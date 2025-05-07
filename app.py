@@ -1,6 +1,5 @@
 import streamlit as st
 import random
-import time
 
 st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
 st.title("MANG BACCARAT GROUP")
@@ -18,9 +17,10 @@ if 'bankroll' not in st.session_state:
     st.session_state.history = []
     st.session_state.wins = 0
     st.session_state.losses = 0
-    st.session_state.target_type = "Percent"
-    st.session_state.target_value = 10
-    st.session_state.target_hit = False
+    st.session_state.target_mode = "Profit %"
+    st.session_state.target_value = 10.0
+    st.session_state.starting_bankroll = 0.0
+    st.session_state.confidence = 0
 
 # --- RESET BUTTON ---
 if st.button("Reset Session"):
@@ -34,17 +34,17 @@ with st.form("setup_form"):
     bankroll = st.number_input("Enter Bankroll ($)", min_value=0.0, value=st.session_state.bankroll, step=10.0)
     base_bet = st.number_input("Enter Base Bet ($)", min_value=0.0, value=st.session_state.base_bet, step=1.0)
     strategy = st.selectbox("Choose Strategy", ["T3", "Flatbet"], index=["T3", "Flatbet"].index(st.session_state.strategy))
-    col1, col2 = st.columns(2)
-    with col1:
-        target_type = st.radio("Target Type", ["Percent", "Units"], index=["Percent", "Units"].index(st.session_state.target_type))
-    with col2:
-        target_value = st.number_input("Target Value", min_value=1, value=int(st.session_state.target_value), step=1)
+    target_mode = st.selectbox("Target Mode", ["Profit %", "Units"], index=["Profit %", "Units"].index(st.session_state.target_mode))
+    target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
     start_clicked = st.form_submit_button("Start Session")
 
 if start_clicked:
     st.session_state.bankroll = bankroll
     st.session_state.base_bet = base_bet
     st.session_state.strategy = strategy
+    st.session_state.target_mode = target_mode
+    st.session_state.target_value = target_value
+    st.session_state.starting_bankroll = bankroll
     st.session_state.sequence = []
     st.session_state.pending_bet = None
     st.session_state.t3_level = 1
@@ -53,14 +53,16 @@ if start_clicked:
     st.session_state.history = []
     st.session_state.wins = 0
     st.session_state.losses = 0
-    st.session_state.target_type = target_type
-    st.session_state.target_value = target_value
-    st.session_state.target_hit = False
     st.success("Session started!")
 
-# --- RANDOM AI BET SELECTION ---
-def random_ai_predict():
-    return random.choice(["P", "B"])
+# --- FUNCTIONS ---
+def predict_random():
+    return random.choice(["P", "B"]), 50.0
+
+def predict_next():
+    if len(st.session_state.sequence) < 1:
+        return None, 0
+    return predict_random()
 
 def place_result(result):
     bet_amount = 0
@@ -102,18 +104,34 @@ def place_result(result):
         st.session_state.pending_bet = None
 
     st.session_state.sequence.append(result)
+
     if len(st.session_state.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
 
-    pred = random_ai_predict()
-    bet_amount = st.session_state.base_bet if st.session_state.strategy == 'Flatbet' else st.session_state.base_bet * st.session_state.t3_level
-    if bet_amount <= st.session_state.bankroll:
-        st.session_state.pending_bet = (bet_amount, pred)
-        st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} (AI Random)"
+    pred, conf = predict_next()
+    st.session_state.confidence = conf
+    if pred:
+        bet_amount = st.session_state.base_bet if st.session_state.strategy == 'Flatbet' else st.session_state.base_bet * st.session_state.t3_level
+        if bet_amount <= st.session_state.bankroll:
+            st.session_state.pending_bet = (bet_amount, pred)
+            st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.0f}%)"
+        else:
+            st.session_state.advice = "Insufficient bankroll"
     else:
-        st.session_state.advice = "Insufficient bankroll"
+        st.session_state.advice = "Waiting for more entries"
 
-# --- INPUT BUTTONS ---
+    # Check target hit
+    profit = st.session_state.bankroll - st.session_state.starting_bankroll
+    if st.session_state.target_mode == "Profit %":
+        target_amount = st.session_state.starting_bankroll * (1 + st.session_state.target_value / 100)
+    else:
+        target_amount = st.session_state.starting_bankroll + (st.session_state.base_bet * st.session_state.target_value)
+
+    if st.session_state.bankroll >= target_amount:
+        st.balloons()
+        st.success("Target reached! Session complete.")
+
+# --- RESULT INPUT ---
 st.subheader("Enter Result")
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -137,16 +155,35 @@ with col3:
             st.session_state.pending_bet = None
             st.session_state.advice = "Last entry undone."
 
-# --- SEQUENCE ---
+# --- DISPLAY SEQUENCE ---
 st.subheader("Current Sequence")
 latest_sequence = st.session_state.sequence[-20:] if 'sequence' in st.session_state else []
 st.text(", ".join(latest_sequence or ["None"]))
 
-# --- HIGHLIGHTED PREDICTION ---
+# --- PREDICTION BLOCK ---
 if st.session_state.pending_bet:
-    _, side = st.session_state.pending_bet
+    amount, side = st.session_state.pending_bet
     color = "blue" if side == "P" else "red"
-    st.markdown(f"<h4 style='color:{color};'>AI Predicts: {side}</h4>", unsafe_allow_html=True)
+    side_full = "Player" if side == "P" else "Banker"
+    confidence = st.session_state.get("confidence", 0)
+
+    if confidence >= 70:
+        bg_color = "#d4edda"
+    elif confidence >= 50:
+        bg_color = "#fff3cd"
+    else:
+        bg_color = "#f8f9fa"
+
+    st.markdown(
+        f"""
+        <div style='padding: 12px; border-radius: 10px; background-color: {bg_color}; text-align: center; border: 1px solid #ccc;'>
+            <h4 style='color:{color}; margin-bottom: 5px;'>Prediction: <strong>{side_full}</strong></h4>
+            <p style='margin: 4px 0;'><strong>Bet Amount:</strong> ${amount:.0f}</p>
+            <p style='margin: 4px 0;'><strong>Win Probability:</strong> {confidence:.0f}%</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 else:
     st.info("No pending bet yet.")
 
@@ -157,7 +194,7 @@ st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
 st.markdown(f"**Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
 
-# --- UNITS PROFIT ---
+# --- UNIT PROFIT ---
 if st.session_state.base_bet > 0:
     bankroll_change = 0
     for h in st.session_state.history:
@@ -166,24 +203,9 @@ if st.session_state.base_bet > 0:
             bankroll_change += amt if h["Bet"] == "P" else amt * 0.95
         else:
             bankroll_change -= amt
-    starting_bankroll = st.session_state.bankroll - bankroll_change
+    starting_bankroll = st.session_state.starting_bankroll
     units_profit = int((st.session_state.bankroll - starting_bankroll) // st.session_state.base_bet)
     st.markdown(f"**Units Profit**: {units_profit}")
-
-    # --- TARGET CHECK ---
-    if not st.session_state.target_hit:
-        if st.session_state.target_type == "Percent":
-            target_amount = starting_bankroll * (1 + st.session_state.target_value / 100)
-            if st.session_state.bankroll >= target_amount:
-                st.session_state.target_hit = True
-                st.success("Target Profit % reached!")
-        else:
-            if units_profit >= st.session_state.target_value:
-                st.session_state.target_hit = True
-                st.success("Target Units reached!")
-
-# --- ADVICE ---
-st.write(st.session_state.advice)
 
 # --- HISTORY TABLE ---
 if st.session_state.history:
