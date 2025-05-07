@@ -88,6 +88,7 @@ def place_result(result):
             st.session_state.t3_results.append('L')
             st.session_state.losses += 1
 
+        # Save to history
         st.session_state.history.append({
             "Bet": selection,
             "Result": result,
@@ -112,6 +113,7 @@ def place_result(result):
 
     st.session_state.sequence.append(result)
 
+    # Trim sequence to last 100
     if len(st.session_state.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
 
@@ -162,6 +164,20 @@ st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
 st.markdown(f"**Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
+
+# --- UNIT PROFIT ---
+if st.session_state.base_bet > 0:
+    bankroll_change = 0
+    for h in st.session_state.history:
+        amt = h["Amount"]
+        if h["Win"]:
+            bankroll_change += amt if h["Bet"] == "P" else amt * 0.95
+        else:
+            bankroll_change -= amt
+    starting_bankroll = st.session_state.bankroll - bankroll_change
+    units_profit = int((st.session_state.bankroll - starting_bankroll) // st.session_state.base_bet)
+    st.markdown(f"**Units Profit**: {units_profit}")
+
 if st.session_state.pending_bet:
     amount, side = st.session_state.pending_bet
     st.success(f"Pending Bet: ${amount:.0f} on {side}")
@@ -169,7 +185,7 @@ else:
     st.info("No pending bet yet.")
 st.write(st.session_state.advice)
 
-# --- RECENT HISTORY TABLE ---
+# --- HISTORY TABLE ---
 if st.session_state.history:
     st.subheader("Recent Bet History")
     history_df = st.session_state.history[-10:]
@@ -183,29 +199,13 @@ if st.session_state.history:
         for h in history_df
     ])
 
-# --- FULL HISTORY & UNITS PROFIT ---
-if st.session_state.history:
-    st.subheader("Full Bet History")
-    st.table([
+    st.subheader("Full History")
+    st.dataframe([
         {
             "Bet": h["Bet"],
             "Result": h["Result"],
-            "Amount": f"${h['Amount']:.2f}",
+            "Amount": f"${h['Amount']:.0f}",
             "Outcome": "Win" if h["Win"] else "Loss"
         }
         for h in st.session_state.history
     ])
-
-    bankroll_change = 0
-    for h in st.session_state.history:
-        amt = h["Amount"]
-        if h["Win"]:
-            bankroll_change -= amt if h["Bet"] == "P" else amt * 0.95
-        else:
-            bankroll_change += amt
-    starting_bankroll = st.session_state.bankroll - bankroll_change
-
-    if st.session_state.base_bet > 0:
-        units_profit = int((st.session_state.bankroll - starting_bankroll) // st.session_state.base_bet)
-        st.subheader("Performance Summary")
-        st.markdown(f"**Units Profit**: {units_profit} units")
