@@ -17,6 +17,11 @@ if 'bankroll' not in st.session_state:
     st.session_state.history = []
     st.session_state.wins = 0
     st.session_state.losses = 0
+    st.session_state.target_mode = "Profit %"
+    st.session_state.target_pct = 30.0
+    st.session_state.target_units = 10
+    st.session_state.start_bankroll = 0.0
+    st.session_state.target_amount = 0.0
 
 # --- RESET BUTTON ---
 if st.button("Reset Session"):
@@ -30,12 +35,25 @@ with st.form("setup_form"):
     bankroll = st.number_input("Enter Bankroll ($)", min_value=0.0, value=st.session_state.bankroll, step=10.0)
     base_bet = st.number_input("Enter Base Bet ($)", min_value=0.0, value=st.session_state.base_bet, step=1.0)
     strategy = st.selectbox("Choose Strategy", ["T3", "Flatbet"], index=["T3", "Flatbet"].index(st.session_state.strategy))
+    target_mode = st.radio("Target Mode", ["Profit %", "Units"], horizontal=True)
+
+    if target_mode == "Profit %":
+        target_pct = st.number_input("Target Profit (%)", min_value=1.0, max_value=100.0, step=1.0, value=st.session_state.get("target_pct", 30.0))
+        target_units = None
+    else:
+        target_units = st.number_input("Target Units", min_value=1, value=st.session_state.get("target_units", 10))
+        target_pct = None
+
     start_clicked = st.form_submit_button("Start Session")
 
 if start_clicked:
     st.session_state.bankroll = bankroll
     st.session_state.base_bet = base_bet
     st.session_state.strategy = strategy
+    st.session_state.target_mode = target_mode
+    st.session_state.target_pct = target_pct
+    st.session_state.target_units = target_units
+    st.session_state.start_bankroll = bankroll
     st.session_state.sequence = []
     st.session_state.pending_bet = None
     st.session_state.t3_level = 1
@@ -44,44 +62,14 @@ if start_clicked:
     st.session_state.history = []
     st.session_state.wins = 0
     st.session_state.losses = 0
+    if target_pct:
+        st.session_state.target_amount = bankroll + (bankroll * target_pct / 100)
     st.success("Session started!")
 
-# --- HYBRID AI LOGIC ---
-def hybrid_ai_bet(sequence):
-    if len(sequence) < 9:
-        return random.choice(['P', 'B']), 50
+# --- BETTING LOGIC ---
+def predict_next_random():
+    return random.choice(["P", "B"]), 50
 
-    last_9 = sequence[-9:]
-    # Rule 1: flip vs repeat
-    flips = sum(1 for i in range(1, 9) if last_9[i] != last_9[i - 1])
-    repeats = 8 - flips
-    rule1 = 'P' if flips > repeats else last_9[-1]
-
-    # Rule 2: segment match
-    seg1 = last_9[0:3]
-    seg3 = last_9[6:9]
-    rule2 = seg1[0] if seg3 == seg1 else ('P' if last_9[-1] == 'B' else 'B')
-
-    # Rule 3: alternating pattern
-    last5 = last_9[-5:]
-    is_alt = all(last5[i] != last5[i+1] for i in range(4))
-    rule3 = ('P' if last_9[-1] == 'B' else 'B') if is_alt else last_9[-1]
-
-    votes = [rule1, rule2, rule3]
-    final = max(set(votes), key=votes.count)
-    confidence = int(votes.count(final) / 3 * 100)
-
-    # Add randomness to the final decision
-    if confidence == 66:
-        final = random.choices([final, 'P' if final == 'B' else 'B'], weights=[0.7, 0.3])[0]
-    elif confidence == 100:
-        pass  # keep final
-    else:
-        final = random.choice(['P', 'B'])
-
-    return final, confidence
-
-# --- PLACE RESULT FUNCTION ---
 def place_result(result):
     bet_amount = 0
     if st.session_state.pending_bet:
@@ -99,6 +87,7 @@ def place_result(result):
             st.session_state.t3_results.append('L')
             st.session_state.losses += 1
 
+        # Save to history
         st.session_state.history.append({
             "Bet": selection,
             "Result": result,
@@ -122,21 +111,18 @@ def place_result(result):
         st.session_state.pending_bet = None
 
     st.session_state.sequence.append(result)
-
     if len(st.session_state.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
 
-    pred, conf = hybrid_ai_bet(st.session_state.sequence)
+    pred, conf = predict_next_random()
     bet_amount = st.session_state.base_bet if st.session_state.strategy == 'Flatbet' else st.session_state.base_bet * st.session_state.t3_level
-
     if bet_amount <= st.session_state.bankroll:
         st.session_state.pending_bet = (bet_amount, pred)
-        st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.0f}%)"
-        st.progress(conf)
+        st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} (Random AI)"
     else:
         st.session_state.advice = "Insufficient bankroll"
 
-# --- RESULT BUTTONS ---
+# --- RESULT INPUT ---
 st.subheader("Enter Result")
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -164,24 +150,29 @@ with col3:
 st.subheader("Current Sequence")
 st.text(", ".join(st.session_state.sequence[-20:] or ["None"]))
 
-# --- STATUS ---
+# --- STATUS DISPLAY ---
 st.subheader("Status")
 st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
 st.markdown(f"**Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
 
-if st.session_state.base_bet > 0:
-    bankroll_change = 0
-    for h in st.session_state.history:
-        amt = h["Amount"]
-        if h["Win"]:
-            bankroll_change += amt if h["Bet"] == "P" else amt * 0.95
-        else:
-            bankroll_change -= amt
-    starting = st.session_state.bankroll - bankroll_change
-    units_profit = int((st.session_state.bankroll - starting) // st.session_state.base_bet)
-    st.markdown(f"**Units Profit**: {units_profit}")
+# --- UNIT PROFIT + TARGET ---
+start_bankroll = st.session_state.start_bankroll
+units_profit = int((st.session_state.bankroll - start_bankroll) // st.session_state.base_bet)
+target_reached = False
+
+if st.session_state.target_mode == "Profit %":
+    st.markdown(f"**Target Profit Goal**: ${st.session_state.target_amount:.2f}")
+    if st.session_state.bankroll >= st.session_state.target_amount:
+        target_reached = True
+elif st.session_state.target_mode == "Units":
+    st.markdown(f"**Units Profit**: {units_profit} / {st.session_state.target_units}")
+    if units_profit >= st.session_state.target_units:
+        target_reached = True
+
+if target_reached:
+    st.success("Congratulations! Your target has been reached.")
 
 if st.session_state.pending_bet:
     amount, side = st.session_state.pending_bet
@@ -190,10 +181,10 @@ else:
     st.info("No pending bet yet.")
 st.write(st.session_state.advice)
 
-# --- HISTORY ---
+# --- HISTORY TABLES ---
 if st.session_state.history:
     st.subheader("Recent Bet History")
-    recent = st.session_state.history[-10:]
+    history_df = st.session_state.history[-10:]
     st.table([
         {
             "Bet": h["Bet"],
@@ -201,7 +192,7 @@ if st.session_state.history:
             "Amount": f"${h['Amount']:.0f}",
             "Outcome": "Win" if h["Win"] else "Loss"
         }
-        for h in recent
+        for h in history_df
     ])
 
     st.subheader("Full History")
