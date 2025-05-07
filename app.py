@@ -1,6 +1,5 @@
 import streamlit as st
 import random
-import pandas as pd
 
 st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
 st.title("MANG BACCARAT GROUP")
@@ -89,7 +88,6 @@ def place_result(result):
             st.session_state.t3_results.append('L')
             st.session_state.losses += 1
 
-        # Save to history
         st.session_state.history.append({
             "Bet": selection,
             "Result": result,
@@ -174,29 +172,40 @@ st.write(st.session_state.advice)
 # --- RECENT HISTORY TABLE ---
 if st.session_state.history:
     st.subheader("Recent Bet History")
-    recent_df = pd.DataFrame(st.session_state.history[-10:])
-    recent_df["Amount"] = recent_df["Amount"].apply(lambda x: f"${x:.0f}")
-    recent_df["Outcome"] = recent_df["Win"].apply(lambda w: "Win" if w else "Loss")
-    st.dataframe(recent_df[["Bet", "Result", "Amount", "Outcome"]])
+    history_df = st.session_state.history[-10:]
+    st.table([
+        {
+            "Bet": h["Bet"],
+            "Result": h["Result"],
+            "Amount": f"${h['Amount']:.0f}",
+            "Outcome": "Win" if h["Win"] else "Loss"
+        }
+        for h in history_df
+    ])
 
 # --- FULL HISTORY & UNITS PROFIT ---
 if st.session_state.history:
     st.subheader("Full Bet History")
-    full_df = pd.DataFrame(st.session_state.history)
-    full_df["Amount"] = full_df["Amount"].apply(lambda x: f"${x:.0f}")
-    full_df["Outcome"] = full_df["Win"].apply(lambda x: "Win" if x else "Loss")
-    st.dataframe(full_df[["Bet", "Result", "Amount", "Outcome"]])
-
-    # Calculate starting bankroll based on bet history
-    bankroll_change = sum(
-        h["Amount"] if not h["Win"]
-        else (-h["Amount"] if h["Bet"] == "P" else -(h["Amount"] * 0.95))
+    st.table([
+        {
+            "Bet": h["Bet"],
+            "Result": h["Result"],
+            "Amount": f"${h['Amount']:.2f}",
+            "Outcome": "Win" if h["Win"] else "Loss"
+        }
         for h in st.session_state.history
-    )
+    ])
+
+    bankroll_change = 0
+    for h in st.session_state.history:
+        amt = h["Amount"]
+        if h["Win"]:
+            bankroll_change -= amt if h["Bet"] == "P" else amt * 0.95
+        else:
+            bankroll_change += amt
     starting_bankroll = st.session_state.bankroll - bankroll_change
 
-    # Show units profit
     if st.session_state.base_bet > 0:
-        units_profit = (st.session_state.bankroll - starting_bankroll) / st.session_state.base_bet
+        units_profit = int((st.session_state.bankroll - starting_bankroll) // st.session_state.base_bet)
         st.subheader("Performance Summary")
-        st.markdown(f"**Units Profit**: {units_profit:.2f} units")
+        st.markdown(f"**Units Profit**: {units_profit} units")
