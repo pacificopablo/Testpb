@@ -46,12 +46,44 @@ if start_clicked:
     st.session_state.losses = 0
     st.success("Session started!")
 
-# --- RANDOM AI BET SELECTION ---
-def generate_ai_bet():
-    return random.choice(['P', 'B'])
+# --- HYBRID AI LOGIC ---
+def hybrid_ai_bet(sequence):
+    if len(sequence) < 9:
+        return random.choice(['P', 'B']), 50
+
+    last_9 = sequence[-9:]
+    # Rule 1: flip vs repeat
+    flips = sum(1 for i in range(1, 9) if last_9[i] != last_9[i - 1])
+    repeats = 8 - flips
+    rule1 = 'P' if flips > repeats else last_9[-1]
+
+    # Rule 2: segment match
+    seg1 = last_9[0:3]
+    seg3 = last_9[6:9]
+    rule2 = seg1[0] if seg3 == seg1 else ('P' if last_9[-1] == 'B' else 'B')
+
+    # Rule 3: alternating pattern
+    last5 = last_9[-5:]
+    is_alt = all(last5[i] != last5[i+1] for i in range(4))
+    rule3 = ('P' if last_9[-1] == 'B' else 'B') if is_alt else last_9[-1]
+
+    votes = [rule1, rule2, rule3]
+    final = max(set(votes), key=votes.count)
+    confidence = int(votes.count(final) / 3 * 100)
+
+    # Add randomness to the final decision
+    if confidence == 66:
+        final = random.choices([final, 'P' if final == 'B' else 'B'], weights=[0.7, 0.3])[0]
+    elif confidence == 100:
+        pass  # keep final
+    else:
+        final = random.choice(['P', 'B'])
+
+    return final, confidence
 
 # --- PLACE RESULT FUNCTION ---
 def place_result(result):
+    bet_amount = 0
     if st.session_state.pending_bet:
         bet_amount, selection = st.session_state.pending_bet
         win = result == selection
@@ -90,41 +122,55 @@ def place_result(result):
         st.session_state.pending_bet = None
 
     st.session_state.sequence.append(result)
+
     if len(st.session_state.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
 
-    # Random AI bet selection
-    pred = generate_ai_bet()
+    pred, conf = hybrid_ai_bet(st.session_state.sequence)
     bet_amount = st.session_state.base_bet if st.session_state.strategy == 'Flatbet' else st.session_state.base_bet * st.session_state.t3_level
+
     if bet_amount <= st.session_state.bankroll:
         st.session_state.pending_bet = (bet_amount, pred)
-        st.session_state.advice = f"AI Bet: ${bet_amount:.0f} on {pred}"
+        st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.0f}%)"
+        st.progress(conf)
     else:
         st.session_state.advice = "Insufficient bankroll"
 
-# --- RESULT INPUT BUTTONS ---
+# --- RESULT BUTTONS ---
 st.subheader("Enter Result")
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 with col1:
     if st.button("Player (P)"):
         place_result("P")
 with col2:
     if st.button("Banker (B)"):
         place_result("B")
+with col3:
+    if st.button("Undo Last"):
+        if st.session_state.sequence:
+            st.session_state.sequence.pop()
+            if st.session_state.history:
+                last = st.session_state.history.pop()
+                if last['Win']:
+                    st.session_state.wins -= 1
+                    st.session_state.bankroll -= last['Amount'] if last["Bet"] == 'P' else last['Amount'] * 0.95
+                else:
+                    st.session_state.losses -= 1
+                    st.session_state.bankroll += last['Amount']
+            st.session_state.pending_bet = None
+            st.session_state.advice = "Last entry undone."
 
 # --- DISPLAY SEQUENCE ---
 st.subheader("Current Sequence")
-latest_sequence = st.session_state.sequence[-20:] if 'sequence' in st.session_state else []
-st.text(", ".join(latest_sequence or ["None"]))
+st.text(", ".join(st.session_state.sequence[-20:] or ["None"]))
 
-# --- STATUS DISPLAY ---
+# --- STATUS ---
 st.subheader("Status")
 st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
 st.markdown(f"**Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
 
-# --- UNIT PROFIT CALCULATION ---
 if st.session_state.base_bet > 0:
     bankroll_change = 0
     for h in st.session_state.history:
@@ -133,11 +179,10 @@ if st.session_state.base_bet > 0:
             bankroll_change += amt if h["Bet"] == "P" else amt * 0.95
         else:
             bankroll_change -= amt
-    starting_bankroll = st.session_state.bankroll - bankroll_change
-    units_profit = int((st.session_state.bankroll - starting_bankroll) // st.session_state.base_bet)
+    starting = st.session_state.bankroll - bankroll_change
+    units_profit = int((st.session_state.bankroll - starting) // st.session_state.base_bet)
     st.markdown(f"**Units Profit**: {units_profit}")
 
-# --- PENDING BET DISPLAY ---
 if st.session_state.pending_bet:
     amount, side = st.session_state.pending_bet
     st.success(f"Pending Bet: ${amount:.0f} on {side}")
@@ -145,10 +190,10 @@ else:
     st.info("No pending bet yet.")
 st.write(st.session_state.advice)
 
-# --- HISTORY TABLES ---
+# --- HISTORY ---
 if st.session_state.history:
     st.subheader("Recent Bet History")
-    history_df = st.session_state.history[-10:]
+    recent = st.session_state.history[-10:]
     st.table([
         {
             "Bet": h["Bet"],
@@ -156,7 +201,7 @@ if st.session_state.history:
             "Amount": f"${h['Amount']:.0f}",
             "Outcome": "Win" if h["Win"] else "Loss"
         }
-        for h in history_df
+        for h in recent
     ])
 
     st.subheader("Full History")
