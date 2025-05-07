@@ -4,6 +4,16 @@ import random
 st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
 st.title("MANG BACCARAT GROUP")
 
+# Remove blue focus line from buttons
+st.markdown("""
+    <style>
+    button:focus {
+        outline: none !important;
+        box-shadow: none !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- SESSION STATE INIT ---
 if 'bankroll' not in st.session_state:
     st.session_state.bankroll = 0.0
@@ -66,35 +76,10 @@ def analyze_pattern(seq):
     confidence = predictions.count(final) / 3 * 100
     return final, confidence
 
-def markov_prediction():
-    if len(st.session_state.sequence) < 2:
-        return None, 0
-    
-    last_outcome = st.session_state.sequence[-1]
-    next_outcome = 'P' if last_outcome == 'B' else 'B'  # Basic transition assumption (P -> B or B -> P)
-    return next_outcome, 70  # Give it a fixed confidence (can be tuned)
-
 def predict_next():
     if len(st.session_state.sequence) < 9:
         return None, 0
-
-    # Pattern-based prediction
-    pattern_pred, pattern_conf = analyze_pattern(st.session_state.sequence)
-    # Markov model prediction
-    markov_pred, markov_conf = markov_prediction()
-
-    # If both predictors agree, we trust them more
-    if pattern_pred == markov_pred:
-        final_pred = pattern_pred
-        combined_conf = (pattern_conf + markov_conf) / 2 + 10  # bonus confidence
-    else:
-        # Weighted voting: favor higher confidence predictor
-        pattern_weight = pattern_conf / (pattern_conf + markov_conf)
-        markov_weight = 1 - pattern_weight
-        final_pred = pattern_pred if pattern_weight >= markov_weight else markov_pred
-        combined_conf = pattern_conf * pattern_weight + markov_conf * markov_weight
-
-    return final_pred, min(100, combined_conf)
+    return analyze_pattern(st.session_state.sequence)
 
 def place_result(result):
     bet_amount = 0
@@ -113,7 +98,6 @@ def place_result(result):
             st.session_state.t3_results.append('L')
             st.session_state.losses += 1
 
-        # Save to history
         st.session_state.history.append({
             "Bet": selection,
             "Result": result,
@@ -138,7 +122,6 @@ def place_result(result):
 
     st.session_state.sequence.append(result)
 
-    # Trim sequence to last 100
     if len(st.session_state.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
 
