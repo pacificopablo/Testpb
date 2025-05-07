@@ -66,10 +66,48 @@ def analyze_pattern(seq):
     confidence = predictions.count(final) / 3 * 100
     return final, confidence
 
+def get_transition_probabilities(sequence):
+    transitions = {"P": {"P": 0, "B": 0}, "B": {"P": 0, "B": 0}}
+    counts = {"P": 0, "B": 0}
+
+    for i in range(1, len(sequence)):
+        prev = sequence[i - 1]
+        curr = sequence[i]
+        if prev in transitions and curr in transitions[prev]:
+            transitions[prev][curr] += 1
+            counts[prev] += 1
+
+    probs = {}
+    for prev in transitions:
+        total = counts[prev] or 1
+        probs[prev] = {
+            "P": transitions[prev]["P"] / total,
+            "B": transitions[prev]["B"] / total
+        }
+
+    return probs
+
 def predict_next():
     if len(st.session_state.sequence) < 9:
         return None, 0
-    return analyze_pattern(st.session_state.sequence)
+
+    pattern_pred, pattern_conf = analyze_pattern(st.session_state.sequence)
+    trans_probs = get_transition_probabilities(st.session_state.sequence)
+    last = st.session_state.sequence[-1]
+
+    if last not in trans_probs:
+        return pattern_pred, pattern_conf
+
+    markov_pred = max(trans_probs[last], key=trans_probs[last].get)
+    markov_conf = trans_probs[last][markov_pred] * 100
+
+    if pattern_pred == markov_pred:
+        final_pred = pattern_pred
+    else:
+        final_pred = pattern_pred if pattern_conf >= markov_conf else markov_pred
+
+    combined_conf = (pattern_conf + markov_conf) / 2
+    return final_pred, combined_conf
 
 def place_result(result):
     bet_amount = 0
@@ -88,7 +126,6 @@ def place_result(result):
             st.session_state.t3_results.append('L')
             st.session_state.losses += 1
 
-        # Save to history
         st.session_state.history.append({
             "Bet": selection,
             "Result": result,
@@ -113,7 +150,6 @@ def place_result(result):
 
     st.session_state.sequence.append(result)
 
-    # Trim sequence to last 100
     if len(st.session_state.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
 
@@ -157,6 +193,12 @@ with col3:
 st.subheader("Current Sequence")
 latest_sequence = st.session_state.sequence[-20:] if 'sequence' in st.session_state else []
 st.text(", ".join(latest_sequence or ["None"]))
+
+# --- TRANSITION TABLE ---
+if len(st.session_state.sequence) >= 5:
+    st.subheader("Markov Transition Table")
+    probs = get_transition_probabilities(st.session_state.sequence)
+    st.table(probs)
 
 # --- STATUS ---
 st.subheader("Status")
