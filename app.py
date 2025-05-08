@@ -240,40 +240,6 @@ def place_result(result):
         st.session_state.pending_bet = (bet_amount, pred)
         st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.0f}%)"
 
-# --- SIMULATION MODE ---
-def simulate_bets(n=100):
-    sim_wins, sim_losses, sim_ties = 0, 0, 0
-    initial_bankroll = st.session_state.bankroll
-    sim_history = []
-    for _ in range(n):
-        result = random.choices(['P', 'B', 'T'], weights=[0.446, 0.458, 0.095])[0]
-        place_result(result)
-        if st.session_state.history and st.session_state.history[-1].get('Win') is not None:
-            if st.session_state.history[-1]['Win']:
-                sim_wins += 1
-            else:
-                sim_losses += 1
-        if result == 'T':
-            sim_ties += 1
-        sim_history.append({
-            'Result': result,
-            'Bankroll': st.session_state.bankroll,
-            'Wins': st.session_state.wins,
-            'Losses': st.session_state.losses,
-            'Ties': sim_ties
-        })
-    final_bankroll = st.session_state.bankroll
-    st.session_state.bankroll = initial_bankroll  # Reset bankroll
-    return sim_wins, sim_losses, sim_ties, final_bankroll, sim_history
-
-if st.button("Simulate 100 Bets"):
-    if st.session_state.initial_bankroll > 0:
-        sim_wins, sim_losses, sim_ties, final_bankroll, sim_history = simulate_bets()
-        st.write(f"Simulation Results: Wins: {sim_wins}, Losses: {sim_losses}, Ties: {sim_ties}")
-        st.write(f"Final Bankroll: ${final_bankroll:.2f} (Change: ${final_bankroll - st.session_state.initial_bankroll:.2f})")
-    else:
-        st.error("Start a session before simulating.")
-
 # --- RESULT INPUT ---
 st.subheader("Enter Result")
 col1, col2, col3, col4 = st.columns(4)
