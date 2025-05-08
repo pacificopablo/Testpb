@@ -233,4 +233,108 @@ with col4:
             if last['Win']:
                 st.session_state.wins -= 1
                 st.session_state.bankroll -= last['Amount'] if last["Bet"] == 'P' else last['Amount'] * 0.95
-                st.session_state.prediction_accuracy[last['Bet']] -=
+                st.session_state.prediction_accuracy[last['Bet']] -= 1
+                st.session_state.consecutive_losses = 0
+            else:
+                st.session_state.bankroll += last['Amount']
+                st.session_state.losses -= 1
+                st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
+            st.session_state.prediction_accuracy['total'] -= 1
+            st.session_state.t3_level = last['T3_Level']
+            st.session_state.t3_results = last['T3_Results']
+            st.session_state.pending_bet = None
+            st.session_state.advice = "Last entry undone."
+            st.session_state.last_was_tie = False
+
+# --- DISPLAY SEQUENCE AS BEAD PLATE ---
+st.subheader("Current Sequence (Bead Plate)")
+sequence = st.session_state.sequence[-100:] if 'sequence' in st.session_state else []  # Show full history up to 100 results
+rows = [sequence[i:i+6] for i in range(0, len(sequence), 6)]  # Split into rows of 6
+
+bead_plate_html = "<div style='display: flex; flex-direction: column; gap: 5px; max-height: 120px; overflow-y: auto;'>"
+for row in rows:
+    row_html = "<div style='display: flex; gap: 5px;'>"
+    for result in row + [''] * (6 - len(row)):  # Pad with empty cells to ensure 6 columns
+        if result == 'P':
+            row_html += "<div style='width: 20px; height: 20px; background-color: blue; border-radius: 50%;'></div>"
+        elif result == 'B':
+            row_html += "<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>"
+        elif result == 'T':
+            # Overlay a green circle for Tie on the last non-tie result in the row
+            last_non_tie_idx = len([r for r in row[:row.index(result)] if r in ['P', 'B']]) - 1
+            if last_non_tie_idx >= 0:
+                row_html = row_html[:last_non_tie_idx * (len("<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>") + 5)] + \
+                          f"<div style='width: 20px; height: 20px; background-color: {row[last_non_tie_idx] == 'P' and 'blue' or 'red'}; border-radius: 50%; position: relative;'>" + \
+                          "<div style='width: 10px; height: 10px; background-color: green; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);'></div></div>" + \
+                          row_html[last_non_tie_idx * (len("<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>") + 5):]
+            else:
+                row_html += "<div style='width: 20px; height: 20px;'></div>"  # Empty if no prior non-tie
+        elif result == '':
+            row_html += "<div style='width: 20px; height: 20px;'></div>"  # Empty cell for padding
+    row_html += "</div>"
+    bead_plate_html += row_html
+bead_plate_html += "</div>"
+
+st.markdown(bead_plate_html, unsafe_allow_html=True)
+
+# --- PREDICTION DISPLAY ---
+if st.session_state.pending_bet:
+    amount, side = st.session_state.pending_bet
+    color = 'blue' if side == 'P' else 'red'
+    conf = st.session_state.advice.split('(')[-1].split('%')[0] if '(' in st.session_state.advice else '0'
+    st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.0f} | Win Prob: {conf}%</h4>", unsafe_allow_html=True)
+else:
+    if not st.session_state.target_hit:
+        st.info(st.session_state.advice)
+
+# --- UNIT PROFIT ---
+if st.session_state.base_bet > 0 and st.session_state.initial_bankroll > 0:
+    profit = st.session_state.bankroll - st.session_state.initial_bankroll
+    units_profit = profit / st.session_state.base_bet
+    st.markdown(f"**Units Profit**: {units_profit:.2f} units (${profit:.2f})")
+else:
+    st.markdown("**Units Profit**: 0.00 units ($0.00)")
+
+# --- STATUS ---
+st.subheader("Status")
+st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
+st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
+st.markdown(f"**Betting Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
+st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
+
+# --- PREDICTION ACCURACY ---
+st.subheader("Prediction Accuracy")
+total = st.session_state.prediction_accuracy['total']
+if total > 0:
+    p_accuracy = (st.session_state.prediction_accuracy['P'] / total) * 100
+    b_accuracy = (st.session_state.prediction_accuracy['B'] / total) * 100
+    st.markdown(f"**Player Bets**: {st.session_state.prediction_accuracy['P']}/{total} ({p_accuracy:.1f}%)")
+    st.markdown(f"**Banker Bets**: {st.session_state.prediction_accuracy['B']}/{total} ({b_accuracy:.1f}%)")
+
+# --- LOSS LOG ---
+if st.session_state.loss_log:
+    st.subheader("Recent Losses")
+    st.dataframe([
+        {
+            "Sequence": ", ".join(log['sequence']),
+            "Prediction": log['prediction'],
+            "Result": log['result'],
+            "Confidence": log['confidence'] + "%"
+        }
+        for log in st.session_state.loss_log[-5:]
+    ])
+
+# --- HISTORY TABLE ---
+if st.session_state.history:
+    st.subheader("Bet History")
+    n = st.slider("Show last N bets", 5, 50, 10)
+    st.dataframe([
+        {
+            "Bet": h["Bet"],
+            "Result": h["Result"],
+            "Amount": f"${h['Amount']:.0f}",
+            "Outcome": "Win" if h["Win"] else "Loss",
+            "T3_Level": h["T3_Level"]
+        }
+        for h in st.session_state.history[-n:]
+    ])
