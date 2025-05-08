@@ -219,47 +219,48 @@ st.subheader("Enter Result")
 # Custom CSS for buttons
 button_style = """
     <style>
-        .custom-button {
-            width: 100px;
-            height: 40px;
-            font-size: 16px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: transform 0.1s;
-            margin: 5px;
+        /* Target buttons by their keys */
+        [data-testid="stButton"] button {
+            width: 100px !important;
+            height: 40px !important;
+            font-size: 16px !important;
+            border: none !important;
+            border-radius: 5px !important;
+            cursor: pointer !important;
+            transition: transform 0.1s !important;
+            margin: 5px !important;
         }
-        .custom-button:hover {
-            transform: scale(1.05);
+        [data-testid="stButton"] button:hover {
+            transform: scale(1.05) !important;
         }
-        .custom-button:active {
-            transform: scale(0.95);
+        [data-testid="stButton"] button:active {
+            transform: scale(0.95) !important;
         }
-        #player-btn {
-            background-color: #007bff;
-            color: white;
+        #player-btn button {
+            background-color: #007bff !important;
+            color: white !important;
         }
-        #banker-btn {
-            background-color: #dc3545;
-            color: white;
+        #banker-btn button {
+            background-color: #dc3545 !important;
+            color: white !important;
         }
-        #tie-btn {
-            background-color: #28a745;
-            color: white;
+        #tie-btn button {
+            background-color: #28a745 !important;
+            color: white !important;
         }
-        #undo-btn {
-            background-color: #6c757d;
-            color: white;
+        #undo-btn button {
+            background-color: #6c757d !important;
+            color: white !important;
         }
         /* Media query for mobile screens (width <= 600px) */
         @media (max-width: 600px) {
-            .custom-button {
-                width: 80%;
-                max-width: 200px;
-                height: 50px;
-                font-size: 14px;
-                margin: 5px auto;
-                display: block;
+            [data-testid="stButton"] button {
+                width: 80% !important;
+                max-width: 200px !important;
+                height: 50px !important;
+                font-size: 14px !important;
+                margin: 5px auto !important;
+                display: block !important;
             }
         }
     </style>
@@ -268,14 +269,14 @@ button_style = """
 # Inject CSS
 st.markdown(button_style, unsafe_allow_html=True)
 
-# Responsive button layout using columns
-if st.button("Player", key="player_btn", help="Click to record a Player win", style="custom-button"):
+# Responsive button layout using individual buttons
+if st.button("Player", key="player_btn", help="Click to record a Player win"):
     place_result("P")
-if st.button("Banker", key="banker_btn", help="Click to record a Banker win", style="custom-button"):
+if st.button("Banker", key="banker_btn", help="Click to record a Banker win"):
     place_result("B")
-if st.button("Tie", key="tie_btn", help="Click to record a Tie", style="custom-button"):
+if st.button("Tie", key="tie_btn", help="Click to record a Tie"):
     place_result("T")
-if st.button("Undo Last", key="undo_btn", help="Click to undo the last result", style="custom-button"):
+if st.button("Undo Last", key="undo_btn", help="Click to undo the last result"):
     if st.session_state.history and st.session_state.sequence:
         st.session_state.sequence.pop()
         last = st.session_state.history.pop()
