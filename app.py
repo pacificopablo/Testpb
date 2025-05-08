@@ -249,32 +249,53 @@ with col4:
 # --- DISPLAY SEQUENCE AS BEAD PLATE (Vertical, 6 rows per column) ---
 st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-100:] if 'sequence' in st.session_state else []  # Show full history up to 100 results
-num_columns = (len(sequence) + 5) // 6  # Calculate number of columns (6 results per column)
-columns = []
-for i in range(0, len(sequence), 6):
-    column = sequence[i:i+6]
-    columns.append(column + [''] * (6 - len(column)))  # Pad with empty cells to ensure 6 rows
+
+# Process sequence to create a grid: fill top to bottom, left to right
+grid = []
+current_col = []
+non_tie_count = 0
+for result in sequence:
+    if result != 'T':
+        if len(current_col) < 6:
+            current_col.append(result)
+        else:
+            grid.append(current_col)
+            current_col = [result]
+        non_tie_count += 1
+    else:
+        # Find the last non-tie result in the current column or previous columns
+        if current_col:
+            current_col[-1] = (current_col[-1], 'T')  # Mark the last non-tie with a Tie
+        elif grid:
+            last_col = grid[-1]
+            for i in range(len(last_col) - 1, -1, -1):
+                if isinstance(last_col[i], str):
+                    last_col[i] = (last_col[i], 'T')
+                    break
+if current_col:
+    grid.append(current_col)
+
+# Pad the last column to 6 rows if necessary
+if grid and len(grid[-1]) < 6:
+    grid[-1] += [''] * (6 - len(grid[-1]))
+
+# Calculate number of columns (based on non-tie results)
+num_columns = (non_tie_count + 5) // 6
 
 bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 120px; overflow-x: auto;'>"
-for col in columns[:num_columns]:  # Only use columns with data
+for col in grid[:num_columns]:  # Only use columns with data
     col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
     for result in col:
-        if result == 'P':
-            col_html += "<div style='width: 20px; height: 20px; background-color: blue; border-radius: 50%;'></div>"
-        elif result == 'B':
-            col_html += "<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>"
-        elif result == 'T':
-            # Overlay a green circle for Tie on the last non-tie result in the column
-            last_non_tie_idx = len([r for r in col[:col.index(result)] if r in ['P', 'B']]) - 1
-            if last_non_tie_idx >= 0:
-                col_html = col_html[:last_non_tie_idx * (len("<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>") + 5)] + \
-                          f"<div style='width: 20px; height: 20px; background-color: {col[last_non_tie_idx] == 'P' and 'blue' or 'red'}; border-radius: 50%; position: relative;'>" + \
-                          "<div style='width: 10px; height: 10px; background-color: green; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);'></div></div>" + \
-                          col_html[last_non_tie_idx * (len("<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>") + 5):]
-            else:
-                col_html += "<div style='width: 20px; height: 20px;'></div>"  # Empty if no prior non-tie
-        elif result == '':
+        if result == '':
             col_html += "<div style='width: 20px; height: 20px;'></div>"  # Empty cell for padding
+        elif isinstance(result, tuple):  # Handle Tie overlay
+            base_result, _ = result
+            color = 'blue' if base_result == 'P' else 'red'
+            col_html += f"<div style='width: 20px; height: 20px; background-color: {color}; border-radius: 50%; position: relative;'>" + \
+                        "<div style='width: 10px; height: 10px; background-color: green; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);'></div></div>"
+        else:  # Player or Banker
+            color = 'blue' if result == 'P' else 'red'
+            col_html += f"<div style='width: 20px; height: 20px; background-color: {color}; border-radius: 50%;'></div>"
     col_html += "</div>"
     bead_plate_html += col_html
 bead_plate_html += "</div>"
