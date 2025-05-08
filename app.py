@@ -170,12 +170,12 @@ def place_result(result):
                 st.session_state.loss_log = st.session_state.loss_log[-50:]
         st.session_state.prediction_accuracy['total'] += 1
 
-        # Debug Logging (enabled to trace issue)
-        profit = st.session_state.bankroll - st.session_state.initial_bankroll
-        units_profit = profit / st.session_state.base_bet if st.session_state.base_bet > 0 else 0
-        st.write(f"Bet: {selection}, Result: {result}, Bet Amount: ${bet_amount:.2f}, "
-                 f"Win: {win}, Bankroll: ${old_bankroll:.2f} -> ${st.session_state.bankroll:.2f}, "
-                 f"Units Profit: {units_profit:.2f}, Wins: {st.session_state.wins}, Losses: {st.session_state.losses}")
+        # Debug Logging (removed to eliminate descriptions)
+        # profit = st.session_state.bankroll - st.session_state.initial_bankroll
+        # units_profit = profit / st.session_state.base_bet if st.session_state.base_bet > 0 else 0
+        # st.write(f"Bet: {selection}, Result: {result}, Bet Amount: ${bet_amount:.2f}, "
+        #          f"Win: {win}, Bankroll: ${old_bankroll:.2f} -> ${st.session_state.bankroll:.2f}, "
+        #          f"Units Profit: {units_profit:.2f}, Wins: {st.session_state.wins}, Losses: {st.session_state.losses}")
 
         st.session_state.history.append({
             "Bet": selection,
@@ -224,13 +224,13 @@ def place_result(result):
 st.subheader("Enter Result")
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    if st.button("Player (P)"):
+    if st.button("Player"):
         place_result("P")
 with col2:
-    if st.button("Banker (B)"):
+    if st.button("Banker"):
         place_result("B")
 with col3:
-    if st.button("Tie (T)"):
+    if st.button("Tie"):
         place_result("T")
 with col4:
     if st.button("Undo Last"):
