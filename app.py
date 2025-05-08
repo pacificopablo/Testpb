@@ -228,8 +228,8 @@ button_style = """
             justify-content: center;
             margin-bottom: 10px;
         }
-        /* Target Streamlit buttons within the container */
-        .button-container [data-testid="stButton"] button {
+        /* General button styles */
+        .button-container [data-testid="stButton"] button[kind="primary"] {
             width: 100px;
             height: 40px;
             font-size: 16px;
@@ -238,28 +238,36 @@ button_style = """
             cursor: pointer;
             transition: transform 0.1s;
             padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .button-container [data-testid="stButton"] button:hover {
+        .button-container [data-testid="stButton"] button[kind="primary"]:hover {
             transform: scale(1.05);
         }
-        .button-container [data-testid="stButton"] button:active {
+        .button-container [data-testid="stButton"] button[kind="primary"]:active {
             transform: scale(0.95);
         }
         /* Specific button styles using key IDs */
-        div[data-testid="stButton"][id="player_btn"] button {
+        div[data-testid="stButton"][id="player_btn"] button[kind="primary"] {
             background-color: #007bff !important;
             color: white !important;
         }
-        div[data-testid="stButton"][id="banker_btn"] button {
+        div[data-testid="stButton"][id="banker_btn"] button[kind="primary"] {
             background-color: #dc3545 !important;
             color: white !important;
         }
-        div[data-testid="stButton"][id="tie_btn"] button {
+        div[data-testid="stButton"][id="tie_btn"] button[kind="primary"] {
             background-color: #28a745 !important;
             color: white !important;
         }
-        div[data-testid="stButton"][id="undo_btn"] button {
+        div[data-testid="stButton"][id="undo_btn"] button[kind="primary"] {
             background-color: #6c757d !important;
+            color: white !important;
+        }
+        /* Fallback for any button inside the container */
+        .button-container button {
+            background-color: #cccccc !important; /* Fallback gray if specific styles fail */
             color: white !important;
         }
         /* Media query for mobile screens (width <= 600px) */
@@ -268,7 +276,7 @@ button_style = """
                 flex-direction: column;
                 align-items: center;
             }
-            .button-container [data-testid="stButton"] button {
+            .button-container [data-testid="stButton"] button[kind="primary"] {
                 width: 80%;
                 max-width: 200px;
                 height: 50px;
@@ -375,7 +383,7 @@ else:
 st.subheader("Status")
 st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
-st.markdown(f"**Betting Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
+st.markdown(f"**Betting Strategy**: ${st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
 
 # --- PREDICTION ACCURACY ---
