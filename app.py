@@ -213,20 +213,84 @@ def place_result(result):
     st.session_state.pending_bet = (bet_amount, pred)
     st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
 
-# --- RESULT INPUT ---
+# --- RESULT INPUT WITH RESPONSIVE BUTTONS ---
 st.subheader("Enter Result")
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    if st.button("Player"):
+
+# Use custom HTML/CSS to create responsive buttons
+button_html = """
+<div class="button-container">
+    <style>
+        .button-container {
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .custom-button {
+            width: 100px;
+            height: 40px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .custom-button:hover {
+            transform: scale(1.05);
+        }
+        .custom-button:active {
+            transform: scale(0.95);
+        }
+        #player-btn {
+            background-color: #007bff;
+            color: white;
+        }
+        #banker-btn {
+            background-color: #dc3545;
+            color: white;
+        }
+        #tie-btn {
+            background-color: #28a745;
+            color: white;
+        }
+        #undo-btn {
+            background-color: #6c757d;
+            color: white;
+        }
+        /* Media query for mobile screens (width <= 600px) */
+        @media (max-width: 600px) {
+            .button-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            .custom-button {
+                width: 80%;
+                max-width: 200px;
+                height: 50px;
+                font-size: 14px;
+            }
+        }
+    </style>
+    <button id="player-btn" class="custom-button" onclick="Streamlit.setComponentValue('Player')">Player</button>
+    <button id="banker-btn" class="custom-button" onclick="Streamlit.setComponentValue('Banker')">Banker</button>
+    <button id="tie-btn" class="custom-button" onclick="Streamlit.setComponentValue('Tie')">Tie</button>
+    <button id="undo-btn" class="custom-button" onclick="Streamlit.setComponentValue('Undo Last')">Undo Last</button>
+</div>
+"""
+
+# Render the custom buttons and handle clicks
+button_click = st.components.v1.html(button_html, height=150)
+
+# Process button clicks
+if button_click:
+    if button_click == "Player":
         place_result("P")
-with col2:
-    if st.button("Banker"):
+    elif button_click == "Banker":
         place_result("B")
-with col3:
-    if st.button("Tie"):
+    elif button_click == "Tie":
         place_result("T")
-with col4:
-    if st.button("Undo Last"):
+    elif button_click == "Undo Last":
         if st.session_state.history and st.session_state.sequence:
             st.session_state.sequence.pop()
             last = st.session_state.history.pop()
