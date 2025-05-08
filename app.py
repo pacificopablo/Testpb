@@ -246,10 +246,32 @@ with col4:
             st.session_state.advice = "Last entry undone."
             st.session_state.last_was_tie = False
 
-# --- DISPLAY SEQUENCE ---
-st.subheader("Current Sequence")
-latest_sequence = st.session_state.sequence[-20:] if 'sequence' in st.session_state else []
-st.text(", ".join(latest_sequence or ["None"]))
+# --- DISPLAY SEQUENCE AS BEAD PLATE ---
+st.subheader("Current Sequence (Bead Plate)")
+sequence = st.session_state.sequence[-36:] if 'sequence' in st.session_state else []  # Limit to last 36 results (6 cols x 6 rows)
+rows = [sequence[i:i+6] for i in range(0, len(sequence), 6)]  # Split into rows of 6
+
+bead_plate_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
+for row in rows:
+    row_html = "<div style='display: flex; gap: 5px;'>"
+    for result in row:
+        if result == 'P':
+            row_html += "<div style='width: 20px; height: 20px; background-color: blue; border-radius: 50%;'></div>"
+        elif result == 'B':
+            row_html += "<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>"
+        elif result == 'T':
+            # Overlay a green circle for Tie on the last non-tie result
+            last_non_tie_idx = len([r for r in row[:row.index(result)] if r in ['P', 'B']]) - 1
+            if last_non_tie_idx >= 0:
+                row_html = row_html[:last_non_tie_idx * (len("<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>") + 5)] + \
+                          f"<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%; position: relative;'>" + \
+                          "<div style='width: 10px; height: 10px; background-color: green; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);'></div></div>" + \
+                          row_html[last_non_tie_idx * (len("<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>") + 5):]
+    row_html += "</div>"
+    bead_plate_html += row_html
+bead_plate_html += "</div>"
+
+st.markdown(bead_plate_html, unsafe_allow_html=True)
 
 # --- PREDICTION DISPLAY ---
 if st.session_state.pending_bet:
@@ -275,7 +297,6 @@ st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
 st.markdown(f"**Betting Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
-# Removed: st.markdown(f"**Consecutive Losses**: {st.session_state.consecutive_losses}")
 
 # --- PREDICTION ACCURACY ---
 st.subheader("Prediction Accuracy")
