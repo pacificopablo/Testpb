@@ -250,7 +250,7 @@ if st.session_state.button_action:
             st.session_state.advice = "Last entry undone."
             st.session_state.last_was_tie = False
 
-# --- BEAD PLATE WITH MATPLOTLIB --- (Improvement 5)
+# --- BEAD PLATE WITH MATPLOTLIB --- (Updated for smaller size)
 st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-100:]
 grid = []
@@ -267,20 +267,25 @@ if grid and len(grid[-1]) < 6:
     grid[-1] += [''] * (6 - len(grid[-1]))
 
 if grid:
-    fig, ax = plt.subplots(figsize=(max(3, len(grid) * 0.5), 2))
+    fig, ax = plt.subplots(figsize=(max(1.5, len(grid) * 0.2), 1.0))
     for i, col in enumerate(grid):
         for j, result in enumerate(col):
             if result == 'P':
-                ax.add_patch(plt.Circle((i, 5-j), 0.4, color='blue'))
+                ax.add_patch(plt.Circle((i, 5-j), 0.15, color='blue'))
             elif result == 'B':
-                ax.add_patch(plt.Circle((i, 5-j), 0.4, color='red'))
+                ax.add_patch(plt.Circle((i, 5-j), 0.15, color='red'))
             elif result == 'T':
-                ax.add_patch(plt.Circle((i, 5-j), 0.4, color='green'))
+                ax.add_patch(plt.Circle((i, 5-j), 0.15, color='green'))
     ax.set_xlim(-0.5, len(grid) - 0.5)
     ax.set_ylim(-0.5, 5.5)
     ax.set_aspect('equal')
-    ax.axis('off')
-    st.pyplot(fig)
+    ax.grid(True, linestyle='--', alpha=0.3)
+    ax.set_xticks(range(len(grid)))
+    ax.set_yticks(range(6))
+    ax.set_xticklabels([])
+    ax.set_yticklabels(['6', '5', '4', '3', '2', '1'], fontsize=6)
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
 else:
     st.write("No results yet.")
 
