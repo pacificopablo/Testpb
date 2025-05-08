@@ -219,48 +219,59 @@ st.subheader("Enter Result")
 # Custom CSS for buttons
 button_style = """
     <style>
-        /* Target buttons by their keys */
-        [data-testid="stButton"] button {
-            width: 100px !important;
-            height: 40px !important;
-            font-size: 16px !important;
-            border: none !important;
-            border-radius: 5px !important;
-            cursor: pointer !important;
-            transition: transform 0.1s !important;
-            margin: 5px !important;
+        /* Container for buttons */
+        .button-container {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 10px;
         }
-        [data-testid="stButton"] button:hover {
-            transform: scale(1.05) !important;
+        /* Target Streamlit buttons within the container */
+        .button-container [data-testid="stButton"] button {
+            width: 100px;
+            height: 40px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.1s;
         }
-        [data-testid="stButton"] button:active {
-            transform: scale(0.95) !important;
+        .button-container [data-testid="stButton"] button:hover {
+            transform: scale(1.05);
         }
-        #player-btn button {
+        .button-container [data-testid="stButton"] button:active {
+            transform: scale(0.95);
+        }
+        /* Specific button styles using key */
+        div[data-testid="stButton"][id="player_btn"] button {
             background-color: #007bff !important;
             color: white !important;
         }
-        #banker-btn button {
+        div[data-testid="stButton"][id="banker_btn"] button {
             background-color: #dc3545 !important;
             color: white !important;
         }
-        #tie-btn button {
+        div[data-testid="stButton"][id="tie_btn"] button {
             background-color: #28a745 !important;
             color: white !important;
         }
-        #undo-btn button {
+        div[data-testid="stButton"][id="undo_btn"] button {
             background-color: #6c757d !important;
             color: white !important;
         }
         /* Media query for mobile screens (width <= 600px) */
         @media (max-width: 600px) {
-            [data-testid="stButton"] button {
-                width: 80% !important;
-                max-width: 200px !important;
-                height: 50px !important;
-                font-size: 14px !important;
-                margin: 5px auto !important;
-                display: block !important;
+            .button-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            .button-container [data-testid="stButton"] button {
+                width: 80%;
+                max-width: 200px;
+                height: 50px;
+                font-size: 14px;
             }
         }
     </style>
@@ -269,7 +280,9 @@ button_style = """
 # Inject CSS
 st.markdown(button_style, unsafe_allow_html=True)
 
-# Responsive button layout using individual buttons
+# Wrap buttons in a container
+st.markdown('<div class="button-container">', unsafe_allow_html=True)
+
 if st.button("Player", key="player_btn", help="Click to record a Player win"):
     place_result("P")
 if st.button("Banker", key="banker_btn", help="Click to record a Banker win"):
@@ -295,6 +308,8 @@ if st.button("Undo Last", key="undo_btn", help="Click to undo the last result"):
         st.session_state.pending_bet = None
         st.session_state.advice = "Last entry undone."
         st.session_state.last_was_tie = False
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 # --- DISPLAY SEQUENCE AS BEAD PLATE (Vertical, 6 rows per column, Tie as separate cell) ---
 st.subheader("Current Sequence (Bead Plate)")
