@@ -11,7 +11,8 @@ if 'bankroll' not in st.session_state:
     st.session_state.base_bet = 0.0
     st.session_state.sequence = []
     st.session_state.pending_bet = None
-    st.session_state.strategy = 'T3'
+    st.session_state.bet_selection_strategy = 'Original'  # New: Bet selection strategy
+    st.session_state.strategy = 'T3'  # Betting strategy (T3 or Flatbet)
     st.session_state.t3_level = 1
     st.session_state.t3_results = []
     st.session_state.advice = ""
@@ -24,8 +25,8 @@ if 'bankroll' not in st.session_state:
     st.session_state.target_hit = False
     st.session_state.prediction_accuracy = {'P': 0, 'B': 0, 'total': 0}
     st.session_state.consecutive_losses = 0
-    st.session_state.loss_log = []  # Log loss sequences
-    st.session_state.last_was_tie = False  # Track if last result was Tie
+    st.session_state.loss_log = []
+    st.session_state.last_was_tie = False
 
 # --- RESET BUTTON ---
 if st.button("Reset Session"):
@@ -38,7 +39,18 @@ st.subheader("Setup")
 with st.form("setup_form"):
     bankroll = st.number_input("Enter Bankroll ($)", min_value=0.0, value=st.session_state.bankroll, step=10.0)
     base_bet = st.number_input("Enter Base Bet ($)", min_value=0.0, value=st.session_state.base_bet, step=1.0)
-    strategy = st.selectbox("Choose Strategy", ["T3", "Flatbet"], index=["T3", "Flatbet"].index(st.session_state.strategy))
+    bet_selection_strategy = st.selectbox(
+        "Choose Bet Selection Strategy",
+        ["Original", "FTCF"],
+        index=["Original", "FTCF"].index(st.session_state.bet_selection_strategy),
+        help="Original: Uses specific patterns to predict Player or Banker, focusing on alternating and repeating sequences. FTCF: Follows short streaks and bets against long streaks, with a Banker bias."
+    )
+    betting_strategy = st.selectbox(
+        "Choose Betting Strategy",
+        ["T3", "Flatbet"],
+        index=["T3", "Flatbet"].index(st.session_state.strategy),
+        help="T3: Adjusts bet size based on wins/losses. Flatbet: Uses a fixed bet size."
+    )
     target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
     target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
     start_clicked = st.form_submit_button("Start Session")
@@ -53,7 +65,8 @@ if start_clicked:
     else:
         st.session_state.bankroll = bankroll
         st.session_state.base_bet = base_bet
-        st.session_state.strategy = strategy
+        st.session_state.bet_selection_strategy = bet_selection_strategy
+        st.session_state.strategy = betting_strategy
         st.session_state.sequence = []
         st.session_state.pending_bet = None
         st.session_state.t3_level = 1
@@ -73,12 +86,11 @@ if start_clicked:
         st.success("Session started!")
 
 # --- FUNCTIONS ---
-def predict_next():
+def predict_next_original():
     sequence = [x for x in st.session_state.sequence[-4:] if x in ['P', 'B']]  # Last 4 outcomes, ignore Ties
     if len(sequence) < 2:
         return 'B', 65  # Default to Banker with 65% confidence
 
-    # Rule-based prediction
     last_three = sequence[-3:] if len(sequence) >= 3 else []
     last_four = sequence[-4:] if len(sequence) >= 4 else []
 
@@ -90,12 +102,12 @@ def predict_next():
     if len(sequence) >= 1:
         return sequence[-1], 65
 
-    # Rule 3: Last 3 outcomes PBP or BBP → Bet P
-    if len(last_three) == 3 and (last_three in [['P', 'B', 'P'], ['B', 'B', 'P']]):
+    # Rule 3: Last 3 outcomes BBP → Bet P
+    if len(last_three) == 3 and last_three == ['B', 'B', 'P']:
         return 'P', 65
 
-    # Rule 4: Last 3 outcomes PBP or BPB → Bet B
-    if len(last_three) == 3 and (last_three in [['P', 'B', 'P'], ['B', 'P', 'B']]):
+    # Rule 4: Last 3 outcomes BPB → Bet B
+    if len(last_three) == 3 and last_three == ['B', 'P', 'B']:
         return 'B', 65
 
     # Rule 5: Third-to-last outcome P or B → Bet same
@@ -103,23 +115,67 @@ def predict_next():
         return sequence[-3], 65
 
     # Rule 6: Last 4 outcomes BPPP or PBBB → Bet P
-    if len(last_four) == 4 and (last_four in [['B', 'P', 'P', 'P'], ['P', 'B', 'B', 'B']]):
+    if len(last_four) == 4 and last_four in [['B', 'P', 'P', 'P'], ['P', 'B', 'B', 'B']]:
         return 'P', 65
 
     # Rule 7: Last 4 outcomes BBBP or PPPB → Bet B
-    if len(last_four) == 4 and (last_four in [['B', 'B', 'B', 'P'], ['P', 'P', 'P', 'B']]):
+    if len(last_four) == 4 and last_four in [['B', 'B', 'B', 'P'], ['P', 'P', 'P', 'B']]:
         return 'B', 65
 
-    # Rule 8: Last 4 outcomes BPP or BPB (corrected from BPR) → Bet B
-    if len(last_four) == 4 and (last_four in [['B', 'P', 'P', 'B'], ['B', 'P', 'B']]):
+    # Rule 8: Last 4 outcomes BPPB → Bet B
+    if len(last_four) == 4 and last_four == ['B', 'P', 'P', 'B']:
         return 'B', 65
 
-    # Rule 9: Last 3 outcomes PBPP or BPPP → Bet P
-    if len(sequence) >= 4 and (sequence[-4:] in [['P', 'B', 'P', 'P'], ['B', 'P', 'P', 'P']]):
+    # Rule 9: Last 4 outcomes PBPP or BPPP → Bet P
+    if len(last_four) == 4 and last_four in [['P', 'B', 'P', 'P'], ['B', 'P', 'P', 'P']]:
         return 'P', 65
 
     # Default: Banker preference
     return 'B', 65
+
+def predict_next_ftcf():
+    sequence = [x for x in st.session_state.sequence[-4:] if x in ['P', 'B']]  # Last 4 non-Tie outcomes
+    if len(sequence) < 2:
+        return 'B', 60  # Default to Banker with 60% confidence
+
+    last_one = sequence[-1]
+    last_two = sequence[-2:] if len(sequence) >= 2 else []
+    last_three = sequence[-3:] if len(sequence) >= 3 else []
+    last_four = sequence[-4:] if len(sequence) >= 4 else []
+
+    # Rule 1: Short Streak (1–2 identical outcomes)
+    if len(last_two) == 2 and last_two == [last_one, last_one]:
+        return last_one, 70  # Follow PP or BB
+    if len(sequence) >= 1:
+        return last_one, 70  # Follow single P or B
+
+    # Rule 2: Medium Streak (3 identical outcomes)
+    if len(last_three) == 3 and all(x == last_one for x in last_three):
+        return last_one, 65  # Follow PPP or BBB
+
+    # Rule 3: Long Streak (4+ identical outcomes)
+    if len(last_four) == 4 and all(x == last_one for x in last_four):
+        return 'P' if last_one == 'B' else 'B', 68  # Bet opposite
+
+    # Rule 4: Alternating Pattern (PBP or BPB)
+    if len(last_three) == 3 and last_three in [['P', 'B', 'P'], ['B', 'P', 'B']]:
+        return 'B' if last_three[-1] == 'P' else 'P', 65  # Continue alternation
+
+    # Rule 5: Mixed Pattern with Recent Dominance
+    if len(last_four) == 4:
+        p_count = last_four.count('P')
+        b_count = last_four.count('B')
+        if p_count > b_count:
+            return 'P', 62
+        return 'B', 62  # Default to Banker in ties
+
+    # Default: Bet Banker
+    return 'B', 60
+
+def predict_next():
+    if st.session_state.bet_selection_strategy == "FTCF":
+        return predict_next_ftcf()
+    return predict_next_original()
 
 def check_target_hit():
     if st.session_state.target_mode == "Profit %":
@@ -172,7 +228,6 @@ def place_result(result):
             st.session_state.t3_results.append('L')
             st.session_state.losses += 1
             st.session_state.consecutive_losses += 1
-            # Log loss
             st.session_state.loss_log.append({
                 'sequence': st.session_state.sequence[-10:],
                 'prediction': selection,
@@ -209,7 +264,6 @@ def place_result(result):
 
         st.session_state.pending_bet = None
 
-    # Reset consecutive losses for non-bet results (but not Ties)
     if not st.session_state.pending_bet and result != 'T':
         st.session_state.consecutive_losses = 0
 
@@ -221,16 +275,16 @@ def place_result(result):
         st.session_state.target_hit = True
         return
 
-    # Check loss avoidance conditions
     pred, conf = predict_next()
     bet_amount = st.session_state.base_bet if st.session_state.strategy == 'Flatbet' else st.session_state.base_bet * st.session_state.t3_level
+    min_confidence = 65 if st.session_state.bet_selection_strategy == "Original" else 60
     if st.session_state.consecutive_losses >= 2:
         st.session_state.pending_bet = None
         st.session_state.advice = f"Skip bet: {st.session_state.consecutive_losses} consecutive losses"
     elif bet_amount > st.session_state.bankroll:
         st.session_state.pending_bet = None
         st.session_state.advice = "Skip bet: Insufficient bankroll"
-    elif conf < 65:
+    elif conf < min_confidence:
         st.session_state.pending_bet = None
         st.session_state.advice = f"Skip bet: Low confidence ({conf:.0f}%)"
     elif st.session_state.last_was_tie:
@@ -297,7 +351,8 @@ if st.session_state.base_bet > 0:
 st.subheader("Status")
 st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
-st.markdown(f"**Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
+st.markdown(f"**Bet Selection Strategy**: {st.session_state.bet_selection_strategy}")
+st.markdown(f"**Betting Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
 st.markdown(f"**Consecutive Losses**: {st.session_state.consecutive_losses}")
 
