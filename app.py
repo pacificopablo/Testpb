@@ -275,7 +275,7 @@ st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
 st.markdown(f"**Betting Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
-st.markdown(f"**Consecutive Losses**: {st.session_state.consecutive_losses}")
+# Removed: st.markdown(f"**Consecutive Losses**: {st.session_state.consecutive_losses}")
 
 # --- PREDICTION ACCURACY ---
 st.subheader("Prediction Accuracy")
