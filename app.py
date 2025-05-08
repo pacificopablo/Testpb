@@ -28,13 +28,13 @@ if 'bankroll' not in st.session_state:
     st.session_state.consecutive_losses = 0
     st.session_state.loss_log = []
     st.session_state.last_was_tie = False
-    st.session_state.button_action = None  # New: Track button actions
+    st.session_state.button_action = None  # Track button actions
 
 # --- RESET BUTTON ---
 if st.button("Reset Session"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    st.rerun()  # Improvement 7: Use st.rerun
+    st.rerun()
 
 # --- SETUP FORM ---
 st.subheader("Setup")
@@ -53,7 +53,7 @@ with st.form("setup_form"):
 
 if start_clicked:
     if bankroll <= 0 or base_bet <= 0 or base_bet > bankroll:
-        st.error("Invalid inputs: Bankroll and base bet must be positive, and base bet cannot exceed bankroll.")  # Improvement 6
+        st.error("Invalid inputs: Bankroll and base bet must be positive, and base bet cannot exceed bankroll.")
     else:
         st.session_state.bankroll = bankroll
         st.session_state.base_bet = base_bet
@@ -80,7 +80,7 @@ if start_clicked:
 # --- FUNCTIONS ---
 def predict_next():
     sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]
-    if len(sequence) < 5:  # Improvement 3: Minimum 5 non-Tie outcomes
+    if len(sequence) < 5:
         return 'B', 45.86
     bigram = sequence[-2:]
     transitions = defaultdict(int)
@@ -186,7 +186,7 @@ def place_result(result):
         st.session_state.advice = f"No bet (Confidence: {conf:.1f}% < 50.5%)"
     else:
         bet_amount = st.session_state.base_bet * st.session_state.t3_level
-        if bet_amount > st.session_state.bankroll:  # Improvement 6
+        if bet_amount > st.session_state.bankroll:
             st.session_state.pending_bet = None
             st.session_state.advice = "No bet: Insufficient bankroll."
         else:
@@ -206,9 +206,9 @@ def place_result(result):
             st.session_state.t3_level = st.session_state.t3_level + 2
         st.session_state.t3_results = []
 
-# --- RESULT INPUT WITH NATIVE BUTTONS --- (Improvement 1, 8)
+# --- RESULT INPUT WITH NATIVE BUTTONS ---
 st.subheader("Enter Result")
-col1, col2, col3, col4 = st.columns(4)  # Improvement 8: Responsive layout
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     if st.button("Player", use_container_width=True):
         st.session_state.button_action = "P"
@@ -222,10 +222,10 @@ with col4:
     if st.button("Undo Last", use_container_width=True):
         st.session_state.button_action = "undo"
 
-# Process button action (Improvement 2)
+# Process button action
 if st.session_state.button_action:
     action = st.session_state.button_action
-    st.session_state.button_action = None  # Reset to avoid reprocessing
+    st.session_state.button_action = None
     if action in ["P", "B", "T"]:
         place_result(action)
     elif action == "undo":
@@ -250,40 +250,37 @@ if st.session_state.button_action:
             st.session_state.advice = "Last entry undone."
             st.session_state.last_was_tie = False
 
-# --- BEAD PLATE WITH MATPLOTLIB --- (Updated for smaller size)
+# --- BEAD PLATE WITH MATPLOTLIB (Traditional Baccarat Bead Road) ---
 st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-100:]
 grid = []
 current_col = []
 for result in sequence:
-    if len(current_col) < 6:
-        current_col.append(result)
-    else:
+    current_col.append(result)
+    if len(current_col) == 6:
         grid.append(current_col)
-        current_col = [result]
+        current_col = []
 if current_col:
     grid.append(current_col)
-if grid and len(grid[-1]) < 6:
-    grid[-1] += [''] * (6 - len(grid[-1]))
 
 if grid:
-    fig, ax = plt.subplots(figsize=(max(1.5, len(grid) * 0.2), 1.0))
+    fig, ax = plt.subplots(figsize=(max(1.5, len(grid) * 0.5), 2.0))
     for i, col in enumerate(grid):
-        for j, result in enumerate(col):
+        for j, result in enumerate(reversed(col)):  # Reverse to match top-down order
             if result == 'P':
-                ax.add_patch(plt.Circle((i, 5-j), 0.15, color='blue'))
+                ax.add_patch(plt.Circle((i, j), 0.2, color='blue'))
             elif result == 'B':
-                ax.add_patch(plt.Circle((i, 5-j), 0.15, color='red'))
+                ax.add_patch(plt.Circle((i, j), 0.2, color='red'))
             elif result == 'T':
-                ax.add_patch(plt.Circle((i, 5-j), 0.15, color='green'))
+                ax.add_patch(plt.Circle((i, j), 0.2, color='green'))
     ax.set_xlim(-0.5, len(grid) - 0.5)
     ax.set_ylim(-0.5, 5.5)
     ax.set_aspect('equal')
-    ax.grid(True, linestyle='--', alpha=0.3)
+    ax.grid(True, linestyle='-', color='gray', alpha=0.5)
     ax.set_xticks(range(len(grid)))
     ax.set_yticks(range(6))
     ax.set_xticklabels([])
-    ax.set_yticklabels(['6', '5', '4', '3', '2', '1'], fontsize=6)
+    ax.set_yticklabels(['1', '2', '3', '4', '5', '6'], fontsize=8)  # Numbered 1 to 6 from top
     plt.tight_layout()
     st.pyplot(fig, use_container_width=True)
 else:
