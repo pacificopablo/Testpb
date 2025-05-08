@@ -264,7 +264,7 @@ def place_result(result):
 
         st.session_state.pending_bet = None
 
-    if not st.session, result != 'T':
+    if not st.session_state.pending_bet and result != 'T':
         st.session_state.consecutive_losses = 0
 
     st.session_state.sequence.append(result)
@@ -284,7 +284,7 @@ def place_result(result):
     elif bet_amount > st.session_state.bankroll:
         st.session_state.pending_bet = None
         st.session_state.advice = "Skip bet: Insufficient bankroll"
-    elif conf < min_confWiki: 
+    elif conf < min_confidence:
         st.session_state.pending_bet = None
         st.session_state.advice = f"Skip bet: Low confidence ({conf:.0f}%)"
     elif st.session_state.last_was_tie:
