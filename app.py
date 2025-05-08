@@ -2,90 +2,65 @@ import streamlit as st
 import datetime
 
 # Initialize session state
-if 'sequence' not in st.session_state:
-    st.session_state.sequence = []
-if 'history' not in st.session_state:
-    st.session_state.history = []
-if 'bankroll' not in st.session_state:
-    st.session_state.bankroll = 46000
-if 'wins' not in st.session_state:
-    st.session_state.wins = 0
-if 'losses' not in st.session_state:
-    st.session_state.losses = 0
-if 'prediction_accuracy' not in st.session_state:
-    st.session_state.prediction_accuracy = {'P': 0, 'B': 0, 'T': 0, 'total': 0}
-if 't3_level' not in st.session_state:
-    st.session_state.t3_level = 1
-if 't3_results' not in st.session_state:
-    st.session_state.t3_results = []
-if 'pending_bet' not in st.session_state:
-    st.session_state.pending_bet = None
-if 'advice' not in st.session_state:
-    st.session_state.advice = ""
-if 'last_was_tie' not in st.session_state:
-    st.session_state.last_was_tie = False
-if 'consecutive_losses' not in st.session_state:
-    st.session_state.consecutive_losses = 0
+for key, value in {
+    'sequence': [],
+    'history': [],
+    'bankroll': 46000,
+    'wins': 0,
+    'losses': 0,
+    'prediction_accuracy': {'P': 0, 'B': 0, 'T': 0, 'total': 0},
+    'consecutive_losses': 0,
+    'pending_bet': None,
+    'advice': '',
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
-# Betting system settings
 BASE_UNIT = 0.05  # 5% of bankroll
-BET_INCREMENT = 1  # Add $1 after loss
-MAX_UNIT_PERCENTAGE = 0.1  # 10% cap
+BET_INCREMENT = 1
+MAX_UNIT_PERCENTAGE = 0.10  # 10% max stake
 
-# Title
-st.title("Algo Z100 Baccarat AI Strategy Tracker")
-
-# Helper: Calculate next bet
 def calculate_bet():
     base_bet = st.session_state.bankroll * BASE_UNIT
-    adjusted_bet = base_bet + (st.session_state.consecutive_losses * BET_INCREMENT)
-    max_bet = st.session_state.bankroll * MAX_UNIT_PERCENTAGE
-    return round(min(adjusted_bet, max_bet), 2)
+    adjusted = base_bet + (st.session_state.consecutive_losses * BET_INCREMENT)
+    return round(min(adjusted, st.session_state.bankroll * MAX_UNIT_PERCENTAGE), 2)
 
-# Process result
 def place_result(result):
-    if result == 'T':
-        st.session_state.last_was_tie = True
-        st.session_state.advice = "Tie recorded. No bankroll change."
-        st.session_state.sequence.append(result)
-        return
-
-    bet = st.session_state.pending_bet if st.session_state.pending_bet else result
+    bet = result  # We assume user bets based on what button is clicked
     amount = calculate_bet()
 
     win = (bet == result)
     if win:
         st.session_state.wins += 1
-        gain = amount if result == 'P' else amount * 0.95
+        gain = amount if result == 'P' else round(amount * 0.95, 2)
         st.session_state.bankroll += gain
-        st.session_state.prediction_accuracy[result] += 1
         st.session_state.consecutive_losses = 0
-        st.session_state.advice = f"Win! Gained ${gain:.2f}"
+        st.session_state.advice = f"Win! Gained ${gain}"
     else:
         st.session_state.losses += 1
         st.session_state.bankroll -= amount
         st.session_state.consecutive_losses += 1
-        st.session_state.advice = f"Loss. Lost ${amount:.2f}"
+        st.session_state.advice = f"Loss. Lost ${amount}"
 
+    st.session_state.prediction_accuracy[result] += 1
     st.session_state.prediction_accuracy['total'] += 1
+
+    st.session_state.sequence.append(result)
     st.session_state.history.append({
         'Time': datetime.datetime.now().strftime("%H:%M:%S"),
         'Bet': bet,
         'Result': result,
         'Win': win,
         'Amount': amount,
-        'T3_Level': st.session_state.t3_level,
-        'T3_Results': st.session_state.t3_results.copy()
+        'Bankroll': st.session_state.bankroll
     })
 
-    st.session_state.sequence.append(result)
-    st.session_state.pending_bet = None
-    st.session_state.last_was_tie = False
+# Interface
+st.title("Algo Z100 Baccarat AI Strategy")
 
-# UI for result entry
 st.subheader("Enter Result")
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3 = st.columns(3)
 
 with col1:
     if st.button("Player", use_container_width=True):
@@ -97,42 +72,33 @@ with col2:
 
 with col3:
     if st.button("Tie", use_container_width=True):
-        place_result("T")
+        st.session_state.sequence.append("T")
+        st.session_state.advice = "Tie recorded. No bankroll change."
 
-with col4:
-    if st.button("Undo Last", use_container_width=True):
-        if st.session_state.history and st.session_state.sequence:
-            st.session_state.sequence.pop()
-            last = st.session_state.history.pop()
-            if last['Win']:
-                st.session_state.wins -= 1
-                st.session_state.bankroll -= last['Amount'] if last["Bet"] == 'P' else last['Amount'] * 0.95
-                st.session_state.prediction_accuracy[last['Bet']] -= 1
-                st.session_state.consecutive_losses = 0
-            else:
-                st.session_state.bankroll += last['Amount']
-                st.session_state.losses -= 1
-                st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
-            st.session_state.prediction_accuracy['total'] -= 1
-            st.session_state.t3_level = last['T3_Level']
-            st.session_state.t3_results = last['T3_Results']
-            st.session_state.pending_bet = None
-            st.session_state.advice = "Last entry undone."
-            st.session_state.last_was_tie = False
+# Undo feature
+if st.button("Undo Last"):
+    if st.session_state.history:
+        last = st.session_state.history.pop()
+        st.session_state.sequence.pop()
+        if last['Win']:
+            st.session_state.wins -= 1
+            refund = last['Amount'] if last['Bet'] == 'P' else round(last['Amount'] * 0.95, 2)
+            st.session_state.bankroll -= refund
+        else:
+            st.session_state.losses -= 1
+            st.session_state.bankroll += last['Amount']
+            st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
+        st.session_state.prediction_accuracy[last['Result']] -= 1
+        st.session_state.prediction_accuracy['total'] -= 1
+        st.session_state.advice = "Last entry undone."
 
-# Display stats
-st.subheader("Dashboard")
+# Display
+st.subheader("Stats")
+st.metric("Bankroll", f"${st.session_state.bankroll:,.2f}")
+st.metric("Wins", st.session_state.wins)
+st.metric("Losses", st.session_state.losses)
 
-colA, colB, colC = st.columns(3)
-colA.metric("Bankroll", f"${st.session_state.bankroll:,.2f}")
-colB.metric("Wins", st.session_state.wins)
-colC.metric("Losses", st.session_state.losses)
-
-st.progress(min(st.session_state.prediction_accuracy['total'], 100), "Total Entries")
-
-st.write("### Advice")
 st.info(st.session_state.advice)
 
-# Show history
-st.write("### Game History")
+st.subheader("Game History")
 st.dataframe(st.session_state.history[::-1])
