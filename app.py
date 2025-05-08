@@ -246,16 +246,19 @@ with col4:
             st.session_state.advice = "Last entry undone."
             st.session_state.last_was_tie = False
 
-# --- DISPLAY SEQUENCE AS BEAD PLATE (Vertical) ---
+# --- DISPLAY SEQUENCE AS BEAD PLATE (Vertical, 6 rows per column) ---
 st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-100:] if 'sequence' in st.session_state else []  # Show full history up to 100 results
 num_columns = (len(sequence) + 5) // 6  # Calculate number of columns (6 results per column)
-columns = [sequence[i::6] for i in range(6)]  # Split into 6 vertical columns
+columns = []
+for i in range(0, len(sequence), 6):
+    column = sequence[i:i+6]
+    columns.append(column + [''] * (6 - len(column)))  # Pad with empty cells to ensure 6 rows
 
 bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 120px; overflow-x: auto;'>"
 for col in columns[:num_columns]:  # Only use columns with data
     col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
-    for result in col + [''] * (6 - len(col)):  # Pad with empty cells to ensure 6 results per column
+    for result in col:
         if result == 'P':
             col_html += "<div style='width: 20px; height: 20px; background-color: blue; border-radius: 50%;'></div>"
         elif result == 'B':
