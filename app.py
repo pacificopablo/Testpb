@@ -229,43 +229,63 @@ st.subheader("Enter Result")
 st.markdown("""
 <style>
 div.stButton > button {
-    width: 100px;
-    height: 40px;
+    width: 120px;
+    height: 45px;
     font-size: 16px;
-    border: none;
-    border-radius: 5px;
+    font-weight: bold;
+    border-radius: 8px;
+    border: 1px solid;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     cursor: pointer;
-    transition: transform 0.1s;
+    transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 div.stButton > button:hover {
-    transform: scale(1.05);
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 div.stButton > button:active {
     transform: scale(0.95);
+    box-shadow: none;
 }
 div.stButton > button[kind="player_btn"] {
-    background-color: #007bff;
+    background: linear-gradient(to bottom, #007bff, #0056b3);
+    border-color: #0056b3;
     color: white;
+}
+div.stButton > button[kind="player_btn"]:hover {
+    background: linear-gradient(to bottom, #339cff, #007bff);
 }
 div.stButton > button[kind="banker_btn"] {
-    background-color: #dc3545;
+    background: linear-gradient(to bottom, #dc3545, #a71d2a);
+    border-color: #a71d2a;
     color: white;
+}
+div.stButton > button[kind="banker_btn"]:hover {
+    background: linear-gradient(to bottom, #ff6666, #dc3545);
 }
 div.stButton > button[kind="tie_btn"] {
-    background-color: #28a745;
+    background: linear-gradient(to bottom, #28a745, #1e7e34);
+    border-color: #1e7e34;
     color: white;
 }
+div.stButton > button[kind="tie_btn"]:hover {
+    background: linear-gradient(to bottom, #4caf50, #28a745);
+}
 div.stButton > button[kind="undo_btn"] {
-    background-color: #6c757d;
+    background: linear-gradient(to bottom, #6c757d, #545b62);
+    border-color: #545b62;
     color: white;
+}
+div.stButton > button[kind="undo_btn"]:hover {
+    background: linear-gradient(to bottom, #8e959c, #6c757d);
 }
 @media (max-width: 600px) {
     div.stButton > button {
-        width: 80%;
-        max-width: 200px;
+        width: 90%;
+        max operational-width: 200px;
         height: 50px;
         font-size: 14px;
     }
