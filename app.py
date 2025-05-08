@@ -189,6 +189,10 @@ def place_result(result):
 
         st.session_state.pending_bet = None
 
+    # Reset consecutive losses for ties or non-bet results
+    if result == 'T' or not st.session_state.pending_bet:
+        st.session_state.consecutive_losses = 0
+
     st.session_state.sequence.append(result)
     if len(st.session_state.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
@@ -198,19 +202,20 @@ def place_result(result):
         return
 
     # Check loss avoidance conditions
-    if st.session_state.consecutive_losses >= 3:
-        st.session_state.pending_bet = None
-        st.session_state.advice = "Skip bet: Too many consecutive losses"
-        return
-
     pred, conf = predict_next()
     bet_amount = st.session_state.base_bet if st.session_state.strategy == 'Flatbet' else st.session_state.base_bet * st.session_state.t3_level
-    if bet_amount <= st.session_state.bankroll and conf >= 60:
+    if st.session_state.consecutive_losses >= 4:
+        st.session_state.pending_bet = None
+        st.session_state.advice = f"Skip bet: {st.session_state.consecutive_losses} consecutive losses"
+    elif bet_amount > st.session_state.bankroll:
+        st.session_state.pending_bet = None
+        st.session_state.advice = "Skip bet: Insufficient bankroll"
+    elif conf < 55:
+        st.session_state.pending_bet = None
+        st.session_state.advice = f"Skip bet: Low confidence ({conf:.0f}%)"
+    else:
         st.session_state.pending_bet = (bet_amount, pred)
         st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.0f}%)"
-    else:
-        st.session_state.pending_bet = None
-        st.session_state.advice = "Skip bet: Low confidence or insufficient bankroll"
 
 # --- RESULT INPUT ---
 st.subheader("Enter Result")
@@ -233,11 +238,11 @@ with col4:
                 st.session_state.wins -= 1
                 st.session_state.bankroll -= last['Amount'] if last["Bet"] == 'P' else last['Amount'] * 0.95
                 st.session_state.prediction_accuracy[last['Bet']] -= 1
-                st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
+                st.session_state.consecutive_losses = 0
             else:
                 st.session_state.losses -= 1
                 st.session_state.bankroll += last['Amount']
-                st.session_state.consecutive_losses += 1
+                st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
             st.session_state.prediction_accuracy['total'] -= 1
             st.session_state.t3_level = last['T3_Level']
             st.session_state.t3_results = last['T3_Results']
