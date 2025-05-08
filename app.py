@@ -250,23 +250,60 @@ if st.session_state.button_action:
             st.session_state.advice = "Last entry undone."
             st.session_state.last_was_tie = False
 
-# --- BEAD PLATE WITH MATPLOTLIB (Matching Screenshot) ---
+# --- BEAD PLATE WITH MATPLOTLIB (Casino-Style Bead Road) ---
 st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-100:]
 
-if sequence:
-    fig, ax = plt.subplots(figsize=(max(3, len(sequence) * 0.3), 0.8))
-    for i, result in enumerate(sequence):
+# Initialize grid positions
+positions = []
+current_col = 0
+current_row = 0
+last_result = None
+
+for result in sequence:
+    # Ignore Tie for column-changing logic, but still record it
+    is_tie = result == 'T'
+    effective_result = result if not is_tie else last_result
+
+    # If this is the first result or a change in result (excluding Tie), start a new column
+    if not positions or (effective_result and effective_result != last_result and not is_tie):
+        current_col += 1
+        current_row = 0
+        positions.append((current_col, current_row, result))
+    else:
+        # Continue in the same column if the result is the same or it's a Tie
+        current_row += 1
+        if current_row >= 6:  # If we reach row 6, start a new column
+            current_col += 1
+            current_row = 0
+        positions.append((current_col, current_row, result))
+
+    # Update last_result only if it's not a Tie
+    if not is_tie:
+        last_result = result
+
+if positions:
+    # Determine the number of columns
+    num_columns = max(pos[0] for pos in positions) + 1
+
+    # Plot the bead plate
+    fig, ax = plt.subplots(figsize=(max(3, num_columns * 0.5), 2.0))
+    for col, row, result in positions:
         if result == 'P':
-            ax.add_patch(plt.Circle((i, 0.5), 0.15, color='blue'))
+            ax.add_patch(plt.Circle((col, 5-row), 0.15, color='blue'))
         elif result == 'B':
-            ax.add_patch(plt.Circle((i, 0.5), 0.15, color='red'))
+            ax.add_patch(plt.Circle((col, 5-row), 0.15, color='red'))
         elif result == 'T':
-            ax.add_patch(plt.Circle((i, 0.5), 0.15, color='green'))
-    ax.set_xlim(-0.5, len(sequence) - 0.5)
-    ax.set_ylim(0, 1)
+            # Draw a smaller green circle to indicate Tie
+            ax.add_patch(plt.Circle((col, 5-row), 0.1, color='green'))
+    ax.set_xlim(-0.5, num_columns - 0.5)
+    ax.set_ylim(-0.5, 5.5)
     ax.set_aspect('equal')
-    ax.axis('off')
+    ax.grid(True, linestyle='-', color='gray', alpha=0.5)
+    ax.set_xticks(range(num_columns))
+    ax.set_yticks(range(6))
+    ax.set_xticklabels([])
+    ax.set_yticklabels(['1', '2', '3', '4', '5', '6'], fontsize=8)
     plt.tight_layout()
     st.pyplot(fig, use_container_width=True)
 else:
@@ -294,7 +331,7 @@ else:
 st.subheader("Status")
 st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
-st.markdown(f"**Betting Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
+st.markdown(f"**Betting Strategy**: ${st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
 
 # --- PREDICTION ACCURACY ---
