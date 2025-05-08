@@ -216,17 +216,9 @@ def place_result(result):
 # --- RESULT INPUT WITH RESPONSIVE BUTTONS ---
 st.subheader("Enter Result")
 
-# Use custom HTML/CSS to create responsive buttons
-button_html = """
-<div class="button-container">
+# Custom CSS for buttons
+button_style = """
     <style>
-        .button-container {
-            display: flex;
-            flex-direction: row;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
         .custom-button {
             width: 100px;
             height: 40px;
@@ -235,6 +227,7 @@ button_html = """
             border-radius: 5px;
             cursor: pointer;
             transition: transform 0.1s;
+            margin: 5px;
         }
         .custom-button:hover {
             transform: scale(1.05);
@@ -260,55 +253,47 @@ button_html = """
         }
         /* Media query for mobile screens (width <= 600px) */
         @media (max-width: 600px) {
-            .button-container {
-                flex-direction: column;
-                align-items: center;
-            }
             .custom-button {
                 width: 80%;
                 max-width: 200px;
                 height: 50px;
                 font-size: 14px;
+                margin: 5px auto;
+                display: block;
             }
         }
     </style>
-    <button id="player-btn" class="custom-button" onclick="Streamlit.setComponentValue('Player')">Player</button>
-    <button id="banker-btn" class="custom-button" onclick="Streamlit.setComponentValue('Banker')">Banker</button>
-    <button id="tie-btn" class="custom-button" onclick="Streamlit.setComponentValue('Tie')">Tie</button>
-    <button id="undo-btn" class="custom-button" onclick="Streamlit.setComponentValue('Undo Last')">Undo Last</button>
-</div>
 """
 
-# Render the custom buttons and handle clicks
-button_click = st.components.v1.html(button_html, height=150)
+# Inject CSS
+st.markdown(button_style, unsafe_allow_html=True)
 
-# Process button clicks
-if button_click:
-    if button_click == "Player":
-        place_result("P")
-    elif button_click == "Banker":
-        place_result("B")
-    elif button_click == "Tie":
-        place_result("T")
-    elif button_click == "Undo Last":
-        if st.session_state.history and st.session_state.sequence:
-            st.session_state.sequence.pop()
-            last = st.session_state.history.pop()
-            if last['Win']:
-                st.session_state.wins -= 1
-                st.session_state.bankroll -= last['Amount'] if last["Bet"] == 'P' else last['Amount'] * 0.95
-                st.session_state.prediction_accuracy[last['Bet']] -= 1
-                st.session_state.consecutive_losses = 0
-            else:
-                st.session_state.bankroll += last['Amount']
-                st.session_state.losses -= 1
-                st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
-            st.session_state.prediction_accuracy['total'] -= 1
-            st.session_state.t3_level = last['T3_Level']
-            st.session_state.t3_results = last['T3_Results']
-            st.session_state.pending_bet = None
-            st.session_state.advice = "Last entry undone."
-            st.session_state.last_was_tie = False
+# Responsive button layout using columns
+if st.button("Player", key="player_btn", help="Click to record a Player win", style="custom-button"):
+    place_result("P")
+if st.button("Banker", key="banker_btn", help="Click to record a Banker win", style="custom-button"):
+    place_result("B")
+if st.button("Tie", key="tie_btn", help="Click to record a Tie", style="custom-button"):
+    place_result("T")
+if st.button("Undo Last", key="undo_btn", help="Click to undo the last result", style="custom-button"):
+    if st.session_state.history and st.session_state.sequence:
+        st.session_state.sequence.pop()
+        last = st.session_state.history.pop()
+        if last['Win']:
+            st.session_state.wins -= 1
+            st.session_state.bankroll -= last['Amount'] if last["Bet"] == 'P' else last['Amount'] * 0.95
+            st.session_state.prediction_accuracy[last['Bet']] -= 1
+            st.session_state.consecutive_losses = 0
+        else:
+            st.session_state.bankroll += last['Amount']
+            st.session_state.losses -= 1
+            st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
+        st.session_state.prediction_accuracy['total'] -= 1
+        st.session_state.t3_level = last['T3_Level']
+        st.session_state.t3_results = last['T3_Results']
+        st.session_state.pending_bet = None
+        st.session_state.advice = "Last entry undone."
+        st.session_state.last_was_tie = False
 
 # --- DISPLAY SEQUENCE AS BEAD PLATE (Vertical, 6 rows per column, Tie as separate cell) ---
 st.subheader("Current Sequence (Bead Plate)")
