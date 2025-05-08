@@ -225,26 +225,26 @@ def place_result(result):
 # --- RESULT INPUT WITH NATIVE STREAMLIT BUTTONS ---
 st.subheader("Enter Result")
 
-# Custom CSS for button styling
+# Custom CSS for smaller button styling
 st.markdown("""
 <style>
 div.stButton > button {
-    width: 120px;
-    height: 45px;
-    font-size: 16px;
+    width: 90px;
+    height: 35px;
+    font-size: 14px;
     font-weight: bold;
-    border-radius: 8px;
+    border-radius: 6px;
     border: 1px solid;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 div.stButton > button:hover {
-    transform: scale(1.1);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    transform: scale(1.08);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
 }
 div.stButton > button:active {
     transform: scale(0.95);
@@ -284,10 +284,10 @@ div.stButton > button[kind="undo_btn"]:hover {
 }
 @media (max-width: 600px) {
     div.stButton > button {
-        width: 90%;
-        max operational-width: 200px;
-        height: 50px;
-        font-size: 14px;
+        width: 80%;
+        max-width: 150px;
+        height: 40px;
+        font-size: 12px;
     }
 }
 </style>
