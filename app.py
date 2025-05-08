@@ -154,13 +154,13 @@ def place_result(result):
             else:
                 st.session_state.bankroll += bet_amount
             st.session_state.t3_results.append('W')
-            st.session_state.wins += 1  # Ensure win counter increments
+            st.session_state.wins += 1
             st.session_state.prediction_accuracy[selection] += 1
             st.session_state.consecutive_losses = 0
         else:
             st.session_state.bankroll -= bet_amount
             st.session_state.t3_results.append('L')
-            st.session_state.losses += 1  # Ensure loss counter increments
+            st.session_state.losses += 1
             st.session_state.consecutive_losses += 1
             st.session_state.loss_log.append({
                 'sequence': st.session_state.sequence[-10:],
@@ -183,19 +183,6 @@ def place_result(result):
         if len(st.session_state.history) > 1000:
             st.session_state.history = st.session_state.history[-1000:]
 
-        if len(st.session_state.t3_results) == 3:
-            w = st.session_state.t3_results.count('W')
-            l = st.session_state.t3_results.count('L')
-            if w == 3:
-                st.session_state.t3_level = max(1, st.session_state.t3_level - 2)
-            elif w == 2:
-                st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
-            elif l == 2:
-                st.session_state.t3_level += 1
-            elif l == 3:
-                st.session_state.t3_level += 2
-            st.session_state.t3_results = []
-
         st.session_state.pending_bet = None
 
     if not st.session_state.pending_bet and result != 'T':
@@ -209,15 +196,33 @@ def place_result(result):
         st.session_state.target_hit = True
         return
 
-    # Check confidence before placing a bet
+    # Check confidence and bankroll before placing a bet
     pred, conf = predict_next()
     if conf < 50.5:
         st.session_state.pending_bet = None
         st.session_state.advice = f"No bet (Confidence: {conf:.1f}% < 50.5%)"
     else:
-        bet_amount = st.session_state.base_bet if st.session_state.strategy == 'Flatbet' else st.session_state.base_bet * st.session_state.t3_level
-        st.session_state.pending_bet = (bet_amount, pred)
-        st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
+        bet_amount = st.session_state.base_bet * st.session_state.t3_level
+        if bet_amount > st.session_state.bankroll:
+            st.session_state.pending_bet = None
+            st.session_state.advice = "No bet: Insufficient bankroll."
+        else:
+            st.session_state.pending_bet = (bet_amount, pred)
+            st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
+
+    # T3 Level Adjustment (after 3 bets)
+    if len(st.session_state.t3_results) == 3:
+        wins = st.session_state.t3_results.count('W')
+        losses = st.session_state.t3_results.count('L')
+        if wins == 3:
+            st.session_state.t3_level = max(1, st.session_state.t3_level - 2)  # Move -2 levels
+        elif wins == 2 and losses == 1:
+            st.session_state.t3_level = max(1, st.session_state.t3_level - 1)  # Move -1 level
+        elif losses == 2 and wins == 1:
+            st.session_state.t3_level = st.session_state.t3_level + 1  # Move +1 level
+        elif losses == 3:
+            st.session_state.t3_level = st.session_state.t3_level + 2  # Move +2 levels
+        st.session_state.t3_results = []  # Reset for next sequence
 
 # --- RESULT INPUT WITH CUSTOM HTML BUTTONS ---
 st.subheader("Enter Result")
@@ -274,7 +279,6 @@ custom_buttons = """
         background-color: #6c757d;
         color: white;
     }
-    /* Media query for mobile screens (width <= 600px) */
     @media (max-width: 600px) {
         .button-container {
             flex-direction: column;
@@ -291,14 +295,12 @@ custom_buttons = """
 
 <script>
     function setValue(value) {
-        // Set the value in a hidden input and trigger a change event
         const input = document.getElementById('button_input');
         input.value = value;
         input.dispatchEvent(new Event('change', { bubbles: true }));
     }
 </script>
 
-<!-- Hidden input to capture button clicks -->
 <input type="hidden" id="button_input" value="">
 """
 
@@ -337,11 +339,10 @@ if button_input != st.session_state.button_click:
             st.session_state.advice = "Last entry undone."
             st.session_state.last_was_tie = False
 
-# --- DISPLAY SEQUENCE AS BEAD PLATE (Vertical, 6 rows per column, Tie as separate cell) ---
+# --- DISPLAY SEQUENCE AS BEAD PLATE ---
 st.subheader("Current Sequence (Bead Plate)")
-sequence = st.session_state.sequence[-100:] if 'sequence' in st.session_state else []  # Show full history up to 100 results
+sequence = st.session_state.sequence[-100:] if 'sequence' in st.session_state else []
 
-# Process sequence to create a grid: fill top to bottom, left to right
 grid = []
 current_col = []
 for result in sequence:
@@ -353,19 +354,17 @@ for result in sequence:
 if current_col:
     grid.append(current_col)
 
-# Pad the last column to 6 rows if necessary
 if grid and len(grid[-1]) < 6:
     grid[-1] += [''] * (6 - len(grid[-1]))
 
-# Calculate number of columns
 num_columns = len(grid)
 
 bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 120px; overflow-x: auto;'>"
-for col in grid[:num_columns]:  # Only use columns with data
+for col in grid[:num_columns]:
     col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
     for result in col:
         if result == '':
-            col_html += "<div style='width: 20px; height: 20px;'></div>"  # Empty cell for padding
+            col_html += "<div style='width: 20px; height: 20px;'></div>"
         elif result == 'P':
             col_html += "<div style='width: 20px; height: 20px; background-color: blue; border-radius: 50%;'></div>"
         elif result == 'B':
