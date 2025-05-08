@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+from collections import defaultdict
 
 st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
 st.title("MANG BACCARAT GROUP")
@@ -21,13 +22,9 @@ if 'bankroll' not in st.session_state:
     st.session_state.target_value = 10.0
     st.session_state.initial_bankroll = 0.0
     st.session_state.target_hit = False
-    st.session_state.contrarian_betting = False
-    st.session_state.prediction_accuracy = {
-        'streak': {'correct': 0, 'total': 0},
-        'alternation': {'correct': 0, 'total': 0},
-        'dominance': {'correct': 0, 'total': 0},
-        'contrarian': {'correct': 0, 'total': 0}
-    }
+    st.session_state.prediction_accuracy = {'P': 0, 'B': 0, 'T': 0, 'total': 0}
+    st.session_state.consecutive_losses = 0
+    st.session_state.markov_transitions = defaultdict(lambda: {'P': 0, 'B': 0, 'T': 0})
 
 # --- RESET BUTTON ---
 if st.button("Reset Session"):
@@ -43,7 +40,6 @@ with st.form("setup_form"):
     strategy = st.selectbox("Choose Strategy", ["T3", "Flatbet"], index=["T3", "Flatbet"].index(st.session_state.strategy))
     target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
     target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
-    contrarian_betting = st.checkbox("Enable Contrarian Betting", value=st.session_state.contrarian_betting)
     start_clicked = st.form_submit_button("Start Session")
 
 if start_clicked:
@@ -69,88 +65,54 @@ if start_clicked:
         st.session_state.target_value = target_value
         st.session_state.initial_bankroll = bankroll
         st.session_state.target_hit = False
-        st.session_state.contrarian_betting = contrarian_betting
-        st.session_state.prediction_accuracy = {
-            'streak': {'correct': 0, 'total': 0},
-            'alternation': {'correct': 0, 'total': 0},
-            'dominance': {'correct': 0, 'total': 0},
-            'contrarian': {'correct': 0, 'total': 0}
-        }
+        st.session_state.prediction_accuracy = {'P': 0, 'B': 0, 'T': 0, 'total': 0}
+        st.session_state.consecutive_losses = 0
+        st.session_state.markov_transitions = defaultdict(lambda: {'P': 0, 'B': 0, 'T': 0})
         st.success("Session started!")
 
 # --- FUNCTIONS ---
 def predict_next():
-    recent = st.session_state.sequence[-10:]  # Short-term trends
-    long_term = st.session_state.sequence[-50:]  # Long-term trends
-    if not recent:
-        return random.choice(['P', 'B']), 50, 'random'
+    sequence = st.session_state.sequence[-50:]  # Analyze last 50 results
+    if len(sequence) < 2:
+        return random.choice(['P', 'B']), 50  # Default if insufficient history
 
-    # Calculate prediction accuracies
-    accuracies = {}
-    for strategy in ['streak', 'alternation', 'dominance', 'contrarian']:
-        total = st.session_state.prediction_accuracy[strategy]['total']
-        correct = st.session_state.prediction_accuracy[strategy]['correct']
-        accuracies[strategy] = correct / total if total > 0 else 0.5
+    # Update Markov transitions
+    transitions = st.session_state.markov_transitions
+    for i in range(len(sequence) - 1):
+        current, next_outcome = sequence[i], sequence[i + 1]
+        transitions[current][next_outcome] += 1
 
-    # Streak detection
-    streak_side = None
-    streak_length = 0
-    current_side = recent[-1]
-    for i in range(len(recent) - 1, -1, -1):
-        if recent[i] == current_side:
-            streak_length += 1
-        else:
-            break
-    if streak_length >= 3:
-        streak_side = current_side
+    # Get probabilities for the last outcome
+    last_outcome = sequence[-1]
+    counts = transitions[last_outcome]
+    total = sum(counts.values())
+    if total == 0:
+        return random.choice(['P', 'B']), 50
 
-    # Alternation detection
-    alternation = False
-    if len(recent) >= 4:
-        alternating = all(recent[i] != recent[i-1] for i in range(-1, -4, -1))
-        if alternating:
-            alternation = True
+    probs = {k: v / total for k, v in counts.items()}
+    p_prob = probs.get('P', 0)
+    b_prob = probs.get('B', 0)
+    t_prob = probs.get('T', 0)
 
-    # Dominance (weighted recent + long-term)
-    p_recent = recent.count('P') / len(recent) if recent else 0.5
-    b_recent = recent.count('B') / len(recent) if recent else 0.5
-    p_long = long_term.count('P') / len(long_term) if long_term else 0.5
-    b_long = long_term.count('B') / len(long_term) if long_term else 0.5
-    p_weighted = 0.7 * p_recent + 0.3 * p_long
-    b_weighted = 0.7 * b_recent + 0.3 * b_long
+    # Apply Banker bias (slight preference for B if probabilities are close)
+    if abs(p_prob - b_prob) < 0.05 and b_prob > 0:
+        b_prob += 0.05
+        p_prob = max(0, p_prob - 0.05)
 
-    # Contrarian logic (bet against streak or dominant side)
-    contrarian_side = None
-    if streak_side and st.session_state.contrarian_betting:
-        contrarian_side = 'P' if streak_side == 'B' else 'B'
-    elif p_weighted > b_weighted and st.session_state.contrarian_betting:
-        contrarian_side = 'B'
-    elif b_weighted > p_weighted and st.session_state.contrarian_betting:
-        contrarian_side = 'P'
+    # Calculate confidence based on max probability and prediction accuracy
+    accuracy = st.session_state.prediction_accuracy['total']
+    accuracy_rate = st.session_state.prediction_accuracy['P'] / accuracy if accuracy > 0 else 0.5
+    max_prob = max(p_prob, b_prob)
+    confidence = 50 + (max_prob * 40) * (0.5 + accuracy_rate / 2)
+    confidence = min(confidence, 90)
 
-    # Choose best strategy based on accuracy
-    best_strategy = max(accuracies, key=accuracies.get) if max(accuracies.values()) > 0.5 else 'dominance'
-
-    # Decision logic
-    if contrarian_side and accuracies['contrarian'] >= 0.5:
-        confidence = 60 + (accuracies['contrarian'] * 20)
-        return contrarian_side, min(confidence, 90), 'contrarian'
-    elif streak_side and accuracies['streak'] >= max(0.5, accuracies['alternation'], accuracies['dominance']):
-        confidence = 55 + (streak_length * 5) * accuracies['streak']
-        return streak_side, min(confidence, 90), 'streak'
-    elif alternation and accuracies['alternation'] >= max(0.5, accuracies['streak'], accuracies['dominance']):
-        next_side = 'P' if recent[-1] == 'B' else 'B'
-        confidence = 55 + (len(recent) / 10 * 15) * accuracies['alternation']
-        return next_side, min(confidence, 90), 'alternation'
+    # Choose prediction
+    if b_prob > p_prob:
+        return 'B', confidence
+    elif p_prob > b_prob:
+        return 'P', confidence
     else:
-        if p_weighted > b_weighted:
-            confidence = 50 + (p_weighted * 30) * accuracies['dominance']
-            return 'P', min(confidence, 90), 'dominance'
-        elif b_weighted > p_weighted:
-            confidence = 50 + (b_weighted * 30) * accuracies['dominance']
-            return 'B', min(confidence, 90), 'dominance'
-        else:
-            return random.choice(['P', 'B']), 50, 'random'
+        return 'B', confidence  # Default to Banker in ties
 
 def check_target_hit():
     if st.session_state.target_mode == "Profit %":
@@ -174,6 +136,7 @@ def reset_session_auto():
     st.session_state.wins = 0
     st.session_state.losses = 0
     st.session_state.target_hit = False
+    st.session_state.consecutive_losses = 0
 
 def place_result(result):
     if st.session_state.target_hit:
@@ -182,7 +145,7 @@ def place_result(result):
 
     bet_amount = 0
     if st.session_state.pending_bet:
-        bet_amount, selection, strategy = st.session_state.pending_bet
+        bet_amount, selection = st.session_state.pending_bet
         win = result == selection
         if win:
             if selection == 'B':
@@ -191,12 +154,14 @@ def place_result(result):
                 st.session_state.bankroll += bet_amount
             st.session_state.t3_results.append('W')
             st.session_state.wins += 1
-            st.session_state.prediction_accuracy[strategy]['correct'] += 1
+            st.session_state.prediction_accuracy[selection] += 1
+            st.session_state.consecutive_losses = 0
         else:
             st.session_state.bankroll -= bet_amount
             st.session_state.t3_results.append('L')
             st.session_state.losses += 1
-        st.session_state.prediction_accuracy[strategy]['total'] += 1
+            st.session_state.consecutive_losses += 1
+        st.session_state.prediction_accuracy['total'] += 1
 
         st.session_state.history.append({
             "Bet": selection,
@@ -204,8 +169,7 @@ def place_result(result):
             "Amount": bet_amount,
             "Win": win,
             "T3_Level": st.session_state.t3_level,
-            "T3_Results": st.session_state.t3_results.copy(),
-            "Strategy": strategy
+            "T3_Results": st.session_state.t3_results.copy()
         })
         if len(st.session_state.history) > 1000:
             st.session_state.history = st.session_state.history[-1000:]
@@ -226,25 +190,31 @@ def place_result(result):
         st.session_state.pending_bet = None
 
     st.session_state.sequence.append(result)
-    if len(st.session_state.sequence) > 100:
+    if len(st.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
 
     if check_target_hit():
         st.session_state.target_hit = True
         return
 
-    pred, conf, strategy = predict_next()
+    # Check loss avoidance conditions
+    if st.session_state.consecutive_losses >= 3:
+        st.session_state.pending_bet = None
+        st.session_state.advice = "Skip bet: Too many consecutive losses"
+        return
+
+    pred, conf = predict_next()
     bet_amount = st.session_state.base_bet if st.session_state.strategy == 'Flatbet' else st.session_state.base_bet * st.session_state.t3_level
     if bet_amount <= st.session_state.bankroll and conf >= 60:
-        st.session_state.pending_bet = (bet_amount, pred, strategy)
-        st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.0f}% - {strategy.capitalize()})"
+        st.session_state.pending_bet = (bet_amount, pred)
+        st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.0f}%)"
     else:
         st.session_state.pending_bet = None
         st.session_state.advice = "Skip bet: Low confidence or insufficient bankroll"
 
 # --- RESULT INPUT ---
 st.subheader("Enter Result")
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     if st.button("Player (P)"):
         place_result("P")
@@ -252,6 +222,9 @@ with col2:
     if st.button("Banker (B)"):
         place_result("B")
 with col3:
+    if st.button("Tie (T)"):
+        place_result("T")
+with col4:
     if st.button("Undo Last"):
         if st.session_state.history and st.session_state.sequence:
             st.session_state.sequence.pop()
@@ -259,11 +232,13 @@ with col3:
             if last['Win']:
                 st.session_state.wins -= 1
                 st.session_state.bankroll -= last['Amount'] if last["Bet"] == 'P' else last['Amount'] * 0.95
-                st.session_state.prediction_accuracy[last['Strategy']]['correct'] -= 1
+                st.session_state.prediction_accuracy[last['Bet']] -= 1
+                st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
             else:
                 st.session_state.losses -= 1
                 st.session_state.bankroll += last['Amount']
-            st.session_state.prediction_accuracy[last['Strategy']]['total'] -= 1
+                st.session_state.consecutive_losses += 1
+            st.session_state.prediction_accuracy['total'] -= 1
             st.session_state.t3_level = last['T3_Level']
             st.session_state.t3_results = last['T3_Results']
             st.session_state.pending_bet = None
@@ -276,10 +251,10 @@ st.text(", ".join(latest_sequence or ["None"]))
 
 # --- PREDICTION DISPLAY ---
 if st.session_state.pending_bet:
-    amount, side, strategy = st.session_state.pending_bet
+    amount, side = st.session_state.pending_bet
     color = 'blue' if side == 'P' else 'red'
     conf = st.session_state.advice.split('(')[-1].split('%')[0] if '(' in st.session_state.advice else '0'
-    st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.0f} | Win Prob: {conf}% ({strategy.capitalize()})</h4>", unsafe_allow_html=True)
+    st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.0f} | Win Prob: {conf}%</h4>", unsafe_allow_html=True)
 else:
     if not st.session_state.target_hit:
         st.info(st.session_state.advice)
@@ -290,15 +265,16 @@ st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
 st.markdown(f"**Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
-st.markdown(f"**Contrarian Betting**: {'Enabled' if st.session_state.contrarian_betting else 'Disabled'}")
+st.markdown(f"**Consecutive Losses**: {st.session_state.consecutive_losses}")
 
 # --- PREDICTION ACCURACY ---
 st.subheader("Prediction Accuracy")
-for strategy, stats in st.session_state.prediction_accuracy.items():
-    total = stats['total']
-    if total > 0:
-        accuracy = (stats['correct'] / total) * 100
-        st.markdown(f"**{strategy.capitalize()}**: {stats['correct']}/{total} ({accuracy:.1f}%)")
+total = st.session_state.prediction_accuracy['total']
+if total > 0:
+    p_accuracy = (st.session_state.prediction_accuracy['P'] / total) * 100
+    b_accuracy = (st.session_state.prediction_accuracy['B'] / total) * 100
+    st.markdown(f"**Player Bets**: {st.session_state.prediction_accuracy['P']}/{total} ({p_accuracy:.1f}%)")
+    st.markdown(f"**Banker Bets**: {st.session_state.prediction_accuracy['B']}/{total} ({b_accuracy:.1f}%)")
 
 # --- UNIT PROFIT ---
 if st.session_state.base_bet > 0:
@@ -315,8 +291,7 @@ if st.session_state.history:
             "Result": h["Result"],
             "Amount": f"${h['Amount']:.0f}",
             "Outcome": "Win" if h["Win"] else "Loss",
-            "T3 Level": h["T3_Level"],
-            "Strategy": h["Strategy"]
+            "T3 Level": h["T3_Level"]
         }
         for h in st.session_state.history[-n:]
     ])
