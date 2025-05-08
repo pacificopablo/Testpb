@@ -26,8 +26,6 @@ if 'bankroll' not in st.session_state:
     st.session_state.consecutive_losses = 0
     st.session_state.loss_log = []
     st.session_state.last_was_tie = False
-if 'button_click' not in st.session_state:
-    st.session_state.button_click = ""
 
 # --- RESET BUTTON ---
 if st.button("Reset Session"):
@@ -224,102 +222,71 @@ def place_result(result):
             st.session_state.t3_level = st.session_state.t3_level + 2  # Move +2 levels
         st.session_state.t3_results = []  # Reset for next sequence
 
-# --- RESULT INPUT WITH CUSTOM HTML BUTTONS ---
+# --- RESULT INPUT WITH NATIVE STREAMLIT BUTTONS ---
 st.subheader("Enter Result")
 
-# Custom HTML and CSS for buttons
-custom_buttons = """
-<div class="button-container">
-    <button id="player_btn" onclick="setValue('P')">Player</button>
-    <button id="banker_btn" onclick="setValue('B')">Banker</button>
-    <button id="tie_btn" onclick="setValue('T')">Tie</button>
-    <button id="undo_btn" onclick="setValue('undo')">Undo Last</button>
-</div>
-
+# Custom CSS for button styling
+st.markdown("""
 <style>
-    .button-container {
-        display: flex;
-        flex-direction: row;
-        flex-wrap: wrap;
-        gap: 10px;
-        justify-content: center;
-        margin-bottom: 10px;
+div.stButton > button {
+    width: 100px;
+    height: 40px;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+div.stButton > button:hover {
+    transform: scale(1.05);
+}
+div.stButton > button:active {
+    transform: scale(0.95);
+}
+div.stButton > button[kind="player_btn"] {
+    background-color: #007bff;
+    color: white;
+}
+div.stButton > button[kind="banker_btn"] {
+    background-color: #dc3545;
+    color: white;
+}
+div.stButton > button[kind="tie_btn"] {
+    background-color: #28a745;
+    color: white;
+}
+div.stButton > button[kind="undo_btn"] {
+    background-color: #6c757d;
+    color: white;
+}
+@media (max-width: 600px) {
+    div.stButton > button {
+        width: 80%;
+        max-width: 200px;
+        height: 50px;
+        font-size: 14px;
     }
-    .button-container button {
-        width: 100px;
-        height: 40px;
-        font-size: 16px;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        transition: transform 0.1s;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .button-container button:hover {
-        transform: scale(1.05);
-    }
-    .button-container button:active {
-        transform: scale(0.95);
-    }
-    #player_btn {
-        background-color: #007bff;
-        color: white;
-    }
-    #banker_btn {
-        background-color: #dc3545;
-        color: white;
-    }
-    #tie_btn {
-        background-color: #28a745;
-        color: white;
-    }
-    #undo_btn {
-        background-color: #6c757d;
-        color: white;
-    }
-    @media (max-width: 600px) {
-        .button-container {
-            flex-direction: column;
-            align-items: center;
-        }
-        .button-container button {
-            width: 80%;
-            max-width: 200px;
-            height: 50px;
-            font-size: 14px;
-        }
-    }
+}
 </style>
+""", unsafe_allow_html=True)
 
-<script>
-    function setValue(value) {
-        const input = document.getElementById('button_input');
-        input.value = value;
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-</script>
+# Create a 4-column layout for buttons
+col1, col2, col3, col4 = st.columns(4)
 
-<input type="hidden" id="button_input" value="">
-"""
-
-# Render the custom buttons
-components = st.components.v1.html(custom_buttons, height=150)
-
-# Use a hidden text input to capture the button click
-button_input = st.text_input("button_input", value="", key="button_input_hidden", label_visibility="hidden")
-
-# Process the button click
-if button_input != st.session_state.button_click:
-    st.session_state.button_click = button_input
-    if button_input == "P":
+with col1:
+    if st.button("Player", key="player_btn"):
         place_result("P")
-    elif button_input == "B":
+with col2:
+    if st.button("Banker", key="banker_btn"):
         place_result("B")
-    elif button_input == "T":
+with col3:
+    if st.button("Tie", key="tie_btn"):
         place_result("T")
-    elif button_input == "undo":
+with col4:
+    if st.button("Undo Last", key="undo_btn"):
         if st.session_state.history and st.session_state.sequence:
             st.session_state.sequence.pop()
             last = st.session_state.history.pop()
