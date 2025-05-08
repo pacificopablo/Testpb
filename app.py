@@ -79,59 +79,34 @@ if start_clicked:
 
 # --- FUNCTIONS ---
 def predict_next():
-    sequence = [x for x in st.session_state.sequence[-4:] if x in ['P', 'B']]  # Last 4 non-Tie outcomes
+    sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]  # Non-Tie outcomes
     if len(sequence) < 2:
-        return 'B', 60  # Default to Banker with 60% confidence
+        return 'B', 45.86  # Default to Banker with theoretical probability
 
-    last_one = sequence[-1]
-    last_two = sequence[-2:] if len(sequence) >= 2 else []
-    last_three = sequence[-3:] if len(sequence) >= 3 else []
-    last_four = sequence[-4:] if len(sequence) >= 4 else []
+    # Get the last bigram (last 2 non-Tie outcomes)
+    bigram = sequence[-2:]
 
-    # Rule 1: Short Streak (1–2 identical outcomes) → Follow (FTCF)
-    if len(last_two) == 2 and last_two == [last_one, last_one]:
-        return last_one, 70  # Follow PP or BB
-    if len(sequence) >= 1:
-        return last_one, 70  # Follow single P or B
+    # Count transitions from this bigram in the sequence
+    transitions = defaultdict(int)
+    for i in range(len(sequence) - 2):
+        if sequence[i:i+2] == bigram:
+            next_outcome = sequence[i+2]
+            transitions[next_outcome] += 1
 
-    # Rule 2: Medium Streak (3 identical outcomes) → Follow (FTCF)
-    if len(last_three) == 3 and all(x == last_one for x in last_three):
-        return last_one, 65  # Follow PPP or BBB
+    # Calculate transition probabilities
+    total_transitions = sum(transitions.values())
+    if total_transitions > 0:
+        prob_p = (transitions['P'] / total_transitions) * 100
+        prob_b = (transitions['B'] / total_transitions) * 100
+    else:
+        # Use theoretical Baccarat probabilities (ignoring Ties)
+        prob_p = 44.62  # Player probability
+        prob_b = 45.86  # Banker probability
 
-    # Rule 3: Long Streak (4+ identical outcomes) → Bet opposite (FTCF)
-    if len(last_four) == 4 and all(x == last_one for x in last_four):
-        return 'P' if last_one == 'B' else 'B', 68  # Bet opposite
-
-    # Rule 4: BBP → Bet P (Original)
-    if len(last_three) == 3 and last_three == ['B', 'B', 'P']:
-        return 'P', 65
-
-    # Rule 5: BPB → Bet B (Original)
-    if len(last_three) == 3 and last_three == ['B', 'P', 'B']:
-        return 'B', 65
-
-    # Rule 6: Alternating Pattern (PBP or BPB) → Continue (FTCF)
-    if len(last_three) == 3 and last_three in [['P', 'B', 'P'], ['B', 'P', 'B']]:
-        return 'B' if last_three[-1] == 'P' else 'P', 65  # Continue alternation
-
-    # Rule 7: BPPP or PBBB → Bet P (Original)
-    if len(last_four) == 4 and last_four in [['B', 'P', 'P', 'P'], ['P', 'B', 'B', 'B']]:
-        return 'P', 65
-
-    # Rule 8: BBBP or PPPB → Bet B (Original)
-    if len(last_four) == 4 and last_four in [['B', 'B', 'B', 'P'], ['P', 'P', 'P', 'B']]:
-        return 'B', 65
-
-    # Rule 9: Mixed Pattern with Recent Dominance → Bet dominant (FTCF)
-    if len(last_four) == 4:
-        p_count = last_four.count('P')
-        b_count = last_four.count('B')
-        if p_count > b_count:
-            return 'P', 62
-        return 'B', 62  # Default to Banker in ties
-
-    # Default: Bet Banker
-    return 'B', 60
+    # Predict the outcome with higher probability
+    if prob_p > prob_b:
+        return 'P', prob_p
+    return 'B', prob_b
 
 def check_target_hit():
     if st.session_state.target_mode == "Profit %":
@@ -231,24 +206,11 @@ def place_result(result):
         st.session_state.target_hit = True
         return
 
+    # Always place a bet for non-Tie rounds
     pred, conf = predict_next()
     bet_amount = st.session_state.base_bet if st.session_state.strategy == 'Flatbet' else st.session_state.base_bet * st.session_state.t3_level
-    min_confidence = 60  # Use FTCF's threshold for hybrid strategy
-    if st.session_state.consecutive_losses >= 2:
-        st.session_state.pending_bet = None
-        st.session_state.advice = f"Skip bet: {st.session_state.consecutive_losses} consecutive losses"
-    elif bet_amount > st.session_state.bankroll:
-        st.session_state.pending_bet = None
-        st.session_state.advice = "Skip bet: Insufficient bankroll"
-    elif conf < min_confidence:
-        st.session_state.pending_bet = None
-        st.session_state.advice = f"Skip bet: Low confidence ({conf:.0f}%)"
-    elif st.session_state.last_was_tie:
-        st.session_state.pending_bet = None
-        st.session_state.advice = "Skip bet: Recent Tie result"
-    else:
-        st.session_state.pending_bet = (bet_amount, pred)
-        st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.0f}%)"
+    st.session_state.pending_bet = (bet_amount, pred)
+    st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
 
 # --- RESULT INPUT ---
 st.subheader("Enter Result")
