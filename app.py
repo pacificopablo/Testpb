@@ -190,7 +190,7 @@ def place_result(result):
         st.session_state.pending_bet = None
 
     st.session_state.sequence.append(result)
-    if len(st.sequence) > 100:
+    if len(st.session_state.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
 
     if check_target_hit():
