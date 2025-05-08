@@ -246,32 +246,19 @@ with col4:
             st.session_state.advice = "Last entry undone."
             st.session_state.last_was_tie = False
 
-# --- DISPLAY SEQUENCE AS BEAD PLATE (Vertical, 6 rows per column) ---
+# --- DISPLAY SEQUENCE AS BEAD PLATE (Vertical, 6 rows per column, Tie as separate cell) ---
 st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-100:] if 'sequence' in st.session_state else []  # Show full history up to 100 results
 
 # Process sequence to create a grid: fill top to bottom, left to right
 grid = []
 current_col = []
-non_tie_count = 0
 for result in sequence:
-    if result != 'T':
-        if len(current_col) < 6:
-            current_col.append(result)
-        else:
-            grid.append(current_col)
-            current_col = [result]
-        non_tie_count += 1
+    if len(current_col) < 6:
+        current_col.append(result)
     else:
-        # Find the last non-tie result in the current column or previous columns
-        if current_col:
-            current_col[-1] = (current_col[-1], 'T')  # Mark the last non-tie with a Tie
-        elif grid:
-            last_col = grid[-1]
-            for i in range(len(last_col) - 1, -1, -1):
-                if isinstance(last_col[i], str):
-                    last_col[i] = (last_col[i], 'T')
-                    break
+        grid.append(current_col)
+        current_col = [result]
 if current_col:
     grid.append(current_col)
 
@@ -279,8 +266,8 @@ if current_col:
 if grid and len(grid[-1]) < 6:
     grid[-1] += [''] * (6 - len(grid[-1]))
 
-# Calculate number of columns (based on non-tie results)
-num_columns = (non_tie_count + 5) // 6
+# Calculate number of columns
+num_columns = len(grid)
 
 bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 120px; overflow-x: auto;'>"
 for col in grid[:num_columns]:  # Only use columns with data
@@ -288,14 +275,12 @@ for col in grid[:num_columns]:  # Only use columns with data
     for result in col:
         if result == '':
             col_html += "<div style='width: 20px; height: 20px;'></div>"  # Empty cell for padding
-        elif isinstance(result, tuple):  # Handle Tie overlay
-            base_result, _ = result
-            color = 'blue' if base_result == 'P' else 'red'
-            col_html += f"<div style='width: 20px; height: 20px; background-color: {color}; border-radius: 50%; position: relative;'>" + \
-                        "<div style='width: 10px; height: 10px; background-color: green; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);'></div></div>"
-        else:  # Player or Banker
-            color = 'blue' if result == 'P' else 'red'
-            col_html += f"<div style='width: 20px; height: 20px; background-color: {color}; border-radius: 50%;'></div>"
+        elif result == 'P':
+            col_html += "<div style='width: 20px; height: 20px; background-color: blue; border-radius: 50%;'></div>"
+        elif result == 'B':
+            col_html += "<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>"
+        elif result == 'T':
+            col_html += "<div style='width: 20px; height: 20px; background-color: green; border-radius: 50%;'></div>"
     col_html += "</div>"
     bead_plate_html += col_html
 bead_plate_html += "</div>"
