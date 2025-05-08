@@ -250,39 +250,23 @@ if st.session_state.button_action:
             st.session_state.advice = "Last entry undone."
             st.session_state.last_was_tie = False
 
-# --- BEAD PLATE WITH MATPLOTLIB (Traditional Baccarat Bead Road) ---
+# --- BEAD PLATE WITH MATPLOTLIB (Matching Screenshot) ---
 st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-100:]
 
-# Create a grid with 6 rows and enough columns to hold all results
-num_columns = (len(sequence) + 5) // 6  # Ceiling division to get number of columns
-grid = [['' for _ in range(num_columns)] for _ in range(6)]
-
-# Fill the grid left to right, top to bottom
-for idx, result in enumerate(sequence):
-    col = idx // 6  # Determine column
-    row = idx % 6   # Determine row
-    grid[row][col] = result
-
 if sequence:
-    fig, ax = plt.subplots(figsize=(max(3, num_columns * 0.5), 2.0))
-    for row in range(6):
-        for col in range(num_columns):
-            result = grid[row][col]
-            if result == 'P':
-                ax.add_patch(plt.Circle((col, 5-row), 0.2, color='blue'))
-            elif result == 'B':
-                ax.add_patch(plt.Circle((col, 5-row), 0.2, color='red'))
-            elif result == 'T':
-                ax.add_patch(plt.Circle((col, 5-row), 0.2, color='green'))
-    ax.set_xlim(-0.5, num_columns - 0.5)
-    ax.set_ylim(-0.5, 5.5)
+    fig, ax = plt.subplots(figsize=(max(3, len(sequence) * 0.3), 0.8))
+    for i, result in enumerate(sequence):
+        if result == 'P':
+            ax.add_patch(plt.Circle((i, 0.5), 0.15, color='blue'))
+        elif result == 'B':
+            ax.add_patch(plt.Circle((i, 0.5), 0.15, color='red'))
+        elif result == 'T':
+            ax.add_patch(plt.Circle((i, 0.5), 0.15, color='green'))
+    ax.set_xlim(-0.5, len(sequence) - 0.5)
+    ax.set_ylim(0, 1)
     ax.set_aspect('equal')
-    ax.grid(True, linestyle='-', color='gray', alpha=0.5)
-    ax.set_xticks(range(num_columns))
-    ax.set_yticks(range(6))
-    ax.set_xticklabels([])
-    ax.set_yticklabels(['1', '2', '3', '4', '5', '6'], fontsize=8)
+    ax.axis('off')
     plt.tight_layout()
     st.pyplot(fig, use_container_width=True)
 else:
