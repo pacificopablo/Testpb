@@ -26,8 +26,11 @@ if 'bankroll' not in st.session_state:
     st.session_state.consecutive_losses = 0
     st.session_state.loss_log = []
     st.session_state.last_was_tie = False
+if 'button_click' not in st.session_state:
+    st.session_state.button_click = ""
 
 # --- RESET BUTTON ---
+# Use a native Streamlit button for Reset since it doesn't need custom styling
 if st.button("Reset Session"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
@@ -213,112 +216,123 @@ def place_result(result):
     st.session_state.pending_bet = (bet_amount, pred)
     st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
 
-# --- RESULT INPUT WITH RESPONSIVE BUTTONS ---
+# --- RESULT INPUT WITH CUSTOM HTML BUTTONS ---
 st.subheader("Enter Result")
 
-# Custom CSS for buttons
-button_style = """
-    <style>
-        /* Container for buttons */
+# Custom HTML and CSS for buttons
+custom_buttons = """
+<div class="button-container">
+    <button id="player_btn" onclick="setValue('P')">Player</button>
+    <button id="banker_btn" onclick="setValue('B')">Banker</button>
+    <button id="tie_btn" onclick="setValue('T')">Tie</button>
+    <button id="undo_btn" onclick="setValue('undo')">Undo Last</button>
+</div>
+
+<style>
+    .button-container {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+    .button-container button {
+        width: 100px;
+        height: 40px;
+        font-size: 16px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: transform 0.1s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .button-container button:hover {
+        transform: scale(1.05);
+    }
+    .button-container button:active {
+        transform: scale(0.95);
+    }
+    #player_btn {
+        background-color: #007bff;
+        color: white;
+    }
+    #banker_btn {
+        background-color: #dc3545;
+        color: white;
+    }
+    #tie_btn {
+        background-color: #28a745;
+        color: white;
+    }
+    #undo_btn {
+        background-color: #6c757d;
+        color: white;
+    }
+    /* Media query for mobile screens (width <= 600px) */
+    @media (max-width: 600px) {
         .button-container {
-            display: flex;
-            flex-direction: row;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-            margin-bottom: 10px;
-        }
-        /* General button styles */
-        .button-container [data-testid="stButton"] button[kind="primary"] {
-            width: 100px;
-            height: 40px;
-            font-size: 16px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: transform 0.1s;
-            padding: 0;
-            display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: center;
         }
-        .button-container [data-testid="stButton"] button[kind="primary"]:hover {
-            transform: scale(1.05);
-        }
-        .button-container [data-testid="stButton"] button[kind="primary"]:active {
-            transform: scale(0.95);
-        }
-        /* Specific button styles using key IDs */
-        div[data-testid="stButton"][id="player_btn"] button[kind="primary"] {
-            background-color: #007bff !important;
-            color: white !important;
-        }
-        div[data-testid="stButton"][id="banker_btn"] button[kind="primary"] {
-            background-color: #dc3545 !important;
-            color: white !important;
-        }
-        div[data-testid="stButton"][id="tie_btn"] button[kind="primary"] {
-            background-color: #28a745 !important;
-            color: white !important;
-        }
-        div[data-testid="stButton"][id="undo_btn"] button[kind="primary"] {
-            background-color: #6c757d !important;
-            color: white !important;
-        }
-        /* Fallback for any button inside the container */
         .button-container button {
-            background-color: #cccccc !important; /* Fallback gray if specific styles fail */
-            color: white !important;
+            width: 80%;
+            max-width: 200px;
+            height: 50px;
+            font-size: 14px;
         }
-        /* Media query for mobile screens (width <= 600px) */
-        @media (max-width: 600px) {
-            .button-container {
-                flex-direction: column;
-                align-items: center;
-            }
-            .button-container [data-testid="stButton"] button[kind="primary"] {
-                width: 80%;
-                max-width: 200px;
-                height: 50px;
-                font-size: 14px;
-            }
-        }
-    </style>
+    }
+</style>
+
+<script>
+    function setValue(value) {
+        // Set the value in a hidden input and trigger a change event
+        const input = document.getElementById('button_input');
+        input.value = value;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+</script>
+
+<!-- Hidden input to capture button clicks -->
+<input type="hidden" id="button_input" value="">
 """
 
-# Inject CSS
-st.markdown(button_style, unsafe_allow_html=True)
+# Render the custom buttons
+components = st.components.v1.html(custom_buttons, height=150)
 
-# Wrap buttons in a container
-st.markdown('<div class="button-container">', unsafe_allow_html=True)
+# Use a hidden text input to capture the button click
+button_input = st.text_input("button_input", value="", key="button_input_hidden", label_visibility="hidden")
 
-if st.button("Player", key="player_btn", help="Click to record a Player win"):
-    place_result("P")
-if st.button("Banker", key="banker_btn", help="Click to record a Banker win"):
-    place_result("B")
-if st.button("Tie", key="tie_btn", help="Click to record a Tie"):
-    place_result("T")
-if st.button("Undo Last", key="undo_btn", help="Click to undo the last result"):
-    if st.session_state.history and st.session_state.sequence:
-        st.session_state.sequence.pop()
-        last = st.session_state.history.pop()
-        if last['Win']:
-            st.session_state.wins -= 1
-            st.session_state.bankroll -= last['Amount'] if last["Bet"] == 'P' else last['Amount'] * 0.95
-            st.session_state.prediction_accuracy[last['Bet']] -= 1
-            st.session_state.consecutive_losses = 0
-        else:
-            st.session_state.bankroll += last['Amount']
-            st.session_state.losses -= 1
-            st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
-        st.session_state.prediction_accuracy['total'] -= 1
-        st.session_state.t3_level = last['T3_Level']
-        st.session_state.t3_results = last['T3_Results']
-        st.session_state.pending_bet = None
-        st.session_state.advice = "Last entry undone."
-        st.session_state.last_was_tie = False
-
-st.markdown('</div>', unsafe_allow_html=True)
+# Process the button click
+if button_input != st.session_state.button_click:
+    st.session_state.button_click = button_input
+    if button_input == "P":
+        place_result("P")
+    elif button_input == "B":
+        place_result("B")
+    elif button_input == "T":
+        place_result("T")
+    elif button_input == "undo":
+        if st.session_state.history and st.session_state.sequence:
+            st.session_state.sequence.pop()
+            last = st.session_state.history.pop()
+            if last['Win']:
+                st.session_state.wins -= 1
+                st.session_state.bankroll -= last['Amount'] if last["Bet"] == 'P' else last['Amount'] * 0.95
+                st.session_state.prediction_accuracy[last['Bet']] -= 1
+                st.session_state.consecutive_losses = 0
+            else:
+                st.session_state.bankroll += last['Amount']
+                st.session_state.losses -= 1
+                st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
+            st.session_state.prediction_accuracy['total'] -= 1
+            st.session_state.t3_level = last['T3_Level']
+            st.session_state.t3_results = last['T3_Results']
+            st.session_state.pending_bet = None
+            st.session_state.advice = "Last entry undone."
+            st.session_state.last_was_tie = False
 
 # --- DISPLAY SEQUENCE AS BEAD PLATE (Vertical, 6 rows per column, Tie as separate cell) ---
 st.subheader("Current Sequence (Bead Plate)")
@@ -383,7 +397,7 @@ else:
 st.subheader("Status")
 st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
-st.markdown(f"**Betting Strategy**: ${st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
+st.markdown(f"**Betting Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
 
 # --- PREDICTION ACCURACY ---
