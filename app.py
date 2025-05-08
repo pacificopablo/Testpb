@@ -145,6 +145,7 @@ def place_result(result):
     if st.session_state.pending_bet and result != 'T':
         bet_amount, selection = st.session_state.pending_bet
         win = result == selection
+        old_bankroll = st.session_state.bankroll
         if win:
             if selection == 'B':
                 st.session_state.bankroll += bet_amount * 0.95
@@ -168,6 +169,13 @@ def place_result(result):
             if len(st.session_state.loss_log) > 50:
                 st.session_state.loss_log = st.session_state.loss_log[-50:]
         st.session_state.prediction_accuracy['total'] += 1
+
+        # Optional Debug Logging (uncomment to enable)
+        # profit = st.session_state.bankroll - st.session_state.initial_bankroll
+        # units_profit = profit / st.session_state.base_bet if st.session_state.base_bet > 0 else 0
+        # st.write(f"Bet: {selection}, Result: {result}, Bet Amount: ${bet_amount:.2f}, "
+        #           f"Win: {win}, Bankroll: ${old_bankroll:.2f} -> ${st.session_state.bankroll:.2f}, "
+        #           f"Units Profit: {units_profit:.2f}")
 
         st.session_state.history.append({
             "Bet": selection,
@@ -261,9 +269,12 @@ else:
         st.info(st.session_state.advice)
 
 # --- UNIT PROFIT ---
-if st.session_state.base_bet > 0:
-    units_profit = int((st.session_state.bankroll - st.session_state.initial_bankroll) // st.session_state.base_bet)
-    st.markdown(f"**Units Profit**: {units_profit}")
+if st.session_state.base_bet > 0 and st.session_state.initial_bankroll > 0:
+    profit = st.session_state.bankroll - st.session_state.initial_bankroll
+    units_profit = profit / st.session_state.base_bet
+    st.markdown(f"**Units Profit**: {units_profit:.2f} units (${profit:.2f})")
+else:
+    st.markdown("**Units Profit**: 0.00 units ($0.00)")
 
 # --- STATUS ---
 st.subheader("Status")
