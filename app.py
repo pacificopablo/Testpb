@@ -237,6 +237,7 @@ button_style = """
             border-radius: 5px;
             cursor: pointer;
             transition: transform 0.1s;
+            padding: 0;
         }
         .button-container [data-testid="stButton"] button:hover {
             transform: scale(1.05);
@@ -244,7 +245,7 @@ button_style = """
         .button-container [data-testid="stButton"] button:active {
             transform: scale(0.95);
         }
-        /* Specific button styles using key */
+        /* Specific button styles using key IDs */
         div[data-testid="stButton"][id="player_btn"] button {
             background-color: #007bff !important;
             color: white !important;
