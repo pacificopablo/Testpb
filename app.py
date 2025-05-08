@@ -1,8 +1,6 @@
 import streamlit as st
 import random
 from collections import defaultdict
-import matplotlib.pyplot as plt
-import numpy as np
 
 st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
 st.title("MANG BACCARAT GROUP")
@@ -13,7 +11,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.base_bet = 0.0
     st.session_state.sequence = []
     st.session_state.pending_bet = None
-    st.session_state.strategy = 'T3'
+    st.session_state.strategy = 'T3'  # Betting strategy (T3 or Flatbet)
     st.session_state.t3_level = 1
     st.session_state.t3_results = []
     st.session_state.advice = ""
@@ -28,13 +26,14 @@ if 'bankroll' not in st.session_state:
     st.session_state.consecutive_losses = 0
     st.session_state.loss_log = []
     st.session_state.last_was_tie = False
-    st.session_state.button_action = None  # Track button actions
+if 'button_click' not in st.session_state:
+    st.session_state.button_click = ""
 
 # --- RESET BUTTON ---
 if st.button("Reset Session"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    st.rerun()
+    st.experimental_rerun()
 
 # --- SETUP FORM ---
 st.subheader("Setup")
@@ -52,8 +51,12 @@ with st.form("setup_form"):
     start_clicked = st.form_submit_button("Start Session")
 
 if start_clicked:
-    if bankroll <= 0 or base_bet <= 0 or base_bet > bankroll:
-        st.error("Invalid inputs: Bankroll and base bet must be positive, and base bet cannot exceed bankroll.")
+    if bankroll <= 0:
+        st.error("Bankroll must be positive.")
+    elif base_bet <= 0:
+        st.error("Base bet must be positive.")
+    elif base_bet > bankroll:
+        st.error("Base bet cannot exceed bankroll.")
     else:
         st.session_state.bankroll = bankroll
         st.session_state.base_bet = base_bet
@@ -74,35 +77,49 @@ if start_clicked:
         st.session_state.consecutive_losses = 0
         st.session_state.loss_log = []
         st.session_state.last_was_tie = False
-        st.session_state.button_action = None
         st.success("Session started!")
 
 # --- FUNCTIONS ---
 def predict_next():
-    sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]
-    if len(sequence) < 5:
-        return 'B', 45.86
+    sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]  # Non-Tie outcomes
+    if len(sequence) < 2:
+        return 'B', 45.86  # Default to Banker with theoretical probability
+
+    # Get the last bigram (last 2 non-Tie outcomes)
     bigram = sequence[-2:]
+
+    # Count transitions from this bigram in the sequence
     transitions = defaultdict(int)
     for i in range(len(sequence) - 2):
         if sequence[i:i+2] == bigram:
             next_outcome = sequence[i+2]
             transitions[next_outcome] += 1
+
+    # Calculate transition probabilities
     total_transitions = sum(transitions.values())
     if total_transitions > 0:
         prob_p = (transitions['P'] / total_transitions) * 100
         prob_b = (transitions['B'] / total_transitions) * 100
     else:
-        prob_p = 44.62
-        prob_b = 45.86
-    return ('P', prob_p) if prob_p > prob_b else ('B', prob_b)
+        # Use theoretical Baccarat probabilities (ignoring Ties)
+        prob_p = 44.62  # Player probability
+        prob_b = 45.86  # Banker probability
+
+    # Predict the outcome with higher probability
+    if prob_p > prob_b:
+        return 'P', prob_p
+    return 'B', prob_b
 
 def check_target_hit():
     if st.session_state.target_mode == "Profit %":
         target_profit = st.session_state.initial_bankroll * (st.session_state.target_value / 100)
-        return st.session_state.bankroll >= st.session_state.initial_bankroll + target_profit
-    unit_profit = (st.session_state.bankroll - st.session_state.initial_bankroll) / st.session_state.base_bet
-    return unit_profit >= st.session_state.target_value
+        if st.session_state.bankroll >= st.session_state.initial_bankroll + target_profit:
+            return True
+    else:
+        unit_profit = (st.session_state.bankroll - st.session_state.initial_bankroll) / st.session_state.base_bet
+        if unit_profit >= st.session_state.target_value:
+            return True
+    return False
 
 def reset_session_auto():
     st.session_state.bankroll = st.session_state.initial_bankroll
@@ -112,13 +129,12 @@ def reset_session_auto():
     st.session_state.t3_results = []
     st.session_state.advice = "Session reset: Target reached."
     st.session_state.history = []
-    st.session_state.wis = 0
+    st.session_state.wins = 0
     st.session_state.losses = 0
     st.session_state.target_hit = False
     st.session_state.consecutive_losses = 0
     st.session_state.loss_log = []
     st.session_state.last_was_tie = False
-    st.session_state.button_action = None
 
 def place_result(result):
     if st.session_state.target_hit:
@@ -180,6 +196,7 @@ def place_result(result):
         st.session_state.target_hit = True
         return
 
+    # Check confidence and bankroll before placing a bet
     pred, conf = predict_next()
     if conf < 50.5:
         st.session_state.pending_bet = None
@@ -193,45 +210,117 @@ def place_result(result):
             st.session_state.pending_bet = (bet_amount, pred)
             st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
 
+    # T3 Level Adjustment (after 3 bets)
     if len(st.session_state.t3_results) == 3:
         wins = st.session_state.t3_results.count('W')
         losses = st.session_state.t3_results.count('L')
         if wins == 3:
-            st.session_state.t3_level = max(1, st.session_state.t3_level - 2)
+            st.session_state.t3_level = max(1, st.session_state.t3_level - 2)  # Move -2 levels
         elif wins == 2 and losses == 1:
-            st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
+            st.session_state.t3_level = max(1, st.session_state.t3_level - 1)  # Move -1 level
         elif losses == 2 and wins == 1:
-            st.session_state.t3_level = st.session_state.t3_level + 1
+            st.session_state.t3_level = st.session_state.t3_level + 1  # Move +1 level
         elif losses == 3:
-            st.session_state.t3_level = st.session_state.t3_level + 2
-        st.session_state.t3_results = []
+            st.session_state.t3_level = st.session_state.t3_level + 2  # Move +2 levels
+        st.session_state.t3_results = []  # Reset for next sequence
 
-# --- RESULT INPUT WITH NATIVE BUTTONS ---
+# --- RESULT INPUT WITH CUSTOM HTML BUTTONS ---
 st.subheader("Enter Result")
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    if st.button("Player", use_container_width=True):
-        st.session_state.button_action = "P"
-with col2:
-    if st.button("Banker", use_container_width=True):
-        st.session_state.button_action = "B"
-with col3:
-    if st.button("Tie", use_container_width=True):
-        st.session_state.button_action = "T"
-with col4:
-    if st.button("Undo Last", use_container_width=True):
-        st.session_state.button_action = "undo"
 
-# Process button action
-if st.session_state.button_action:
-    action = st.session_state.button_action
-    st.session_state.button_action = None
-    if action in ["P", "B", "T"]:
-        place_result(action)
-    elif action == "undo":
-        if not st.session_state.history or not st.session_state.sequence:
-            st.session_state.advice = "Nothing to undo."
-        else:
+# Custom HTML and CSS for buttons
+custom_buttons = """
+<div class="button-container">
+    <button id="player_btn" onclick="setValue('P')">Player</button>
+    <button id="banker_btn" onclick="setValue('B')">Banker</button>
+    <button id="tie_btn" onclick="setValue('T')">Tie</button>
+    <button id="undo_btn" onclick="setValue('undo')">Undo Last</button>
+</div>
+
+<style>
+    .button-container {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+    .button-container button {
+        width: 100px;
+        height: 40px;
+        font-size: 16px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: transform 0.1s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .button-container button:hover {
+        transform: scale(1.05);
+    }
+    .button-container button:active {
+        transform: scale(0.95);
+    }
+    #player_btn {
+        background-color: #007bff;
+        color: white;
+    }
+    #banker_btn {
+        background-color: #dc3545;
+        color: white;
+    }
+    #tie_btn {
+        background-color: #28a745;
+        color: white;
+    }
+    #undo_btn {
+        background-color: #6c757d;
+        color: white;
+    }
+    @media (max-width: 600px) {
+        .button-container {
+            flex-direction: column;
+            align-items: center;
+        }
+        .button-container button {
+            width: 80%;
+            max-width: 200px;
+            height: 50px;
+            font-size: 14px;
+        }
+    }
+</style>
+
+<script>
+    function setValue(value) {
+        const input = document.getElementById('button_input');
+        input.value = value;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+</script>
+
+<input type="hidden" id="button_input" value="">
+"""
+
+# Render the custom buttons
+components = st.components.v1.html(custom_buttons, height=150)
+
+# Use a hidden text input to capture the button click
+button_input = st.text_input("button_input", value="", key="button_input_hidden", label_visibility="hidden")
+
+# Process the button click
+if button_input != st.session_state.button_click:
+    st.session_state.button_click = button_input
+    if button_input == "P":
+        place_result("P")
+    elif button_input == "B":
+        place_result("B")
+    elif button_input == "T":
+        place_result("T")
+    elif button_input == "undo":
+        if st.session_state.history and st.session_state.sequence:
             st.session_state.sequence.pop()
             last = st.session_state.history.pop()
             if last['Win']:
@@ -250,64 +339,43 @@ if st.session_state.button_action:
             st.session_state.advice = "Last entry undone."
             st.session_state.last_was_tie = False
 
-# --- BEAD PLATE WITH MATPLOTLIB (Casino-Style Bead Road) ---
+# --- DISPLAY SEQUENCE AS BEAD PLATE ---
 st.subheader("Current Sequence (Bead Plate)")
-sequence = st.session_state.sequence[-100:]
+sequence = st.session_state.sequence[-100:] if 'sequence' in st.session_state else []
 
-# Initialize grid positions
-positions = []
-current_col = 0
-current_row = 0
-last_result = None
-
+grid = []
+current_col = []
 for result in sequence:
-    # Ignore Tie for column-changing logic, but still record it
-    is_tie = result == 'T'
-    effective_result = result if not is_tie else last_result
-
-    # If this is the first result or a change in result (excluding Tie), start a new column
-    if not positions or (effective_result and effective_result != last_result and not is_tie):
-        current_col += 1
-        current_row = 0
-        positions.append((current_col, current_row, result))
+    if len(current_col) < 6:
+        current_col.append(result)
     else:
-        # Continue in the same column if the result is the same or it's a Tie
-        current_row += 1
-        if current_row >= 6:  # If we reach row 6, start a new column
-            current_col += 1
-            current_row = 0
-        positions.append((current_col, current_row, result))
+        grid.append(current_col)
+        current_col = [result]
+if current_col:
+    grid.append(current_col)
 
-    # Update last_result only if it's not a Tie
-    if not is_tie:
-        last_result = result
+if grid and len(grid[-1]) < 6:
+    grid[-1] += [''] * (6 - len(grid[-1]))
 
-if positions:
-    # Determine the number of columns
-    num_columns = max(pos[0] for pos in positions) + 1
+num_columns = len(grid)
 
-    # Plot the bead plate
-    fig, ax = plt.subplots(figsize=(max(3, num_columns * 0.5), 2.0))
-    for col, row, result in positions:
-        if result == 'P':
-            ax.add_patch(plt.Circle((col, 5-row), 0.15, color='blue'))
+bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 120px; overflow-x: auto;'>"
+for col in grid[:num_columns]:
+    col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
+    for result in col:
+        if result == '':
+            col_html += "<div style='width: 20px; height: 20px;'></div>"
+        elif result == 'P':
+            col_html += "<div style='width: 20px; height: 20px; background-color: blue; border-radius: 50%;'></div>"
         elif result == 'B':
-            ax.add_patch(plt.Circle((col, 5-row), 0.15, color='red'))
+            col_html += "<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>"
         elif result == 'T':
-            # Draw a smaller green circle to indicate Tie
-            ax.add_patch(plt.Circle((col, 5-row), 0.1, color='green'))
-    ax.set_xlim(-0.5, num_columns - 0.5)
-    ax.set_ylim(-0.5, 5.5)
-    ax.set_aspect('equal')
-    ax.grid(True, linestyle='-', color='gray', alpha=0.5)
-    ax.set_xticks(range(num_columns))
-    ax.set_yticks(range(6))
-    ax.set_xticklabels([])
-    ax.set_yticklabels(['1', '2', '3', '4', '5', '6'], fontsize=8)
-    plt.tight_layout()
-    st.pyplot(fig, use_container_width=True)
-else:
-    st.write("No results yet.")
+            col_html += "<div style='width: 20px; height: 20px; background-color: green; border-radius: 50%;'></div>"
+    col_html += "</div>"
+    bead_plate_html += col_html
+bead_plate_html += "</div>"
+
+st.markdown(bead_plate_html, unsafe_allow_html=True)
 
 # --- PREDICTION DISPLAY ---
 if st.session_state.pending_bet:
@@ -331,7 +399,7 @@ else:
 st.subheader("Status")
 st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
-st.markdown(f"**Betting Strategy**: ${st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
+st.markdown(f"**Betting Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
 
 # --- PREDICTION ACCURACY ---
