@@ -11,7 +11,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.base_bet = 0.0
     st.session_state.sequence = []
     st.session_state.pending_bet = None
-    st.session_state.bet_selection_strategy = 'Original'  # New: Bet selection strategy
+    st.session_state.bet_selection_strategy = 'Original'  # Bet selection strategy
     st.session_state.strategy = 'T3'  # Betting strategy (T3 or Flatbet)
     st.session_state.t3_level = 1
     st.session_state.t3_results = []
@@ -264,7 +264,7 @@ def place_result(result):
 
         st.session_state.pending_bet = None
 
-    if not st.session_state.pending_bet and result != 'T':
+    if not st.session, result != 'T':
         st.session_state.consecutive_losses = 0
 
     st.session_state.sequence.append(result)
@@ -284,7 +284,7 @@ def place_result(result):
     elif bet_amount > st.session_state.bankroll:
         st.session_state.pending_bet = None
         st.session_state.advice = "Skip bet: Insufficient bankroll"
-    elif conf < min_confidence:
+    elif conf < min_confWiki: 
         st.session_state.pending_bet = None
         st.session_state.advice = f"Skip bet: Low confidence ({conf:.0f}%)"
     elif st.session_state.last_was_tie:
