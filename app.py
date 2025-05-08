@@ -152,13 +152,13 @@ def place_result(result):
             else:
                 st.session_state.bankroll += bet_amount
             st.session_state.t3_results.append('W')
-            st.session_state.wins += 1
+            st.session_state.wins += 1  # Ensure win counter increments
             st.session_state.prediction_accuracy[selection] += 1
             st.session_state.consecutive_losses = 0
         else:
             st.session_state.bankroll -= bet_amount
             st.session_state.t3_results.append('L')
-            st.session_state.losses += 1
+            st.session_state.losses += 1  # Ensure loss counter increments
             st.session_state.consecutive_losses += 1
             st.session_state.loss_log.append({
                 'sequence': st.session_state.sequence[-10:],
@@ -170,12 +170,12 @@ def place_result(result):
                 st.session_state.loss_log = st.session_state.loss_log[-50:]
         st.session_state.prediction_accuracy['total'] += 1
 
-        # Optional Debug Logging (uncomment to enable)
-        # profit = st.session_state.bankroll - st.session_state.initial_bankroll
-        # units_profit = profit / st.session_state.base_bet if st.session_state.base_bet > 0 else 0
-        # st.write(f"Bet: {selection}, Result: {result}, Bet Amount: ${bet_amount:.2f}, "
-        #           f"Win: {win}, Bankroll: ${old_bankroll:.2f} -> ${st.session_state.bankroll:.2f}, "
-        #           f"Units Profit: {units_profit:.2f}")
+        # Debug Logging (enabled to trace issue)
+        profit = st.session_state.bankroll - st.session_state.initial_bankroll
+        units_profit = profit / st.session_state.base_bet if st.session_state.base_bet > 0 else 0
+        st.write(f"Bet: {selection}, Result: {result}, Bet Amount: ${bet_amount:.2f}, "
+                 f"Win: {win}, Bankroll: ${old_bankroll:.2f} -> ${st.session_state.bankroll:.2f}, "
+                 f"Units Profit: {units_profit:.2f}, Wins: {st.session_state.wins}, Losses: {st.session_state.losses}")
 
         st.session_state.history.append({
             "Bet": selection,
