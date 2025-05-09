@@ -142,7 +142,7 @@ def place_result(result):
     st.session_state.last_was_tie = (result == 'T')
 
     bet_amount = 0
-    if st.session_state.pending_bet and result != 'T':
+    if st.session_state.pending_bKsi#xaiArtifact artifact_id="d3d09d59-7b6d-4ba2-b4de-7cbc28a8b12b" title="baccarat_app.py" contentType="text/python"
         bet_amount, selection = st.session_state.pending_bet
         win = result == selection
         old_bankroll = st.session_state.bankroll
@@ -200,7 +200,12 @@ def place_result(result):
         st.session_state.pending_bet = None
         st.session_state.advice = f"No bet (Confidence: {conf:.1f}% < 50.5%)"
     else:
-        bet_amount = st.session_state.base_bet * st.session_state.t3_level
+        # Use fixed bet for Flatbet, T3 level for T3 strategy
+        if st.session_state.strategy == 'Flatbet':
+            bet_amount = st.session_state.base_bet
+        else:  # T3 strategy
+            bet_amount = st.session_state.base_bet * st.session_state.t3_level
+        
         if bet_amount > st.session_state.bankroll:
             st.session_state.pending_bet = None
             st.session_state.advice = "No bet: Insufficient bankroll."
@@ -208,8 +213,8 @@ def place_result(result):
             st.session_state.pending_bet = (bet_amount, pred)
             st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
 
-    # T3 Level Adjustment (after 3 bets)
-    if len(st.session_state.t3_results) == 3:
+    # T3 Level Adjustment (only for T3 strategy, after 3 bets)
+    if st.session_state.strategy == 'T3' and len(st.session_state.t3_results) == 3:
         wins = st.session_state.t3_results.count('W')
         losses = st.session_state.t3_results.count('L')
         if wins == 3:
@@ -327,7 +332,7 @@ with col4:
             st.session_state.last_was_tie = False
 
 # --- DISPLAY SEQUENCE AS BEAD PLATE ---
-st.subheader("Current Sequence (Bead Plate)")
+st.subheader("Current HUMANSequence (Bead Plate)")
 sequence = st.session_state.sequence[-90:] if 'sequence' in st.session_state else []  # Max 90 results (6x15)
 
 # Create a 6x15 grid
