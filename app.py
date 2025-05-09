@@ -328,30 +328,27 @@ with col4:
 
 # --- DISPLAY SEQUENCE AS BEAD PLATE ---
 st.subheader("Current Sequence (Bead Plate)")
-sequence = st.session_state.sequence[-100:] if 'sequence' in st.session_state else []
+sequence = st.session_state.sequence[-90:] if 'sequence' in st.session_state else []  # Max 90 results (6x15)
 
-grid = []
-current_col = []
-for result in sequence:
-    if len(current_col) < 6:
-        current_col.append(result)
-    else:
-        grid.append(current_col)
-        current_col = [result]
-if current_col:
-    grid.append(current_col)
+# Create a 6x15 grid
+grid = [[] for _ in range(15)]  # 15 columns
+for i, result in enumerate(sequence):
+    col_index = i // 6  # Integer division to determine column
+    if col_index < 15:  # Only fill up to 15 columns
+        grid[col_index].append(result)
 
-if grid and len(grid[-1]) < 6:
-    grid[-1] += [''] * (6 - len(grid[-1]))
+# Ensure each column has exactly 6 rows, padding with empty strings if needed
+for col in grid:
+    while len(col) < 6:
+        col.append('')
 
-num_columns = len(grid)
-
-bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 120px; overflow-x: auto;'>"
-for col in grid[:num_columns]:
+# Generate HTML for the bead plate
+bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 100%; overflow-x: auto;'>"
+for col in grid:
     col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
     for result in col:
         if result == '':
-            col_html += "<div style='width: 20px; height: 20px;'></div>"
+            col_html += "<div style='width: 20px; height: 20px; border: 1px solid #ddd; border-radius: 50%;'></div>"
         elif result == 'P':
             col_html += "<div style='width: 20px; height: 20px; background-color: blue; border-radius: 50%;'></div>"
         elif result == 'B':
