@@ -394,7 +394,7 @@ else:
 
 # --- UNIT PROFIT ---
 if st.session_state.base_bet > 0 and st.session_state.initial_bankroll > 0:
-    profit = st.session_state.bankroll - st.session_state.initial_bank-roll
+    profit = st.session_state.bankroll - st.session_state.initial_bankroll
     units_profit = profit / st.session_state.base_bet
     st.markdown(f"**Units Profit**: {units_profit:.2f} units (${profit:.2f})")
 else:
