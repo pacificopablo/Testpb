@@ -27,6 +27,10 @@ if 'bankroll' not in st.session_state:
     st.session_state.loss_log = []
     st.session_state.last_was_tie = False
 
+# Validate strategy on every load
+if 'strategy' in st.session_state and st.session_state.strategy not in ['T3', 'Flatbet']:
+    st.session_state.strategy = 'T3'
+
 # --- RESET BUTTON ---
 if st.button("Reset Session"):
     for key in list(st.session_state.keys()):
@@ -41,7 +45,7 @@ with st.form("setup_form"):
     betting_strategy = st.selectbox(
         "Choose Betting Strategy",
         ["T3", "Flatbet"],
-        index=["T3", "Flatbet"].index(st.session_state.strategy),
+        index=0 if st.session_state.strategy == "T3" else 1,
         help="T3: Adjusts bet size based on wins/losses. Flatbet: Uses a fixed bet size."
     )
     target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
@@ -75,7 +79,11 @@ if start_clicked:
         st.session_state.consecutive_losses = 0
         st.session_state.loss_log = []
         st.session_state.last_was_tie = False
-        st.success("Session started!")
+        # Reset T3 state for Flatbet
+        if betting_strategy == 'Flatbet':
+            st.session_state.t3_level = 1
+            st.session_state.t3_results = []
+        st.success(f"Session started with {betting_strategy} strategy!")
 
 # --- FUNCTIONS ---
 def predict_next():
@@ -142,7 +150,7 @@ def place_result(result):
     st.session_state.last_was_tie = (result == 'T')
 
     bet_amount = 0
-    if st.session_state.pending_bKsi#xaiArtifact artifact_id="d3d09d59-7b6d-4ba2-b4de-7cbc28a8b12b" title="baccarat_app.py" contentType="text/python"
+    if st.session_state.pending_bet and result != 'T':
         bet_amount, selection = st.session_state.pending_bet
         win = result == selection
         old_bankroll = st.session_state.bankroll
@@ -332,7 +340,7 @@ with col4:
             st.session_state.last_was_tie = False
 
 # --- DISPLAY SEQUENCE AS BEAD PLATE ---
-st.subheader("Current HUMANSequence (Bead Plate)")
+st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-90:] if 'sequence' in st.session_state else []  # Max 90 results (6x15)
 
 # Create a 6x15 grid
@@ -388,7 +396,8 @@ else:
 st.subheader("Status")
 st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
-st.markdown(f"**Betting Strategy**: {st.session_state.strategy} | T3 Level: {st.session_state.t3_level}")
+st.markdown(f"**Betting Strategy**: {st.session_state.strategy}" + 
+            (f" | T3 Level: {st.session_state.t3_level}" if st.session_state.strategy == 'T3' else ""))
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
 
 # --- PREDICTION ACCURACY ---
