@@ -66,110 +66,14 @@ if start_clicked:
         st.session_state.sequence = []
         st.session_state.pending_bet = None
         st.session_state.t3_level = 1
-        st.session_state.t3_results = []
+        st.session_state.t3_results = [] if betting_strategy == 'T3' else []
         st.session_state.advice = ""
         st.session_state.history = []
         st.session_state.wins = 0
         st.session_state.losses = 0
         st.session_state.target_mode = target_mode
         st.session_state.target_value = target_value
-        st.session_state.initial_bankroll = bankroll
-        st.session_state.target_hit = False
-        st.session_state.prediction_accuracy = {'P': 0, 'B': 0, 'total': 0}
-        st.session_state.consecutive_losses = 0
-        st.session_state.loss_log = []
-        st.session_state.last_was_tie = False
-        # Reset T3 state for Flatbet
-        if betting_strategy == 'Flatbet':
-            st.session_state.t3_level = 1
-            st.session_state.t3_results = []
-        st.success(f"Session started with {betting_strategy} strategy!")
-
-# --- FUNCTIONS ---
-def predict_next():
-    sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]  # Non-Tie outcomes
-    if len(sequence) < 2:
-        return 'B', 45.86  # Default to Banker with theoretical probability
-
-    # Get the last bigram (last 2 non-Tie outcomes)
-    bigram = sequence[-2:]
-
-    # Count transitions from this bigram in the sequence
-    transitions = defaultdict(int)
-    for i in range(len(sequence) - 2):
-        if sequence[i:i+2] == bigram:
-            next_outcome = sequence[i+2]
-            transitions[next_outcome] += 1
-
-    # Calculate transition probabilities
-    total_transitions = sum(transitions.values())
-    if total_transitions > 0:
-        prob_p = (transitions['P'] / total_transitions) * 100
-        prob_b = (transitions['B'] / total_transitions) * 100
-    else:
-        # Use theoretical Baccarat probabilities (ignoring Ties)
-        prob_p = 44.62  # Player probability
-        prob_b = 45.86  # Banker probability
-
-    # Predict the outcome with higher probability
-    if prob_p > prob_b:
-        return 'P', prob_p
-    return 'B', prob_b
-
-def check_target_hit():
-    if st.session_state.target_mode == "Profit %":
-        target_profit = st.session_state.initial_bankroll * (st.session_state.target_value / 100)
-        if st.session_state.bankroll >= st.session_state.initial_bankroll + target_profit:
-            return True
-    else:
-        unit_profit = (st.session_state.bankroll - st.session_state.initial_bankroll) / st.session_state.base_bet
-        if unit_profit >= st.session_state.target_value:
-            return True
-    return False
-
-def reset_session_auto():
-    st.session_state.bankroll = st.session_state.initial_bankroll
-    st.session_state.sequence = []
-    st.session_state.pending_bet = None
-    st.session_state.t3_level = 1
-    st.session_state.t3_results = []
-    st.session_state.advice = "Session reset: Target reached."
-    st.session_state.history = []
-    st.session_state.wins = 0
-    st.session_state.losses = 0
-    st.session_state.target_hit = False
-    st.session_state.consecutive_losses = 0
-    st.session_state.loss_log = []
-    st.session_state.last_was_tie = False
-
-def place_result(result):
-    if st.session_state.target_hit:
-        reset_session_auto()
-        return
-
-    st.session_state.last_was_tie = (result == 'T')
-
-    bet_amount = 0
-    if st.session_state.pending_bet and result != 'T':
-        bet_amount, selection = st.session_state.pending_bet
-        win = result == selection
-        old_bankroll = st.session_state.bankroll
-        if win:
-            if selection == 'B':
-                st.session_state.bankroll += bet_amount * 0.95
-            else:
-                st.session_state.bankroll += bet_amount
-            st.session_state.t3_results.append('W')
-            st.session_state.wins += 1
-            st.session_state.prediction_accuracy[selection] += 1
-            st.session_state.consecutive_losses = 0
-        else:
-            st.session_state.bankroll -= bet_amount
-            st.session_state.t3_results.append('L')
-            st.session_state.losses += 1
-            st.session_state.consecutive_losses += 1
-            st.session_state.loss_log.append({
-                'sequence': st.session_state.sequence[-10:],
+        st.session_state.initial_bankroll = bankrollsequence[-10:],
                 'prediction': selection,
                 'result': result,
                 'confidence': st.session_state.advice.split('(')[-1].split('%')[0] if '(' in st.session_state.advice else '0'
@@ -183,8 +87,8 @@ def place_result(result):
             "Result": result,
             "Amount": bet_amount,
             "Win": win,
-            "T3_Level": st.session_state.t3_level,
-            "T3_Results": st.session_state.t3_results.copy()
+            "T3_Level": st.session_state.t3_level if st.session_state.strategy == 'T3' else 1,
+            "T3_Results": st.session_state.t3_results.copy() if st.session_state.strategy == 'T3' else []
         })
         if len(st.session_state.history) > 1000:
             st.session_state.history = st.session_state.history[-1000:]
@@ -220,6 +124,8 @@ def place_result(result):
         else:
             st.session_state.pending_bet = (bet_amount, pred)
             st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
+            # Debug: Confirm strategy and bet amount
+            st.write(f"Debug: Strategy={st.session_state.strategy}, Bet Amount={bet_amount}, T3 Level={st.session_state.t3_level}")
 
     # T3 Level Adjustment (only for T3 strategy, after 3 bets)
     if st.session_state.strategy == 'T3' and len(st.session_state.t3_results) == 3:
@@ -333,8 +239,12 @@ with col4:
                 st.session_state.losses -= 1
                 st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
             st.session_state.prediction_accuracy['total'] -= 1
-            st.session_state.t3_level = last['T3_Level']
-            st.session_state.t3_results = last['T3_Results']
+            if st.session_state.strategy == 'T3':
+                st.session_state.t3_level = last['T3_Level']
+                st.session_state.t3_results = last['T3_Results']
+            else:
+                st.session_state.t3_level = 1
+                st.session_state.t3_results = []
             st.session_state.pending_bet = None
             st.session_state.advice = "Last entry undone."
             st.session_state.last_was_tie = False
@@ -432,7 +342,7 @@ if st.session_state.history:
             "Result": h["Result"],
             "Amount": f"${h['Amount']:.0f}",
             "Outcome": "Win" if h["Win"] else "Loss",
-            "T3_Level": h["T3_Level"]
+            "T3_Level": h["T3_Level"] if st.session_state.strategy == 'T3' else "-"
         }
         for h in st.session_state.history[-n:]
     ])
