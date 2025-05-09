@@ -222,8 +222,6 @@ def place_result(result):
         else:
             st.session_state.pending_bet = (bet_amount, pred)
             st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
-            # Debug: Confirm strategy and bet amount
-            st.write(f"Debug: Strategy={st.session_state.strategy}, Bet Amount={bet_amount}, T3 Level={st.session_state.t3_level}")
 
     # T3 Level Adjustment (only for T3 strategy, after 3 bets)
     if st.session_state.strategy == 'T3' and len(st.session_state.t3_results) == 3:
