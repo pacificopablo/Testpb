@@ -1,24 +1,27 @@
 import streamlit as st
+import pyrebase
 import random
 from collections import defaultdict
 import json
-import os
-import bcrypt
+import streamlit.components.v1 as components
+
+# Firebase Configuration (Replace with your Firebase project credentials)
+firebase_config = {
+    "apiKey": "YOUR_API_KEY",
+    "authDomain": "YOUR_PROJECT_ID.firebaseapp.com",
+    "projectId": "YOUR_PROJECT interventionId",
+    "storageBucket": "YOUR_PROJECT_ID.appspot.com",
+    "messagingSenderId": "YOUR_MESSAGING_SENDER_ID",
+    "appId": "YOUR_APP_ID",
+    "databaseURL": "https://YOUR_PROJECT_ID.firebaseio.com",
+}
+
+# Initialize Firebase
+firebase = pyrebase.initialize_app(firebase_config)
+auth = firebase.auth()
+db = firebase.database()
 
 st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
-
-# --- FILE-BASED STORAGE ---
-DATA_FILE = "users.json"
-
-def load_users():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    return {}
-
-def save_users(users):
-    with open(DATA_FILE, "w") as f:
-        json.dump(users, f, indent=2)
 
 # --- SESSION STATE INIT ---
 def initialize_session_state():
@@ -42,15 +45,16 @@ def initialize_session_state():
         st.session_state.consecutive_losses = 0
         st.session_state.loss_log = []
         st.session_state.last_was_tie = False
-        st.session_state.user_email = None
+        st.session_state.user = None
+        st.session_state.google_token = None
 
 # Initialize session state
 initialize_session_state()
 
 # --- AUTHENTICATION UI ---
 def save_user_data():
-    if st.session_state.user_email:
-        users = load_users()
+    if st.session_state.user:
+        user_id = st.session_state.user['localId']
         user_data = {
             'bankroll': st.session_state.bankroll,
             'base_bet': st.session_state.base_bet,
@@ -72,35 +76,84 @@ def save_user_data():
             'loss_log': st.session_state.loss_log,
             'last_was_tie': st.session_state.last_was_tie,
         }
-        users[st.session_state.user_email]['data'] = user_data
-        save_users(users)
+        db.child("users").child(user_id).child("sessions").set(user_data)
 
 def load_user_data():
-    if st.session_state.user_email:
-        users = load_users()
-        user_data = users.get(st.session_state.user_email, {}).get('data', {})
-        for key, value in user_data.items():
-            st.session_state[key] = value
+    if st.session_state.user:
+        user_id = st.session_state.user['localId']
+        try:
+            user_data = db.child("users").child(user_id).child("sessions").get().val()
+            if user_data:
+                for key, value in user_data.items():
+                    st.session_state[key] = value
+        except:
+            pass
 
-if 'user_email' not in st.session_state or not st.session_state.user_email:
+if 'user' not in st.session_state or not st.session_state.user:
     st.title("Welcome to MANG BACCARAT GROUP")
     tab1, tab2 = st.tabs(["Login", "Sign Up"])
 
     with tab1:
         st.subheader("Login")
+        # Email/Password Login
         with st.form("login_form"):
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             login_button = st.form_submit_button("Login")
             if login_button:
-                users = load_users()
-                if email in users and bcrypt.checkpw(password.encode(), users[email]['password'].encode()):
-                    st.session_state.user_email = email
+                try:
+                    user = auth.sign_in_with_email_and_password(email, password)
+                    st.session_state.user = user
+                    st.session_state.google_token = None
                     load_user_data()
                     st.success("Logged in successfully!")
-                    st.experimental_rerun()
-                else:
-                    st.error("Invalid email or password.")
+                    st.rerun()
+                except Exception as e:
+                    st.error("Login failed. Check your credentials.")
+
+        # Google Login
+        st.markdown("**Or sign in with Google**")
+        google_login_html = f"""
+        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
+        <script>
+        const firebaseConfig = {json.dumps(firebase_config)};
+        firebase.initializeApp(firebaseConfig);
+        const provider = new firebase.auth.GoogleAuthProvider();
+        function signInWithGoogle() {{
+            firebase.auth().signInWithPopup(provider)
+                .then((result) => {{
+                    result.user.getIdToken().then((idToken) => {{
+                        window.location.href = window.location.pathname + '?google_token=' + encodeURIComponent(idToken);
+                    }});
+                }})
+                .catch((error) => {{
+                    window.parent.postMessage({{ type: 'google_login_error', error: error.message }}, '*');
+                }});
+        }}
+        </script>
+        <button onclick="signInWithGoogle()" style="background-color: #4285F4; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+            Sign in with Google
+        </button>
+        """
+        components.html(google_login_html, height=100)
+
+        # Handle Google login response
+        google_token = st.query_params.get("google_token", [None])[0]
+        if google_token:
+            try:
+                user = auth.sign_in_with_idp({
+                    'requestUri': 'http://localhost:8501',
+                    'id_token': google_token
+                })
+                st.session_state.user = user
+                st.session_state.google_token = google_token
+                load_user_data()
+                st.success("Logged in with Google successfully!")
+                st.query_params.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Google login failed: {str(e)}")
 
     with tab2:
         st.subheader("Sign Up")
@@ -115,33 +168,34 @@ if 'user_email' not in st.session_state or not st.session_state.user_email:
                 elif len(new_password) < 6:
                     st.error("Password must be at least 6 characters.")
                 else:
-                    users = load_users()
-                    if new_email in users:
-                        st.error("Email already registered.")
-                    else:
-                        hashed_password = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
-                        users[new_email] = {'password': hashed_password, 'data': {}}
-                        save_users(users)
-                        st.session_state.user_email = new_email
+                    try:
+                        user = auth.create_user_with_email_and_password(new_email, new_password)
+                        st.session_state.user = user
+                        st.session_state.google_token = None
                         initialize_session_state()
-                        st.session_state.user_email = new_email
+                        st.session_state.user = user
                         save_user_data()
                         st.success("Account created and logged in successfully!")
-                        st.experimental_rerun()
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Sign-up failed. Email may already be in use.")
+
 else:
     # --- MAIN APP ---
     st.title("MANG BACCARAT GROUP")
-    st.markdown(f"Logged in as: {st.session_state.user_email}")
+    st.markdown(f"Logged in as: {st.session_state.user['email']}")
     if st.button("Logout"):
+        auth.current_user = None
         st.session_state.clear()
-        st.experimental_rerun()
+        st.rerun()
 
     # --- RESET BUTTON ---
     if st.button("Reset Session"):
         initialize_session_state()
-        st.session_state.user_email = st.session_state.user_email
+        st.session_state.user = st.session_state.user
+        st.session_state.google_token = st.session_state.google_token
         save_user_data()
-        st.experimental_rerun()
+        st.rerun()
 
     # --- SETUP FORM ---
     st.subheader("Setup")
