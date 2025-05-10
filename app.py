@@ -60,12 +60,12 @@ if 'bankroll' not in st.session_state:
     st.session_state.t3_level = 1
     st.session_state.t3_results = []
     st.session_state.t3_level_changes = 0
-    st.session_state.t3_peak_level = 1  # New: Track peak T3 level
+    st.session_state.t3_peak_level = 1
     st.session_state.parlay_step = 1
     st.session_state.parlay_wins = 0
     st.session_state.parlay_using_base = True
     st.session_state.parlay_step_changes = 0
-    st.session_state.parlay_peak_step = 1  # New: Track peak Parlay step
+    st.session_state.parlay_peak_step = 1
     st.session_state.advice = ""
     st.session_state.history = []
     st.session_state.wins = 0
@@ -115,12 +115,12 @@ if start_clicked:
         st.session_state.t3_level = 1
         st.session_state.t3_results = [] if betting_strategy == 'T3' else []
         st.session_state.t3_level_changes = 0
-        st.session_state.t3_peak_level = 1  # Reset peak T3 level
+        st.session_state.t3_peak_level = 1
         st.session_state.parlay_step = 1
         st.session_state.parlay_wins = 0
         st.session_state.parlay_using_base = True
         st.session_state.parlay_step_changes = 0
-        st.session_state.parlay_peak_step = 1  # Reset peak Parlay step
+        st.session_state.parlay_peak_step = 1
         st.session_state.advice = ""
         st.session_state.history = []
         st.session_state.wins = 0
@@ -210,12 +210,12 @@ def reset_session_auto():
     st.session_state.t3_level = 1
     st.session_state.t3_results = []
     st.session_state.t3_level_changes = 0
-    st.session_state.t3_peak_level = 1  # Reset peak T3 level
+    st.session_state.t3_peak_level = 1
     st.session_state.parlay_step = 1
     st.session_state.parlay_wins = 0
     st.session_state.parlay_using_base = True
     st.session_state.parlay_step_changes = 0
-    st.session_state.parlay_peak_step = 1  # Reset peak Parlay step
+    st.session_state.parlay_peak_step = 1
     st.session_state.advice = "Session reset: Target reached."
     st.session_state.history = []
     st.session_state.wins = 0
@@ -314,11 +314,11 @@ def place_result(result):
         "Win": win,
         "T3_Level": st.session_state.t3_level,
         "T3_Results": st.session_state.t3_results.copy(),
-        # "T3_Peak_Level": st.session_state.t3_peak_level,  # Uncomment to include in history
+        "T3_Peak_Level": st.session_state.t3_peak_level,
         "Parlay_Step": st.session_state.parlay_step,
         "Parlay_Wins": st.session_state.parlay_wins,
         "Parlay_Using_Base": st.session_state.parlay_using_base,
-        # "Parlay_Peak_Step": st.session_state.parlay_peak_step,  # Uncomment to include in history
+        "Parlay_Peak_Step": st.session_state.parlay_peak_step,
         "Previous_State": previous_state,
         "Bet_Placed": bet_placed
     })
@@ -503,7 +503,7 @@ for i, result in enumerate(sequence):
     col_index = i // 6
     if col_index < 15:
         grid[col_index].append(result)
-for col in grid:
+for col in gra:
     while len(col) < 6:
         col.append('')
 bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 100%; overflow-x: auto;'>"
@@ -588,10 +588,9 @@ if st.session_state.history:
             "Amount": f"${h['Amount']:.0f}" if h["Bet_Placed"] else "-",
             "Outcome": "Win" if h["Win"] else "Loss" if h["Bet_Placed"] else "-",
             "T3_Level": h["T3_Level"] if st.session_state.strategy == 'T3' else "-",
-            "Parlay_Step": h["Parlay_Step"] if st.session_state.strategy == 'Parlay16' else "-"
-            # Uncomment to include peak levels/steps:
-            # "T3_Peak_Level": h.get("T3_Peak_Level", "-") if st.session_state.strategy == 'T3' else "-",
-            # "Parlay_Peak_Step": h.get("Parlay_Peak_Step", "-") if st.session_state.strategy == 'Parlay16' else "-"
+            "T3_Peak_Level": h["T3_Peak_Level"] if st.session_state.strategy == 'T3' else "-",
+            "Parlay_Step": h["Parlay_Step"] if st.session_state.strategy == 'Parlay16' else "-",
+            "Parlay_Peak_Step": h["Parlay_Peak_Step"] if st.session_state.strategy == 'Parlay16' else "-"
         }
         for h in st.session_state.history[-n:]
     ])
