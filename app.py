@@ -75,12 +75,12 @@ if 'strategy' in st.session_state and st.session_state.strategy not in ['T3', 'F
     st.session_state.strategy = 'T3'
 
 # --- RESET BUTTON ---
-if st.button("Reset Session"):
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-    st.session_state.t3_level_changes = 0
-    st.session_state.parlay_step_changes = 0
-    st.experimental_rerun()
+# if st.button("Reset Session"):
+#     for key in list(st.session_state.keys()):
+#         del st.session_state[key]
+#     st.session_state.t3_level_changes = 0
+#     st.session_state.parlay_step_changes = 0
+#     st.experimental_rerun()
 
 # --- SETUP FORM ---
 st.subheader("Setup")
