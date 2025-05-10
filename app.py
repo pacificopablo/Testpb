@@ -14,7 +14,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.strategy = 'T3'  # Betting strategy (T3, Flatbet, Parlay16)
     st.session_state.t3_level = 1
     st.session_state.t3_results = []
-    st.session_state.parlay_step = 1  # Current step in Parlay (1-18)
+    st.session_state.parlay_step = 1  # Current step in Parlay (1-16)
     st.session_state.parlay_wins = 0  # Track consecutive wins for reset
     st.session_state.advice = ""
     st.session_state.history = []
@@ -96,7 +96,7 @@ if start_clicked:
             st.session_state.parlay_wins = 0
         st.success(f"Session started with {betting_strategy} strategy!")
 
-# --- PARLAY TABLE (Base/Unit and Parlay values from the image) ---
+# --- PARLAY TABLE (Base/Unit and Parlay values, limited to 16 steps) ---
 PARLAY_TABLE = {
     1: {'base': 10, 'parlay': 20},
     2: {'base': 10, 'parlay': 20},
@@ -113,9 +113,7 @@ PARLAY_TABLE = {
     13: {'base': 400, 'parlay': 800},
     14: {'base': 520, 'parlay': 1040},
     15: {'base': 700, 'parlay': 1400},
-    16: {'base': 950, 'parlay': 1900},
-    17: {'base': 1270, 'parlay': 2540},
-    18: {'base': 1700, 'parlay': 3400}
+    16: {'base': 950, 'parlay': 1900}
 }
 
 # --- FUNCTIONS ---
@@ -204,7 +202,7 @@ def place_result(result):
                 else:
                     current_parlay = PARLAY_TABLE[st.session_state.parlay_step]['parlay']
                     if current_parlay <= st.session_state.bankroll / (st.session_state.base_bet / 10):  # Check affordability
-                        for step in range(1, 19):
+                        for step in range(1, 17):
                             if PARLAY_TABLE[step]['parlay'] == current_parlay:
                                 st.session_state.parlay_step = step
                                 break
@@ -218,7 +216,7 @@ def place_result(result):
             elif st.session_state.strategy == 'Parlay16':
                 st.session_state.parlay_wins = 0  # Reset wins on loss
                 # Move to next base step on loss
-                st.session_state.parlay_step = min(st.session_state.parlay_step + 1, 18)
+                st.session_state.parlay_step = min(st.session_state.parlay_step + 1, 16)
             st.session_state.losses += 1
             st.session_state.consecutive_losses += 1
             st.session_state.loss_log.append({
@@ -398,7 +396,7 @@ with col4:
                 st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
                 if st.session_state.strategy == 'Parlay16':
                     st.session_state.parlay_wins = 0
-                    st.session_state.parlay_step = min(st.session_state.parlay_step + 1, 18)
+                    st.session_state.parlay_step = min(st.session_state.parlay_step + 1, 16)
             st.session_state.prediction_accuracy['total'] -= 1
             if st.session_state.strategy == 'T3':
                 st.session_state.t3_level = last['T3_Level']
@@ -471,7 +469,7 @@ strategy_status = f"**Betting Strategy**: {st.session_state.strategy}"
 if st.session_state.strategy == 'T3':
     strategy_status += f" | T3 Level: {st.session_state.t3_level}"
 elif st.session_state.strategy == 'Parlay16':
-    strategy_status += f" | Parlay Step: {st.session_state.parlay_step}/18 | Consecutive Wins: {st.session_state.parlay_wins}"
+    strategy_status += f" | Parlay Step: {st.session_state.parlay_step}/16 | Consecutive Wins: {st.session_state.parlay_wins}"
 st.markdown(strategy_status)
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
 
