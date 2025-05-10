@@ -1,9 +1,51 @@
 import streamlit as st
 import random
 from collections import defaultdict
+import os
+import time
+from datetime import datetime, timedelta
 
+# --- FILE-BASED SESSION TRACKING ---
+SESSION_FILE = "online_users.txt"
+
+def track_user_session_file():
+    # Generate a unique session ID if not already set
+    if 'session_id' not in st.session_state:
+        st.session_state.session_id = str(time.time())
+    
+    # Read and clean up expired sessions
+    sessions = {}
+    current_time = datetime.now()
+    try:
+        with open(SESSION_FILE, 'r') as f:
+            for line in f:
+                session_id, timestamp = line.strip().split(',')
+                last_seen = datetime.fromisoformat(timestamp)
+                if current_time - last_seen <= timedelta(seconds=30):
+                    sessions[session_id] = last_seen
+    except FileNotFoundError:
+        pass
+    
+    # Add or update current session
+    sessions[st.session_state.session_id] = current_time
+    
+    # Write back active sessions
+    try:
+        with open(SESSION_FILE, 'w') as f:
+            for session_id, last_seen in sessions.items():
+                f.write(f"{session_id},{last_seen.isoformat()}\n")
+    except:
+        return 0  # Fallback if file access fails
+    
+    return len(sessions)
+
+# --- APP CONFIG ---
 st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
 st.title("MANG BACCARAT GROUP")
+
+# --- DISPLAY NUMBER OF ONLINE USERS ---
+online_users = track_user_session_file()
+st.markdown(f"**Online Users**: {online_users}")
 
 # --- SESSION STATE INIT ---
 if 'bankroll' not in st.session_state:
@@ -68,11 +110,11 @@ if start_clicked:
         st.session_state.strategy = betting_strategy
         st.session_state.sequence = []
         st.session_state.pending_bet = None
-        st.session_state.t3_level = 1
+        st.session_state.t`*3_level = 1
         st.session_state.t3_results = [] if betting_strategy == 'T3' else []
-        st.session_state.parlay_step = 1  # Initialize Parlay step
-        st.session_state.parlay_wins = 0  # Initialize consecutive wins
-        st.session_state.parlay_using_base = True  # Start with base value
+        st.session_state.parlay_step = 1
+        st.session_state.parlay_wins = 0
+        st.session_state.parlay_using_base = True
         st.session_state.advice = ""
         st.session_state.history = []
         st.session_state.wins = 0
@@ -85,7 +127,6 @@ if start_clicked:
         st.session_state.consecutive_losses = 0
         st.session_state.loss_log = []
         st.session_state.last_was_tie = False
-        # Reset strategy-specific state
         if betting_strategy == 'Flatbet':
             st.session_state.t3_level = 1
             st.session_state.t3_results = []
@@ -100,7 +141,7 @@ if start_clicked:
             st.session_state.parlay_using_base = True
         st.success(f"Session started with {betting_strategy} strategy!")
 
-# --- PARLAY TABLE (Base/Unit and Parlay values, limited to 16 steps) ---
+# --- PARLAY TABLE ---
 PARLAY_TABLE = {
     1: {'base': 10, 'parlay': 20},
     2: {'base': 10, 'parlay': 20},
@@ -122,45 +163,31 @@ PARLAY_TABLE = {
 
 # --- FUNCTIONS ---
 def predict_next():
-    sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]  # Non-Tie outcomes
+    sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]
     if len(sequence) < 2:
-        return 'B', 45.86  # Default to Banker with theoretical probability
-
-    # Get the last bigram (last 2 non-Tie outcomes)
+        return 'B', 45.86
     bigram = sequence[-2:]
-
-    # Count transitions from this bigram in the sequence
     transitions = defaultdict(int)
     for i in range(len(sequence) - 2):
         if sequence[i:i+2] == bigram:
             next_outcome = sequence[i+2]
             transitions[next_outcome] += 1
-
-    # Calculate transition probabilities
     total_transitions = sum(transitions.values())
     if total_transitions > 0:
         prob_p = (transitions['P'] / total_transitions) * 100
         prob_b = (transitions['B'] / total_transitions) * 100
     else:
-        # Use theoretical Baccarat probabilities (ignoring Ties)
-        prob_p = 44.62  # Player probability
-        prob_b = 45.86  # Banker probability
-
-    # Predict the outcome with higher probability
-    if prob_p > prob_b:
-        return 'P', prob_p
-    return 'B', prob_b
+        prob_p = 44.62
+        prob_b = 45.86
+    return ('P', prob_p) if prob_p > prob_b else ('B', prob_b)
 
 def check_target_hit():
     if st.session_state.target_mode == "Profit %":
         target_profit = st.session_state.initial_bankroll * (st.session_state.target_value / 100)
-        if st.session_state.bankroll >= st.session_state.initial_bankroll + target_profit:
-            return True
+        return st.session_state.bankroll >= st.session_state.initial_bankroll + target_profit
     else:
         unit_profit = (st.session_state.bankroll - st.session_state.initial_bankroll) / st.session_state.base_bet
-        if unit_profit >= st.session_state.target_value:
-            return True
-    return False
+        return unit_profit >= st.session_state.target_value
 
 def reset_session_auto():
     st.session_state.bankroll = st.session_state.initial_bankroll
@@ -184,9 +211,7 @@ def place_result(result):
     if st.session_state.target_hit:
         reset_session_auto()
         return
-
     st.session_state.last_was_tie = (result == 'T')
-
     bet_amount = 0
     if st.session_state.pending_bet and result != 'T':
         bet_amount, selection = st.session_state.pending_bet
@@ -202,11 +227,10 @@ def place_result(result):
             elif st.session_state.strategy == 'Parlay16':
                 st.session_state.parlay_wins += 1
                 if st.session_state.parlay_wins == 2:
-                    st.session_state.parlay_step = 1  # Reset after 2 wins
+                    st.session_state.parlay_step = 1
                     st.session_state.parlay_wins = 0
                     st.session_state.parlay_using_base = True
                 else:
-                    # Switch to parlay value for the current step after a win
                     st.session_state.parlay_using_base = False
             st.session_state.wins += 1
             st.session_state.prediction_accuracy[selection] += 1
@@ -216,10 +240,9 @@ def place_result(result):
             if st.session_state.strategy == 'T3':
                 st.session_state.t3_results.append('L')
             elif st.session_state.strategy == 'Parlay16':
-                st.session_state.parlay_wins = 0  # Reset wins on loss
-                # Move to next base step on loss
+                st.session_state.parlay_wins = 0
                 st.session_state.parlay_step = min(st.session_state.parlay_step + 1, 16)
-                st.session_state.parlay_using_base = True  # Use base value after a loss
+                st.session_state.parlay_using_base = True
             st.session_state.losses += 1
             st.session_state.consecutive_losses += 1
             st.session_state.loss_log.append({
@@ -231,7 +254,6 @@ def place_result(result):
             if len(st.session_state.loss_log) > 50:
                 st.session_state.loss_log = st.session_state.loss_log[-50:]
         st.session_state.prediction_accuracy['total'] += 1
-
         st.session_state.history.append({
             "Bet": selection,
             "Result": result,
@@ -243,68 +265,55 @@ def place_result(result):
         })
         if len(st.session_state.history) > 1000:
             st.session_state.history = st.session_state.history[-1000:]
-
         st.session_state.pending_bet = None
-
     if not st.session_state.pending_bet and result != 'T':
         st.session_state.consecutive_losses = 0
-
     st.session_state.sequence.append(result)
     if len(st.session_state.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
-
     if check_target_hit():
         st.session_state.target_hit = True
         return
-
-    # Check confidence and bankroll before placing a bet
     pred, conf = predict_next()
     if conf < 50.5:
         st.session_state.pending_bet = None
         st.session_state.advice = f"No bet (Confidence: {conf:.1f}% < 50.5%)"
     else:
-        # Calculate bet amount based on strategy
         if st.session_state.strategy == 'Flatbet':
             bet_amount = st.session_state.base_bet
         elif st.session_state.strategy == 'T3':
             bet_amount = st.session_state.base_bet * st.session_state.t3_level
         elif st.session_state.strategy == 'Parlay16':
-            # Use base or parlay value based on the state
             key = 'base' if st.session_state.parlay_using_base else 'parlay'
             bet_amount = (st.session_state.base_bet / 10) * PARLAY_TABLE[st.session_state.parlay_step][key]
             if bet_amount > st.session_state.bankroll:
-                st.session_state.parlay_step = 1  # Reset to Step 1 if unaffordable
+                st.session_state.parlay_step = 1
                 st.session_state.parlay_using_base = True
                 bet_amount = (st.session_state.base_bet / 10) * PARLAY_TABLE[st.session_state.parlay_step]['base']
-        
         if bet_amount > st.session_state.bankroll:
             st.session_state.pending_bet = None
             st.session_state.advice = "No bet: Insufficient bankroll."
             if st.session_state.strategy == 'Parlay16':
-                st.session_state.parlay_step = 1  # Reset if can't afford bet
+                st.session_state.parlay_step = 1
                 st.session_state.parlay_using_base = True
         else:
             st.session_state.pending_bet = (bet_amount, pred)
             st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
-
-    # T3 Level Adjustment (only for T3 strategy, after 3 bets)
     if st.session_state.strategy == 'T3' and len(st.session_state.t3_results) == 3:
         wins = st.session_state.t3_results.count('W')
         losses = st.session_state.t3_results.count('L')
         if wins == 3:
-            st.session_state.t3_level = max(1, st.session_state.t3_level - 2)  # Move -2 levels
+            st.session_state.t3_level = max(1, st.session_state.t3_level - 2)
         elif wins == 2 and losses == 1:
-            st.session_state.t3_level = max(1, st.session_state.t3_level - 1)  # Move -1 level
+            st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
         elif losses == 2 and wins == 1:
-            st.session_state.t3_level = st.session_state.t3_level + 1  # Move +1 level
+            st.session_state.t3_level = st.session_state.t3_level + 1
         elif losses == 3:
-            st.session_state.t3_level = st.session_state.t3_level + 2  # Move +2 levels
-        st.session_state.t3_results = []  # Reset for next sequence
+            st.session_state.t3_level = st.session_state.t3_level + 2
+        st.session_state.t3_results = []
 
-# --- RESULT INPUT WITH NATIVE STREAMLIT BUTTONS ---
+# --- RESULT INPUT ---
 st.subheader("Enter Result")
-
-# Custom CSS for smaller button styling
 st.markdown("""
 <style>
 div.stButton > button {
@@ -372,9 +381,7 @@ div.stButton > button[kind="undo_btn"]:hover {
 </style>
 """, unsafe_allow_html=True)
 
-# Create a 4-column layout for buttons
 col1, col2, col3, col4 = st.columns(4)
-
 with col1:
     if st.button("Player", key="player_btn"):
         place_result("P")
@@ -417,23 +424,17 @@ with col4:
             st.session_state.advice = "Last entry undone."
             st.session_state.last_was_tie = False
 
-# --- DISPLAY SEQUENCE AS BEAD PLATE ---
+# --- DISPLAY SEQUENCE ---
 st.subheader("Current Sequence (Bead Plate)")
-sequence = st.session_state.sequence[-90:] if 'sequence' in st.session_state else []  # Max 90 results (6x15)
-
-# Create a 6x15 grid
-grid = [[] for _ in range(15)]  # 15 columns
+sequence = st.session_state.sequence[-90:] if 'sequence' in st.session_state else []
+grid = [[] for _ in range(15)]
 for i, result in enumerate(sequence):
-    col_index = i // 6  # Integer division to determine column
-    if col_index < 15:  # Only fill up to 15 columns
+    col_index = i // 6
+    if col_index < 15:
         grid[col_index].append(result)
-
-# Ensure each column has exactly 6 rows, padding with empty strings if needed
 for col in grid:
     while len(col) < 6:
         col.append('')
-
-# Generate HTML for the bead plate
 bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 100%; overflow-x: auto;'>"
 for col in grid:
     col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
@@ -449,7 +450,6 @@ for col in grid:
     col_html += "</div>"
     bead_plate_html += col_html
 bead_plate_html += "</div>"
-
 st.markdown(bead_plate_html, unsafe_allow_html=True)
 
 # --- PREDICTION DISPLAY ---
