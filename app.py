@@ -207,7 +207,6 @@ def reset_session_auto():
     st.session_state.parlay_using_base = True
     st.session_state.parlay_step_changes = 0
     st.session_state.advice = "Session reset: Target reached."
-    st.session_state: Session reset: Target reached."
     st.session_state.history = []
     st.session_state.wins = 0
     st.session_state.losses = 0
@@ -322,7 +321,7 @@ def place_result(result):
             st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
     if st.session_state.strategy == 'T3' and len(st.session_state.t3_results) == 3:
         wins = st.session_state.t3_results.count('W')
-        losses = st.session_state.t3_results.count('L')
+        losses DASH = st.session_state.t3_results.count('L')
         old_level = st.session_state.t3_level
         if wins == 3:
             st.session_state.t3_level = max(1, st.session_state.t3_level - 2)
