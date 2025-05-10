@@ -16,6 +16,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.t3_results = []
     st.session_state.parlay_step = 1  # Current step in Parlay (1-16)
     st.session_state.parlay_wins = 0  # Track consecutive wins for reset
+    st.session_state.parlay_using_base = True  # True: use base value, False: use parlay value
     st.session_state.advice = ""
     st.session_state.history = []
     st.session_state.wins = 0
@@ -71,6 +72,7 @@ if start_clicked:
         st.session_state.t3_results = [] if betting_strategy == 'T3' else []
         st.session_state.parlay_step = 1  # Initialize Parlay step
         st.session_state.parlay_wins = 0  # Initialize consecutive wins
+        st.session_state.parlay_using_base = True  # Start with base value
         st.session_state.advice = ""
         st.session_state.history = []
         st.session_state.wins = 0
@@ -89,11 +91,13 @@ if start_clicked:
             st.session_state.t3_results = []
             st.session_state.parlay_step = 1
             st.session_state.parlay_wins = 0
+            st.session_state.parlay_using_base = True
         elif betting_strategy == 'Parlay16':
             st.session_state.t3_level = 1
             st.session_state.t3_results = []
             st.session_state.parlay_step = 1
             st.session_state.parlay_wins = 0
+            st.session_state.parlay_using_base = True
         st.success(f"Session started with {betting_strategy} strategy!")
 
 # --- PARLAY TABLE (Base/Unit and Parlay values, limited to 16 steps) ---
@@ -166,6 +170,7 @@ def reset_session_auto():
     st.session_state.t3_results = []
     st.session_state.parlay_step = 1
     st.session_state.parlay_wins = 0
+    st.session_state.parlay_using_base = True
     st.session_state.advice = "Session reset: Target reached."
     st.session_state.history = []
     st.session_state.wins = 0
@@ -199,13 +204,10 @@ def place_result(result):
                 if st.session_state.parlay_wins == 2:
                     st.session_state.parlay_step = 1  # Reset after 2 wins
                     st.session_state.parlay_wins = 0
+                    st.session_state.parlay_using_base = True
                 else:
-                    current_parlay = PARLAY_TABLE[st.session_state.parlay_step]['parlay']
-                    if current_parlay <= st.session_state.bankroll / (st.session_state.base_bet / 10):  # Check affordability
-                        for step in range(1, 17):
-                            if PARLAY_TABLE[step]['parlay'] == current_parlay:
-                                st.session_state.parlay_step = step
-                                break
+                    # Switch to parlay value for the current step after a win
+                    st.session_state.parlay_using_base = False
             st.session_state.wins += 1
             st.session_state.prediction_accuracy[selection] += 1
             st.session_state.consecutive_losses = 0
@@ -217,6 +219,7 @@ def place_result(result):
                 st.session_state.parlay_wins = 0  # Reset wins on loss
                 # Move to next base step on loss
                 st.session_state.parlay_step = min(st.session_state.parlay_step + 1, 16)
+                st.session_state.parlay_using_base = True  # Use base value after a loss
             st.session_state.losses += 1
             st.session_state.consecutive_losses += 1
             st.session_state.loss_log.append({
@@ -266,16 +269,20 @@ def place_result(result):
         elif st.session_state.strategy == 'T3':
             bet_amount = st.session_state.base_bet * st.session_state.t3_level
         elif st.session_state.strategy == 'Parlay16':
-            bet_amount = (st.session_state.base_bet / 10) * PARLAY_TABLE[st.session_state.parlay_step]['parlay']
+            # Use base or parlay value based on the state
+            key = 'base' if st.session_state.parlay_using_base else 'parlay'
+            bet_amount = (st.session_state.base_bet / 10) * PARLAY_TABLE[st.session_state.parlay_step][key]
             if bet_amount > st.session_state.bankroll:
                 st.session_state.parlay_step = 1  # Reset to Step 1 if unaffordable
-                bet_amount = (st.session_state.base_bet / 10) * PARLAY_TABLE[st.session_state.parlay_step]['parlay']
+                st.session_state.parlay_using_base = True
+                bet_amount = (st.session_state.base_bet / 10) * PARLAY_TABLE[st.session_state.parlay_step]['base']
         
         if bet_amount > st.session_state.bankroll:
             st.session_state.pending_bet = None
             st.session_state.advice = "No bet: Insufficient bankroll."
             if st.session_state.strategy == 'Parlay16':
                 st.session_state.parlay_step = 1  # Reset if can't afford bet
+                st.session_state.parlay_using_base = True
         else:
             st.session_state.pending_bet = (bet_amount, pred)
             st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
@@ -388,8 +395,9 @@ with col4:
                 st.session_state.prediction_accuracy[last['Bet']] -= 1
                 st.session_state.consecutive_losses = 0
                 if st.session_state.strategy == 'Parlay16':
-                    st.session_state.parlay_wins = max(0, last['Parlay_Step'] > 3 and last['Win'] * 2 - 1)
+                    st.session_state.parlay_wins = max(0, st.session_state.parlay_wins - 1)
                     st.session_state.parlay_step = max(1, last['Parlay_Step'] - 1 if last['Parlay_Step'] > 1 else 1)
+                    st.session_state.parlay_using_base = True
             else:
                 st.session_state.bankroll += last['Amount']
                 st.session_state.losses -= 1
@@ -397,6 +405,7 @@ with col4:
                 if st.session_state.strategy == 'Parlay16':
                     st.session_state.parlay_wins = 0
                     st.session_state.parlay_step = min(st.session_state.parlay_step + 1, 16)
+                    st.session_state.parlay_using_base = True
             st.session_state.prediction_accuracy['total'] -= 1
             if st.session_state.strategy == 'T3':
                 st.session_state.t3_level = last['T3_Level']
