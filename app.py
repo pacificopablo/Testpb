@@ -1,5 +1,4 @@
 import streamlit as st
-import random
 from collections import defaultdict
 import os
 import time
@@ -193,7 +192,7 @@ def reset_session_auto():
     st.session_state.pending_bet = None
     st.session_state.t3_level = 1
     st.session_state.t3_results = []
-    st.session_state.t3_level_changes = 0
+    st.session_state.t3_level_changes﻿ = 0
     st.session_state.parlay_step = 1
     st.session_state.parlay_wins = 0
     st.session_state.parlay_using_base = True
@@ -239,7 +238,7 @@ def place_result(result):
             st.session_state.prediction_accuracy[selection] += 1
             st.session_state.consecutive_losses = 0
         else:
-            st.session_state.bankroll -= bet/under
+            st.session_state.bankroll -= bet_amount
             if st.session_state.strategy == 'T3':
                 st.session_state.t3_results.append('L')
             elif st.session_state.strategy == 'Parlay16':
@@ -259,7 +258,7 @@ def place_result(result):
             })
             if len(st.session_state.loss_log) > 50:
                 st.session_state.loss_log = st.session_state.loss_log[-50:]
-        st.session_state.prediction_accuracy['total'] += 1  # Corrected typo
+        st.session_state.prediction_accuracy['total'] += 1
         st.session_state.history.append({
             "Bet": selection,
             "Result": result,
@@ -408,43 +407,64 @@ with col3:
         place_result("T")
 with col4:
     if st.button("Undo Last", key="undo_btn"):
-        if st.session_state.history and st.session_state.sequence:
-            st.session_state.sequence.pop()
-            last = st.session_state.history.pop()
-            if last['Win']:
-                st.session_state.wins -= 1
-                st.session_state.bankroll -= last['Amount'] if last["Bet"] == 'P' else last['Amount'] * 0.95
-                st.session_state.prediction_accuracy[last['Bet']] -= 1
-                st.session_state.consecutive_losses = 0
-                if st.session_state.strategy == 'Parlay16':
-                    st.session_state.parlay_wins = max(0, st.session_state.parlay_wins - 1)
-                    st.session_state.parlay_step = max(1, last['Parlay_Step'] - 1 if last['Parlay_Step'] > 1 else 1)
+        if not st.session_state.history or not st.session_state.sequence:
+            st.warning("Nothing to undo.")
+        else:
+            try:
+                # Remove the last sequence and history entry
+                st.session_state.sequence.pop()
+                last = st.session_state.history.pop()
+
+                # Reverse bankroll and counters based on win/loss
+                if last['Win']:
+                    st.session_state.wins -= 1
+                    st.session_state.bankroll -= last['Amount'] if last["Bet"] == 'P' else last['Amount'] * 0.95
+                    st.session_state.prediction_accuracy[last['Bet']] -= 1
+                    st.session_state.consecutive_losses = 0
+                else:
+                    st.session_state.bankroll += last['Amount']
+                    st.session_state.losses -= 1
+                    st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
+                    # Remove the last loss from loss_log if it was a loss
+                    if st.session_state.loss_log and st.session_state.loss_log[-1]['result'] != last['Bet']:
+                        st.session_state.loss_log.pop()
+
+                # Update prediction accuracy total
+                st.session_state.prediction_accuracy['total'] -= 1
+
+                # Restore strategy-specific state
+                if st.session_state.strategy == 'T3':
+                    st.session_state.t3_level = last['T3_Level']
+                    st.session_state.t3_results = last['T3_Results']
+                elif st.session_state.strategy == 'Parlay16':
+                    st.session_state.parlay_step = last['Parlay_Step']
+                    # Estimate parlay_wins based on history (approximate, as exact wins not stored)
+                    st.session_state.parlay_wins = 0  # Reset to 0, assume undone bet resets progression
                     st.session_state.parlay_using_base = True
-            else:
-                st.session_state.bankroll += last['Amount']
-                st.session_state.losses -= 1
-                st.session_state.consecutive_losses = max(0, st.session_state.consecutive_losses - 1)
-                if st.session_state.strategy == 'Parlay16':
+                else:  # Flatbet or other
+                    st.session_state.t3_level = 1
+                    st.session_state.t3_results = []
+                    st.session_state.parlay_step = 1
                     st.session_state.parlay_wins = 0
-                    st.session_state.parlay_step = min(st.session_state.parlay_step + 1, 16)
                     st.session_state.parlay_using_base = True
-            st.session_state.prediction_accuracy['total'] -= 1
-            if st.session_state.strategy == 'T3':
-                st.session_state.t3_level = last['T3_Level']
-                st.session_state.t3_results = last['T3_Results']
-            else:
-                st.session_state.t3_level = 1
-                st.session_state.t3_results = []
-            st.session_state.pending_bet = None
-            st.session_state.advice = "Last entry undone."
-            st.session_state.last_was_tie = False
+
+                # Reset pending bet and update advice
+                st.session_state.pending_bet = None
+                st.session_state.advice = "Last entry undone."
+                st.session_state.last_was_tie = False
+
+                # Refresh UI
+                st.success("Undone last action.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error undoing last action: {str(e)}")
 
 # --- DISPLAY SEQUENCE ---
 st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-90:] if 'sequence' in st.session_state else []
 grid = [[] for _ in range(15)]
 for i, result in enumerate(sequence):
-    col_index = i // 6
+    col_index = I // 6
     if col_index < 15:
         grid[col_index].append(result)
 for col in grid:
