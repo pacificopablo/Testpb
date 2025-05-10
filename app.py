@@ -329,14 +329,15 @@ def place_result(result):
             bet_amount = st.session_state.base_bet * st.session_state.t3_level
         elif st.session_state.strategy == 'Parlay16':
             key = 'base' if st.session_state.parlay_using_base else 'parlay'
-            bet_amount = (st.session_state.base_bet / 10) * PARLAY_TABLE[st.session_state.parlay_step][key]
+            # Fix: Multiply table value directly by base_bet
+            bet_amount = st.session_state.base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
             if bet_amount > st.session_state.bankroll:
                 old_step = st.session_state.parlay_step
                 st.session_state.parlay_step = 1
                 st.session_state.parlay_using_base = True
                 if old_step != st.session_state.parlay_step:
                     st.session_state.parlay_step_changes += 1
-                bet_amount = (st.session_state.base_bet / 10) * PARLAY_TABLE[st.session_state.parlay_step]['base']
+                bet_amount = st.session_state.base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base']
         if bet_amount > st.session_state.bankroll:
             st.session_state.pending_bet = None
             st.session_state.advice = "No bet: Insufficient bankroll."
