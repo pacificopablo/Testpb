@@ -53,6 +53,7 @@ st.title("MANG BACCARAT GROUP")
 if 'bankroll' not in st.session_state:
     st.session_state.bankroll = 0.0
     st.session_state.base_bet = 0.0
+    st.session_state.initial_base_bet = 0.0  # Store initial base bet
     st.session_state.sequence = []
     st.session_state.pending_bet = None
     st.session_state.strategy = 'T3'
@@ -107,6 +108,7 @@ if start_clicked:
     else:
         st.session_state.bankroll = bankroll
         st.session_state.base_bet = base_bet
+        st.session_state.initial_base_bet = base_bet  # Store initial base bet
         st.session_state.strategy = betting_strategy
         st.session_state.sequence = []
         st.session_state.pending_bet = None
@@ -192,7 +194,7 @@ def check_target_hit():
         target_profit = st.session_state.initial_bankroll * (st.session_state.target_value / 100)
         return st.session_state.bankroll >= st.session_state.initial_bankroll + target_profit
     else:
-        unit_profit = (st.session_state.bankroll - st.session_state.initial_bankroll) / st.session_state.base_bet
+        unit_profit = (st.session_state.bankroll - st.session_state.initial_bankroll) / st.session_state.initial_base_bet
         return unit_profit >= st.session_state.target_value
 
 def reset_session_auto():
@@ -329,15 +331,15 @@ def place_result(result):
             bet_amount = st.session_state.base_bet * st.session_state.t3_level
         elif st.session_state.strategy == 'Parlay16':
             key = 'base' if st.session_state.parlay_using_base else 'parlay'
-            # Fix: Multiply table value directly by base_bet
-            bet_amount = st.session_state.base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
+            # Fix: Multiply table value by initial base bet
+            bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
             if bet_amount > st.session_state.bankroll:
                 old_step = st.session_state.parlay_step
                 st.session_state.parlay_step = 1
                 st.session_state.parlay_using_base = True
                 if old_step != st.session_state.parlay_step:
                     st.session_state.parlay_step_changes += 1
-                bet_amount = st.session_state.base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base']
+                bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base']
         if bet_amount > st.session_state.bankroll:
             st.session_state.pending_bet = None
             st.session_state.advice = "No bet: Insufficient bankroll."
@@ -552,9 +554,9 @@ else:
         st.info(st.session_state.advice)
 
 # --- UNIT PROFIT ---
-if st.session_state.base_bet > 0 and st.session_state.initial_bankroll > 0:
+if st.session_state.initial_base_bet > 0 and st.session_state.initial_bankroll > 0:
     profit = st.session_state.bankroll - st.session_state.initial_bankroll
-    units_profit = profit / st.session_state.base_bet
+    units_profit = profit / st.session_state.initial_base_bet
     st.markdown(f"**Units Profit**: {units_profit:.2f} units (${profit:.2f})")
 else:
     st.markdown("**Units Profit**: 0.00 units ($0.00)")
