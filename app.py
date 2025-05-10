@@ -103,8 +103,6 @@ if start_clicked:
         st.error("Base bet must be positive.")
     elif base_bet > bankroll:
         st.error("Base bet cannot exceed bankroll.")
-    elif betting_strategy == 'Parlay16' and base_bet % 10 != 0:
-        st.error("Base bet must be a multiple of 10 for Parlay16 strategy.")
     else:
         st.session_state.bankroll = bankroll
         st.session_state.base_bet = base_bet
@@ -331,7 +329,6 @@ def place_result(result):
             bet_amount = st.session_state.base_bet * st.session_state.t3_level
         elif st.session_state.strategy == 'Parlay16':
             key = 'base' if st.session_state.parlay_using_base else 'parlay'
-            # Fix: Multiply table value by initial base bet
             bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
             if bet_amount > st.session_state.bankroll:
                 old_step = st.session_state.parlay_step
