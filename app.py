@@ -74,14 +74,6 @@ if 'bankroll' not in st.session_state:
 if 'strategy' in st.session_state and st.session_state.strategy not in ['T3', 'Flatbet', 'Parlay16']:
     st.session_state.strategy = 'T3'
 
-# --- RESET BUTTON ---
-# if st.button("Reset Session"):
-#     for key in list(st.session_state.keys()):
-#         del st.session_state[key]
-#     st.session_state.t3_level_changes = 0
-#     st.session_state.parlay_step_changes = 0
-#     st.experimental_rerun()
-
 # --- SETUP FORM ---
 st.subheader("Setup")
 with st.form("setup_form"):
@@ -267,7 +259,7 @@ def place_result(result):
             })
             if len(st.session_state.loss_log) > 50:
                 st.session_state.loss_log = st.session_state.loss_log[-50:]
-        st.session_state.prediction_accuracy['total'] += 1
+        st.session_state.predPrediction_accuracy['total'] += 1
         st.session_state.history.append({
             "Bet": selection,
             "Result": result,
