@@ -16,25 +16,32 @@ def track_user_session_file():
     sessions = {}
     current_time = datetime.now()
     try:
-        with open(SESSION_FILE, 'r') as f:
+        with open(SESSION_FILE, 'r', encoding='utf-8') as f:
             for line in f:
-                session_id, timestamp = line.strip().split(',')
-                last_seen = datetime.fromisoformat(timestamp)
-                if current_time - last_seen <= timedelta(seconds=30):
-                    sessions[session_id] = last_seen
+                try:
+                    session_id, timestamp = line.strip().split(',')
+                    last_seen = datetime.fromisoformat(timestamp)
+                    if current_time - last_seen <= timedelta(seconds=30):
+                        sessions[session_id] = last_seen
+                except ValueError:
+                    continue  # Skip malformed lines
     except FileNotFoundError:
         pass
+    except PermissionError:
+        st.error("Unable to access session file. Online user count unavailable.")
+        return 0
     
     # Add or update current session
     sessions[st.session_state.session_id] = current_time
     
     # Write back active sessions
     try:
-        with open(SESSION_FILE, 'w') as f:
+        with open(SESSION_FILE, 'w', encoding='utf-8') as f:
             for session_id, last_seen in sessions.items():
                 f.write(f"{session_id},{last_seen.isoformat()}\n")
-    except:
-        return 0  # Fallback if file access fails
+    except PermissionError:
+        st.error("Unable to write to session file. Online user count may be inaccurate.")
+        return 0
     
     return len(sessions)
 
@@ -95,6 +102,8 @@ if start_clicked:
         st.error("Base bet must be positive.")
     elif base_bet > bankroll:
         st.error("Base bet cannot exceed bankroll.")
+    elif betting_strategy == 'Parlay16' and base_bet % 10 != 0:
+        st.error("Base bet must be a multiple of 10 for Parlay16 strategy.")
     else:
         st.session_state.bankroll = bankroll
         st.session_state.base_bet = base_bet
@@ -192,7 +201,7 @@ def reset_session_auto():
     st.session_state.pending_bet = None
     st.session_state.t3_level = 1
     st.session_state.t3_results = []
-    st.session_state.t3_level_changes﻿ = 0
+    st.session_state.t3_level_changes = 0
     st.session_state.parlay_step = 1
     st.session_state.parlay_wins = 0
     st.session_state.parlay_using_base = True
@@ -456,6 +465,8 @@ with col4:
                 # Refresh UI
                 st.success("Undone last action.")
                 st.rerun()
+            except IndexError:
+                st.error("Cannot undo: No actions available.")
             except Exception as e:
                 st.error(f"Error undoing last action: {str(e)}")
 
@@ -464,7 +475,7 @@ st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-90:] if 'sequence' in st.session_state else []
 grid = [[] for _ in range(15)]
 for i, result in enumerate(sequence):
-    col_index = I // 6
+    col_index = i // 6
     if col_index < 15:
         grid[col_index].append(result)
 for col in grid:
