@@ -43,10 +43,6 @@ def track_user_session_file():
 st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
 st.title("MANG BACCARAT GROUP")
 
-# --- DISPLAY NUMBER OF ONLINE USERS ---
-online_users = track_user_session_file()
-st.markdown(f"**Online Users**: {online_users}")
-
 # --- SESSION STATE INIT ---
 if 'bankroll' not in st.session_state:
     st.session_state.bankroll = 0.0
@@ -110,7 +106,7 @@ if start_clicked:
         st.session_state.strategy = betting_strategy
         st.session_state.sequence = []
         st.session_state.pending_bet = None
-        st.session_state.t`*3_level = 1
+        st.session_state.t3_level = 1
         st.session_state.t3_results = [] if betting_strategy == 'T3' else []
         st.session_state.parlay_step = 1
         st.session_state.parlay_wins = 0
@@ -481,6 +477,8 @@ elif st.session_state.strategy == 'Parlay16':
     strategy_status += f" | Parlay Step: {st.session_state.parlay_step}/16 | Consecutive Wins: {st.session_state.parlay_wins}"
 st.markdown(strategy_status)
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
+online_users = track_user_session_file()
+st.markdown(f"**Online Users**: {online_users}")
 
 # --- PREDICTION ACCURACY ---
 st.subheader("Prediction Accuracy")
