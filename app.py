@@ -42,36 +42,6 @@ def track_user_session_file():
     
     return len(sessions)
 
-# --- NEW FUNCTION: MANAGE PROFIT AND LOSS ---
-def manage_profit_and_loss(session_profit):
-    if session_profit > 0:
-        saved = session_profit * 0.5
-        reinvested = session_profit * 0.5
-        st.session_state.saved_profits += saved
-        st.session_state.total_bankroll += reinvested
-        st.session_state.session_profit += session_profit
-        st.info(f"Profit: ${session_profit:.2f} | Saved: ${saved:.2f} | Reinvested: ${reinvested:.2f}")
-    elif session_profit < 0:
-        st.session_state.session_profit += session_profit
-        st.session_state.total_bankroll += session_profit
-        st.warning(f"Loss: ${-session_profit:.2f}")
-
-    win_limit = st.session_state.session_bankroll * st.session_state.win_limit_percent
-    loss_limit = st.session_state.session_bankroll * st.session_state.loss_limit_percent
-    if st.session_state.session_profit >= win_limit:
-        st.session_state.session_active = False
-        st.success(f"Win limit reached: ${st.session_state.session_profit:.2f} (Target: ${win_limit:.2f}). Session paused.")
-    elif -st.session_state.session_profit >= loss_limit:
-        st.session_state.session_active = False
-        st.error(f"Loss limit reached: ${-st.session_state.session_profit:.2f} (Target: ${loss_limit:.2f}). Session paused.")
-
-    if st.session_state.total_bankroll < st.session_state.initial_total_bankroll * 0.8:
-        new_session_bankroll = max(st.session_state.total_bankroll / 10, 10.0)
-        st.session_state.session_bankroll = new_session_bankroll
-        st.session_state.base_bet = max(new_session_bankroll * 0.02, 1.0)
-        st.session_state.initial_base_bet = st.session_state.base_bet
-        st.warning(f"Bankroll low: ${st.session_state.total_bankroll:.2f}. Adjusted session bankroll to ${new_session_bankroll:.2f}, base bet to ${st.session_state.base_bet:.2f}")
-
 # --- NEW FUNCTION: AUTO-OPTIMIZE PREDICTION WEIGHTS ---
 def auto_optimize_weights():
     if len(st.session_state.sequence) % 10 == 0 and len(st.session_state.sequence) > 0:
@@ -84,7 +54,7 @@ def auto_optimize_weights():
             attempts = st.session_state.pattern_attempts[pattern]
             if attempts > 0:
                 accuracy = success / attempts
-                weights[pattern] = max(0.05, 0.4 * accuracy)  # Base weight scaled by accuracy
+                weights[pattern] = max(0.05, 0.4 * accuracy)  # Scale weight by accuracy
             else:
                 weights[pattern] = 0.05
         total_w = sum(weights.values())
@@ -92,12 +62,6 @@ def auto_optimize_weights():
             weights[k] = weights[k] / total_w
         st.session_state.optimized_weights = weights
         st.session_state.optimization_status.append(f"Weights updated: Bigram: {weights['bigram']:.2f}, Trigram: {weights['trigram']:.2f}, Streak: {weights['streak']:.2f}, Chop: {weights['chop']:.2f}, Double: {weights['double']:.2f}")
-
-    # Adjust thresholds and scaling based on win/loss ratio
-    if st.session_state.losses >= st.session_state.wins * 1.5 and st.session_state.losses > 0:
-        st.session_state.dynamic_threshold += 2.0
-        st.session_state.dynamic_bet_scale *= 0.9
-        st.session_state.optimization_status.append(f"Losses high ({st.session_state.losses}/{st.session_state.wins}). Threshold: {st.session_state.dynamic_threshold:.1f}%, Bet Scale: {st.session_state.dynamic_bet_scale:.2f}")
 
 # --- APP CONFIG ---
 st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
@@ -145,11 +109,10 @@ if 'bankroll' not in st.session_state:
     st.session_state.session_active = True
     st.session_state.win_limit_percent = 0.25
     st.session_state.loss_limit_percent = 0.5
-    # New optimization variables
+    # New variables for bet selection optimization
     st.session_state.optimized_weights = {'bigram': 0.4, 'trigram': 0.3, 'streak': 0.2, 'chop': 0.05, 'double': 0.05}
     st.session_state.optimization_status = []
-    st.session_state.dynamic_threshold = 52.0  # Base threshold
-    st.session_state.dynamic_bet_scale = 1.0   # Base bet scale
+    st.session_state.dynamic_threshold = 53.0  # Stricter base threshold
     st.session_state.cool_off_counter = 0      # Tracks cool-off period after losses
 
 # Validate strategy
@@ -268,7 +231,7 @@ def predict_next():
             insights['Trigram'] = f"{weights['trigram']*100:.0f}% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
 
     if streak_count >= 2:
-        streak_prob = min(0.7, 0.5 + streak_count * 0.05) * (0.8 if streak_count > 4 else 1.0)
+        streak_prob = min(0.7, 0.5 + streak_count * 0.05) * (0.7 if streak_count > 4 else 1.0)  # Penalty for long streaks
         if current_streak == 'P':
             prob_p += weights['streak'] * streak_prob
             prob_b += weights['streak'] * (1 - streak_prob)
@@ -322,7 +285,7 @@ def predict_next():
 
     recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
     threshold = st.session_state.dynamic_threshold + (st.session_state.consecutive_losses * 1.0) - (recent_accuracy * 1.5)
-    threshold = min(max(threshold, 50.0 if st.session_state.recovery_mode else 52.0), 65.0)
+    threshold = min(max(threshold, 50.0 if st.session_state.recovery_mode else 53.0), 65.0)
     insights['Threshold'] = f"{threshold:.1f}%"
 
     if st.session_state.pattern_volatility > 0.6:  # Stricter volatility threshold
@@ -373,8 +336,7 @@ def reset_session_auto():
     st.session_state.session_active = True
     st.session_state.optimized_weights = {'bigram': 0.4, 'trigram': 0.3, 'streak': 0.2, 'chop': 0.05, 'double': 0.05}
     st.session_state.optimization_status = []
-    st.session_state.dynamic_threshold = 52.0
-    st.session_state.dynamic_bet_scale = 1.0
+    st.session_state.dynamic_threshold = 53.0
     st.session_state.cool_off_counter = 0
 
 # --- PLACE RESULT FUNCTION ---
@@ -476,16 +438,42 @@ def place_result(result, manual_selection=None):
         st.session_state.prediction_accuracy['total'] += 1
         st.session_state.pending_bet = None
 
-        # Manage profit/loss
+        # Manage profit/loss (unchanged)
         session_profit = st.session_state.bankroll - previous_bankroll
-        manage_profit_and_loss(session_profit)
+        if session_profit > 0:
+            saved = session_profit * 0.5
+            reinvested = session_profit * 0.5
+            st.session_state.saved_profits += saved
+            st.session_state.total_bankroll += reinvested
+            st.session_state.session_profit += session_profit
+            st.info(f"Profit: ${session_profit:.2f} | Saved: ${saved:.2f} | Reinvested: ${reinvested:.2f}")
+        elif session_profit < 0:
+            st.session_state.session_profit += session_profit
+            st.session_state.total_bankroll += session_profit
+            st.warning(f"Loss: ${-session_profit:.2f}")
+
+        win_limit = st.session_state.session_bankroll * st.session_state.win_limit_percent
+        loss_limit = st.session_state.session_bankroll * st.session_state.loss_limit_percent
+        if st.session_state.session_profit >= win_limit:
+            st.session_state.session_active = False
+            st.success(f"Win limit reached: ${st.session_state.session_profit:.2f} (Target: ${win_limit:.2f}). Session paused.")
+        elif -st.session_state.session_profit >= loss_limit:
+            st.session_state.session_active = False
+            st.error(f"Loss limit reached: ${-st.session_state.session_profit:.2f} (Target: ${loss_limit:.2f}). Session paused.")
+
+        if st.session_state.total_bankroll < st.session_state.initial_total_bankroll * 0.8:
+            new_session_bankroll = max(st.session_state.total_bankroll / 10, 10.0)
+            st.session_state.session_bankroll = new_session_bankroll
+            st.session_state.base_bet = max(new_session_bankroll * 0.02, 1.0)
+            st.session_state.initial_base_bet = st.session_state.base_bet
+            st.warning(f"Bankroll low: ${st.session_state.total_bankroll:.2f}. Adjusted session bankroll to ${new_session_bankroll:.2f}, base bet to ${st.session_state.base_bet:.2f}")
 
     # Append to sequence
     st.session_state.sequence.append(result)
     if len(st.session_state.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
 
-    # Auto-optimize weights
+    # Auto-optimize weights for bet selection
     auto_optimize_weights()
 
     # Store history
@@ -522,13 +510,12 @@ def place_result(result, manual_selection=None):
         conf = max(conf, 50.0)
         st.session_state.advice = f"Manual Bet: {pred} (User override)"
 
-    # Dynamic bet sizing with stricter loss adjustments
-    bet_scaling = st.session_state.dynamic_bet_scale
+    # Bet sizing (unchanged from original logic)
+    bet_scaling = 1.0
     if st.session_state.recovery_mode:
         bet_scaling *= st.session_state.recovery_bet_scale
-    if st.session_state.consecutive_losses >= 1:
-        reduction = min(0.5, 0.2 * st.session_state.consecutive_losses)  # Reduce by 20% per loss, max 50%
-        bet_scaling *= (1 - reduction)
+    if st.session_state.consecutive_losses >= 2:
+        bet_scaling *= 0.8
     if conf < 55.0:
         bet_scaling *= 0.9
 
@@ -546,7 +533,7 @@ def place_result(result, manual_selection=None):
         st.session_state.insights = insights
         return
 
-    if pred is None or conf < 52.0:
+    if pred is None or conf < 53.0:
         st.session_state.pending_bet = None
         st.session_state.advice = f"No bet (Confidence: {conf:.1f}% too low)"
         st.session_state.insights = insights
@@ -566,7 +553,7 @@ def place_result(result, manual_selection=None):
                     st.session_state.parlay_step_changes += 1
                 bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base'] * bet_scaling
 
-        # Bankroll-aware filtering
+        # Bankroll-aware filtering (unchanged)
         safe_bankroll = st.session_state.initial_bankroll * 0.2
         max_bet_percent = 0.05
         if (bet_amount > st.session_state.bankroll or
@@ -676,8 +663,7 @@ if start_clicked:
         st.session_state.loss_limit_percent = loss_limit_percent / 100
         st.session_state.optimized_weights = {'bigram': 0.4, 'trigram': 0.3, 'streak': 0.2, 'chop': 0.05, 'double': 0.05}
         st.session_state.optimization_status = []
-        st.session_state.dynamic_threshold = 52.0
-        st.session_state.dynamic_bet_scale = 1.0
+        st.session_state.dynamic_threshold = 53.0
         st.session_state.cool_off_counter = 0
         st.success(f"Session started with {betting_strategy} strategy!")
 
@@ -852,12 +838,11 @@ if st.session_state.pattern_volatility > 0.6:
     st.warning(f"High Pattern Volatility: {st.session_state.pattern_volatility:.2f} (Betting paused)")
 
 # --- OPTIMIZATION STATUS ---
-st.subheader("Optimization Status")
+st.subheader("Bet Selection Optimization Status")
 if st.session_state.optimization_status:
     for status in st.session_state.optimization_status[-5:]:
         st.markdown(f"- {status}")
-st.markdown(f"**Current Threshold**: {st.session_state.dynamic_threshold:.1f}%")
-st.markdown(f"**Current Bet Scale**: {st.session_state.dynamic_bet_scale:.2f}")
+st.markdown(f"**Current Confidence Threshold**: {st.session_state.dynamic_threshold:.1f}%")
 
 # --- UNIT PROFIT ---
 if st.session_state.initial_base_bet > 0 and st.session_state.initial_bankroll > 0:
