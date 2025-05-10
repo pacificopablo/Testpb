@@ -142,8 +142,8 @@ PARLAY_TABLE = {
 }
 
 # --- PREDICTION FUNCTION ---
-def predict_next():
-    sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]
+def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, recovery_mode, consecutive_losses):
+    sequence = [x for x in sequence if x in ['P', 'B']]
     if len(sequence) < 3:
         return 'B', 45.86, {}
 
@@ -195,21 +195,11 @@ def predict_next():
             next_outcome = recent_sequence[i+2]
             pattern_transitions[current_pattern][next_outcome] += 1
 
-    st.session_state.pattern_volatility = pattern_changes / max(len(recent_sequence) - 2, 1)
-
-    # Enhanced volatility with probability variance
-    prob_history = []
-    for _ in range(1, min(21, len(sequence))):
-        pred, conf, _ = predict_next()  # Recursive call for simplicity
-        if pred:
-            prob_history.append(conf)
-    prob_variance = np.std(prob_history) if prob_history else 0
+    pattern_volatility = pattern_changes / max(len(recent_sequence) - 2, 1)
 
     prior_p = 44.62 / 100
     prior_b = 45.86 / 100
 
-    # Use optimized weights
-    weights = st.session_state.optimized_weights
     total_w = sum(weights.values())
     for k in weights:
         weights[k] = max(weights[k] / total_w, 0.05)
@@ -290,9 +280,9 @@ def predict_next():
         if result in ['P', 'B']:
             recent_wins[result] += 1
     if len(sequence[-10:]) >= 5:
-        if recent_wins['P'] / 10 >= 0.7 and st.session_state.pattern_volatility < 0.5:
+        if recent_wins['P'] / 10 >= 0.7 and pattern_volatility < 0.5:
             prob_p = min(75.0, prob_p + 5.0)
-        elif recent_wins['B'] / 10 >= 0.7 and st.session_state.pattern_volatility < 0.5:
+        elif recent_wins['B'] / 10 >= 0.7 and pattern_volatility < 0.5:
             prob_b = min(75.0, prob_b + 5.0)
 
     current_pattern = 'streak' if streak_count >= 2 else 'chop' if chop_count >= 2 else 'double' if double_count >= 1 else 'other'
@@ -312,12 +302,9 @@ def predict_next():
         prob_b = max(50.0, prob_b - confidence_penalty)
         insights['Conflict Penalty'] = f"-{confidence_penalty:.1f}%"
 
-    recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
-    threshold = st.session_state.dynamic_threshold + (st.session_state.consecutive_losses * 1.0) - (recent_accuracy * 1.5)
-    threshold = min(max(threshold, 50.0 if st.session_state.recovery_mode else 53.0), 65.0)
-    if prob_variance > 15.0:  # Enhanced volatility check
-        threshold += 3.0
-        insights['Volatility (Variance)'] = f"High (Adjustment: +3% threshold)"
+    recent_accuracy = (prediction_accuracy['P'] + prediction_accuracy['B']) / max(prediction_accuracy['total'], 1)
+    threshold = st.session_state.dynamic_threshold + (consecutive_losses * 1.0) - (recent_accuracy * 1.5)
+    threshold = min(max(threshold, 50.0 if recovery_mode else 53.0), 65.0)
 
     if prob_p > prob_b and prob_p >= threshold:
         return 'P', prob_p, insights
@@ -534,8 +521,37 @@ def place_result(result, manual_selection=None):
         st.session_state.insights = {}
         return
 
+    # Compute prob_variance for volatility check
+    prob_history = []
+    temp_sequence = st.session_state.sequence.copy()
+    for _ in range(min(20, len(temp_sequence))):
+        pred, conf, _ = predict_next(temp_sequence, st.session_state.pattern_volatility, st.session_state.optimized_weights,
+                                     st.session_state.prediction_accuracy, st.session_state.recovery_mode,
+                                     st.session_state.consecutive_losses)
+        if pred:
+            prob_history.append(conf)
+        if temp_sequence:
+            temp_sequence.pop()  # Simulate past predictions
+    prob_variance = np.std(prob_history) if prob_history else 0
+
+    # Update pattern volatility
+    sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]
+    pattern_changes = 0
+    last_pattern = None
+    for i in range(len(sequence) - 1):
+        if i < len(sequence) - 2:
+            current_pattern = 'streak' if (sequence[i] == sequence[i-1] and sequence[i-1] == sequence[i-2]) else 'chop' if (sequence[i] != sequence[i-1] and sequence[i-1] != sequence[i-2]) else 'other'
+            if last_pattern and last_pattern != current_pattern:
+                pattern_changes += 1
+            last_pattern = current_pattern
+    st.session_state.pattern_volatility = pattern_changes / max(len(sequence) - 2, 1)
+
     # Calculate next bet
-    pred, conf, insights = predict_next()
+    pred, conf, insights = predict_next(st.session_state.sequence, st.session_state.pattern_volatility,
+                                        st.session_state.optimized_weights, st.session_state.prediction_accuracy,
+                                        st.session_state.recovery_mode, st.session_state.consecutive_losses)
+    if prob_variance > 15.0:
+        insights['Volatility (Variance)'] = f"High (Adjustment: +3% threshold)"
     if manual_selection in ['P', 'B']:
         pred = manual_selection
         conf = max(conf, 50.0)
@@ -811,7 +827,9 @@ with col4:
                             st.session_state.loss_log.pop()
                     if st.session_state.pending_bet:
                         amount, pred = st.session_state.pending_bet
-                        conf = predict_next()[1]
+                        conf = predict_next(st.session_state.sequence, st.session_state.pattern_volatility,
+                                            st.session_state.optimized_weights, st.session_state.prediction_accuracy,
+                                            st.session_state.recovery_mode, st.session_state.consecutive_losses)[1]
                         st.session_state.advice = f"Next Bet: ${amount:.0f} on {pred} ({conf:.1f}%)"
                     else:
                         st.session_state.advice = "No bet pending."
