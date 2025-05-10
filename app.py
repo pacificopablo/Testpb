@@ -149,22 +149,22 @@ if start_clicked:
 
 # --- PARLAY TABLE ---
 PARLAY_TABLE = {
-    1: {'base': 10, 'parlay': 20},
-    2: {'base': 10, 'parlay': 20},
-    3: {'base': 10, 'parlay': 20},
-    4: {'base': 20, 'parlay': 40},
-    5: {'base': 30, 'parlay': 60},
-    6: {'base': 40, 'parlay': 80},
-    7: {'base': 60, 'parlay': 120},
-    8: {'base': 80, 'parlay': 160},
-    9: {'base': 120, 'parlay': 240},
-    10: {'base': 160, 'parlay': 320},
-    11: {'base': 220, 'parlay': 440},
-    12: {'base': 300, 'parlay': 600},
-    13: {'base': 400, 'parlay': 800},
-    14: {'base': 520, 'parlay': 1040},
-    15: {'base': 700, 'parlay': 1400},
-    16: {'base': 950, 'parlay': 1900}
+    1: {'base': 1, 'parlay': 2},    # Start at base_bet
+    2: {'base': 1, 'parlay': 2},
+    3: {'base': 1, 'parlay': 2},
+    4: {'base': 2, 'parlay': 4},
+    5: {'base': 3, 'parlay': 6},
+    6: {'base': 4, 'parlay': 8},
+    7: {'base': 6, 'parlay': 12},
+    8: {'base': 8, 'parlay': 16},
+    9: {'base': 12, 'parlay': 24},
+    10: {'base': 16, 'parlay': 32},
+    11: {'base': 22, 'parlay': 44},
+    12: {'base': 30, 'parlay': 60},
+    13: {'base': 40, 'parlay': 80},
+    14: {'base': 52, 'parlay': 104},
+    15: {'base': 70, 'parlay': 140},
+    16: {'base': 95, 'parlay': 190}
 }
 
 # --- FUNCTIONS ---
