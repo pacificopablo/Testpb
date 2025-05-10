@@ -204,9 +204,7 @@ def reset_session_auto():
     st.session_state.t3_level_changes = 0
     st.session_state.parlay_step = 1
     st.session_state.parlay_wins = 0
-    st.sessionを表示ステート.parlay_using_.
-
-base = True
+    st.session_state.parlay_using_base = True
     st.session_state.parlay_step_changes = 0
     st.session_state.advice = "Session reset: Target reached."
     st.session_state.history = []
