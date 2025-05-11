@@ -1,3 +1,26 @@
+
+def calculate_stake(confidence):
+    strategy = st.session_state.get("management_strategy", "Flat")
+    bankroll = st.session_state.get("bankroll", 1000)
+    base_bet = st.session_state.get("base_bet", 10)
+
+    if strategy == "Flat":
+        return base_bet
+
+    elif strategy == "Kelly %":
+        edge = (confidence / 100) - 0.5  # Assumes breakeven at 50%
+        kelly_fraction = edge / 0.5  # Based on fair odds
+        stake = bankroll * kelly_fraction
+        return max(base_bet, round(stake, 2))
+
+    elif strategy == "Progressive":
+        losses = st.session_state.get("loss_streak", 0)
+        stake = base_bet + losses * base_bet
+        return min(stake, bankroll)
+
+    return base_bet
+
+
 import streamlit as st
 from collections import defaultdict
 import os
@@ -234,6 +257,14 @@ def log_result(result):
 
     pred, conf, insights = predict_next()
     st.session_state.insights = insights
+    # Track loss streak for Progressive strategy
+    if pred and result != pred:
+        st.session_state.loss_streak = st.session_state.get("loss_streak", 0) + 1
+    else:
+        st.session_state.loss_streak = 0
+
+    stake = calculate_stake(conf)
+
     if st.session_state.pattern_volatility > 0.5:
         st.session_state.advice = f"No prediction: High pattern volatility ({st.session_state.pattern_volatility:.2f})"
     elif pred is None or conf < 48.0:
@@ -241,7 +272,7 @@ def log_result(result):
     else:
         top_factor = st.session_state.insights.get('Top Factor Raw', 'Mixed Factors')
         st.session_state.advice = (
-    f"Recommended Bet: {pred} ({conf:.1f}% confidence)\n"
+    f"Recommended Bet: {pred} (${stake:.2f} stake at {conf:.1f}% confidence)\n"
     f"Reason: Driven by {top_factor} â€” based on recent pattern behavior."
 )
 
@@ -255,6 +286,7 @@ with st.form("setup_form"):
     col1, col2 = st.columns([1, 2])
     with col1:
         target_mode = st.radio("Target Mode", ["Percentage", "Units"], horizontal=True)
+    management_strategy = st.selectbox("Money Management Strategy", ["Flat", "Kelly %", "Progressive"])
     with col2:
         if target_mode == "Percentage":
             target_value = st.number_input("Target Profit (%)", min_value=1.0, value=10.0, step=1.0)
@@ -275,6 +307,7 @@ if start_clicked:
     st.session_state.base_bet = base_bet
     st.session_state.target_mode = target_mode
     st.session_state.target_value = target_value
+    st.session_state.management_strategy = management_strategy
 
     st.success("Session started!")
 
