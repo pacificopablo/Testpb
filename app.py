@@ -91,7 +91,7 @@ def predict_next():
                 if current_streak == recent_sequence[i]:
                     streak_count += 1
                 else:
-                    current_streak = resultsrecent_sequence[i]
+                    current_streak = recent_sequence[i]
                     streak_count = 1
                 if i > 1 and recent_sequence[i-1] == recent_sequence[i-2]:
                     double_count += 1
