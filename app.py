@@ -21,11 +21,15 @@ def predict_next():
     default_b = 0.4586 / total_p_b  # ~0.5069
 
     if len(sequence) < 2:
-        overall_p = default_p
-        overall_b = default_b
-        pred = 'P' if overall_p > overall_b else 'B'
-        conf = max(overall_p, overall_b) * 100
-        return pred, conf, {"Overall": f"P: {overall_p*100:.1f}%, B: {overall_b*100:.1f}%"}
+        insights = {
+            "Overall": f"No prediction: Need at least 2 outcomes (Current: {len(sequence)})",
+        }
+        return None, 0, insights
+    elif len(sequence) < 3:
+        insights = {
+            "Overall": f"No prediction: Need at least 3 outcomes for trigram (Current: {len(sequence)})",
+        }
+        return None, 0, insights
 
     # Sliding window of 50 hands
     window_size = 50
@@ -93,38 +97,40 @@ def predict_next():
     else:
         bigram_p_prob = default_p
         bigram_b_prob = default_b
+    bigram_pred = 'P' if bigram_p_prob > bigram_b_prob else 'B'
 
-    # Compute trigram probabilities for the last three outcomes (if available)
-    if len(recent_sequence) >= 3:
-        trigram = tuple(recent_sequence[-3:])
-        total_transitions = sum(trigram_transitions[trigram].values())
-        if total_transitions > 0:
-            trigram_p_prob = trigram_transitions[trigram]['P'] / total_transitions
-            trigram_b_prob = trigram_transitions[trigram]['B'] / total_transitions
-        else:
-            trigram_p_prob = default_p
-            trigram_b_prob = default_b
-        # Combine bigram and trigram probabilities
+    # Compute trigram probabilities for the last three outcomes
+    trigram = tuple(recent_sequence[-3:])
+    total_transitions = sum(trigram_transitions[trigram].values())
+    if total_transitions > 0:
+        trigram_p_prob = trigram_transitions[trigram]['P'] / total_transitions
+        trigram_b_prob = trigram_transitions[trigram]['B'] / total_transitions
+    else:
+        trigram_p_prob = default_p
+        trigram_b_prob = default_b
+    trigram_pred = 'P' if trigram_p_prob > trigram_b_prob else 'B'
+
+    # Combine probabilities only if predictions agree
+    if bigram_pred == trigram_pred:
+        pred = bigram_pred
         overall_p = (bigram_p_prob + trigram_p_prob) / 2
         overall_b = (bigram_b_prob + trigram_b_prob) / 2
+        conf = max(overall_p, overall_b) * 100
     else:
-        # Use only bigram probabilities
-        overall_p = bigram_p_prob
-        overall_b = bigram_b_prob
-
-    # Determine prediction
-    max_prob = max(overall_p, overall_b)
-    conf = max_prob * 100
-    pred = 'P' if overall_p > overall_b else 'B'
+        pred = None
+        overall_p = (bigram_p_prob + trigram_p_prob) / 2
+        overall_b = (bigram_b_prob + trigram_b_prob) / 2
+        conf = max(overall_p, overall_b) * 100
 
     # Insights
     insights = {
-        'Bigram': f"P: {bigram_p_prob*100:.1f}%, B: {bigram_b_prob*100:.1f}%",
+        'Bigram': f"Prediction: {bigram_pred}, P: {bigram_p_prob*100:.1f}%, B: {bigram_b_prob*100:.1f}%",
+        'Trigram': f"Prediction: {trigram_pred}, P: {trigram_p_prob*100:.1f}%, B: {trigram_b_prob*100:.1f}%",
+        'Overall': f"P: {overall_p*100:.1f}%, B: {overall_b*100:.1f}%",
+        'Volatility': f"{st.session_state.pattern_volatility:.2f}",
     }
-    if len(recent_sequence) >= 3:
-        insights['Trigram'] = f"P: {trigram_p_prob*100:.1f}%, B: {trigram_b_prob*100:.1f}%"
-    insights['Overall'] = f"P: {overall_p*100:.1f}%, B: {overall_b*100:.1f}%"
-    insights['Volatility'] = f"{st.session_state.pattern_volatility:.2f}"
+    if pred is None:
+        insights['Status'] = "No prediction: Bigram and trigram predictions differ"
 
     return pred, conf, insights
 
@@ -138,13 +144,17 @@ def place_result(result):
     # Calculate next prediction
     pred, conf, insights = predict_next()
 
-    st.session_state.pending_prediction = pred
-    st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%)"
+    if pred is None:
+        st.session_state.pending_prediction = None
+        st.session_state.advice = "No prediction: Bigram and trigram predictions differ"
+        if st.session_state.pattern_volatility > 0.5:
+            st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
+    else:
+        st.session_state.pending_prediction = pred
+        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%)"
+        if st.session_state.pattern_volatility > 0.5:
+            st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
     st.session_state.insights = insights
-
-    # Volatility check for advice only
-    if st.session_state.pattern_volatility > 0.5:
-        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%), High pattern volatility ({st.session_state.pattern_volatility:.2f})"
 
 # --- UI ---
 st.title("BACCARAT PLAYER/BANKER PREDICTOR")
@@ -254,4 +264,4 @@ if st.session_state.insights:
     if st.session_state.pattern_volatility > 0.5:
         st.warning(f"**High Pattern Volatility**: {st.session_state.pattern_volatility:.2f}")
 else:
-    st.markdown("No insights available yet. Enter at least 2 Player or Banker results to generate predictions.")
+    st.markdown("No insights available yet. Enter at least 3 Player or Banker results to generate predictions.")
