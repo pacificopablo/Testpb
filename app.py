@@ -21,7 +21,11 @@ def predict_next():
     default_b = 0.4586 / total_p_b  # ~0.5069
 
     if len(sequence) < 2:
-        return None, max(default_p, default_b) * 100, {"Overall": f"P: {default_p*100:.1f}%, B: {default_b*100:.1f}%"}
+        overall_p = default_p
+        overall_b = default_b
+        pred = 'P' if overall_p > overall_b else 'B'
+        conf = max(overall_p, overall_b) * 100
+        return pred, conf, {"Overall": f"P: {overall_p*100:.1f}%, B: {overall_b*100:.1f}%"}
 
     # Sliding window of 50 hands
     window_size = 50
@@ -108,19 +112,10 @@ def predict_next():
         overall_p = bigram_p_prob
         overall_b = bigram_b_prob
 
-    # Determine prediction with threshold
-    threshold = 52.0
-    if st.session_state.pattern_volatility > 0.5:
-        threshold += 2.0
+    # Determine prediction
     max_prob = max(overall_p, overall_b)
     conf = max_prob * 100
-    if max_prob >= threshold / 100:
-        if overall_p > overall_b:
-            pred = 'P'
-        else:
-            pred = 'B'
-    else:
-        pred = None
+    pred = 'P' if overall_p > overall_b else 'B'
 
     # Insights
     insights = {
@@ -130,9 +125,6 @@ def predict_next():
         insights['Trigram'] = f"P: {trigram_p_prob*100:.1f}%, B: {trigram_b_prob*100:.1f}%"
     insights['Overall'] = f"P: {overall_p*100:.1f}%, B: {overall_b*100:.1f}%"
     insights['Volatility'] = f"{st.session_state.pattern_volatility:.2f}"
-    insights['Threshold'] = f"{threshold:.1f}%"
-    if pred is None:
-        insights['Reason'] = "Confidence below threshold"
 
     return pred, conf, insights
 
@@ -146,20 +138,13 @@ def place_result(result):
     # Calculate next prediction
     pred, conf, insights = predict_next()
 
-    if pred is None or conf < 48.0:
-        st.session_state.pending_prediction = None
-        st.session_state.advice = f"No prediction (Confidence: {conf:.1f}% too low)"
-        st.session_state.insights = insights
-    else:
-        st.session_state.pending_prediction = pred
-        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%)"
-        st.session_state.insights = insights
+    st.session_state.pending_prediction = pred
+    st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%)"
+    st.session_state.insights = insights
 
-    # Volatility check
+    # Volatility check for advice only
     if st.session_state.pattern_volatility > 0.5:
-        st.session_state.advice = f"No prediction: High pattern volatility ({st.session_state.pattern_volatility:.2f})"
-        st.session_state.pending_prediction = None
-        st.session_state.insights = insights
+        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%), High pattern volatility ({st.session_state.pattern_volatility:.2f})"
 
 # --- UI ---
 st.title("BACCARAT PLAYER/BANKER PREDICTOR")
@@ -255,8 +240,8 @@ st.markdown(bead_plate_html, unsafe_allow_html=True)
 if st.session_state.pending_prediction:
     side = st.session_state.pending_prediction
     color = 'blue' if side == 'P' else 'red'
-    conf = st.session_state.advice.split('(')[-1].split('%')[0] if '(' in st.session_state.advice else '0'
-    st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Win Prob: {conf}%</h4>", unsafe_allow_html=True)
+    prob = st.session_state.advice.split('(')[-1].split('%')[0] if '(' in st.session_state.advice else '0'
+    st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Prob: {prob}%</h4>", unsafe_allow_html=True)
 else:
     st.info(st.session_state.advice)
 
@@ -267,6 +252,6 @@ if st.session_state.insights:
     for factor, contribution in st.session_state.insights.items():
         st.markdown(f"- **{factor}**: {contribution}")
     if st.session_state.pattern_volatility > 0.5:
-        st.warning(f"**High Pattern Volatility**: {st.session_state.pattern_volatility:.2f} (Predicting paused)")
+        st.warning(f"**High Pattern Volatility**: {st.session_state.pattern_volatility:.2f}")
 else:
     st.markdown("No insights available yet. Enter at least 2 Player or Banker results to generate predictions.")
