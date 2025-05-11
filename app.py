@@ -11,10 +11,12 @@ if 'sequence' not in st.session_state:
     st.session_state.advice = ""
     st.session_state.insights = {}
     st.session_state.pattern_volatility = 0.0
+    st.session_state.flat_bet_amount = 10.0  # Default flat bet amount
 
 # --- PREDICTION FUNCTION ---
 def predict_next():
     sequence = st.session_state.sequence  # Contains only P, B
+    flat_bet = st.session_state.flat_bet_amount
     # Define default probabilities (normalized P and B probabilities)
     total_p_b = 0.4462 + 0.4586
     default_p = 0.4462 / total_p_b  # ~0.4931
@@ -23,11 +25,13 @@ def predict_next():
     if len(sequence) < 2:
         insights = {
             "Overall": f"No prediction: Need at least 2 outcomes (Current: {len(sequence)})",
+            "Betting Strategy": "No bet",
         }
         return None, 0, insights
     elif len(sequence) < 3:
         insights = {
             "Overall": f"No prediction: Need at least 3 outcomes for trigram (Current: {len(sequence)})",
+            "Betting Strategy": "No bet",
         }
         return None, 0, insights
 
@@ -116,11 +120,13 @@ def predict_next():
         overall_p = (bigram_p_prob + trigram_p_prob) / 2
         overall_b = (bigram_b_prob + trigram_b_prob) / 2
         conf = max(overall_p, overall_b) * 100
+        bet_info = f"Flat bet: ${flat_bet:.2f} on {pred}"
     else:
         pred = None
         overall_p = (bigram_p_prob + trigram_p_prob) / 2
         overall_b = (bigram_b_prob + trigram_b_prob) / 2
         conf = max(overall_p, overall_b) * 100
+        bet_info = "No bet"
 
     # Insights
     insights = {
@@ -128,6 +134,7 @@ def predict_next():
         'Trigram': f"Prediction: {trigram_pred}, P: {trigram_p_prob*100:.1f}%, B: {trigram_b_prob*100:.1f}%",
         'Overall': f"P: {overall_p*100:.1f}%, B: {overall_b*100:.1f}%",
         'Volatility': f"{st.session_state.pattern_volatility:.2f}",
+        'Betting Strategy': bet_info,
     }
     if pred is None:
         insights['Status'] = "No prediction: Bigram and trigram predictions differ"
@@ -146,12 +153,12 @@ def place_result(result):
 
     if pred is None:
         st.session_state.pending_prediction = None
-        st.session_state.advice = "No prediction: Bigram and trigram predictions differ"
+        st.session_state.advice = f"No prediction: Bigram and trigram predictions differ, No bet"
         if st.session_state.pattern_volatility > 0.5:
             st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
     else:
         st.session_state.pending_prediction = pred
-        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%)"
+        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%), Bet: ${st.session_state.flat_bet_amount:.2f}"
         if st.session_state.pattern_volatility > 0.5:
             st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
     st.session_state.insights = insights
@@ -159,8 +166,11 @@ def place_result(result):
 # --- UI ---
 st.title("BACCARAT PLAYER/BANKER PREDICTOR")
 
-# Result Input
+# Result Input and Bet Amount
 st.subheader("Enter Game Result")
+st.session_state.flat_bet_amount = st.number_input(
+    "Flat Bet Amount ($)", min_value=0.01, value=st.session_state.flat_bet_amount, step=1.0, format="%.2f"
+)
 st.markdown("""
 <style>
 div.stButton > button {
@@ -250,8 +260,10 @@ st.markdown(bead_plate_html, unsafe_allow_html=True)
 if st.session_state.pending_prediction:
     side = st.session_state.pending_prediction
     color = 'blue' if side == 'P' else 'red'
-    prob = st.session_state.advice.split('(')[-1].split('%')[0] if '(' in st.session_state.advice else '0'
-    st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Prob: {prob}%</h4>", unsafe_allow_html=True)
+    advice_parts = st.session_state.advice.split(', ')
+    prob = advice_parts[0].split('(')[-1].split('%')[0] if '(' in advice_parts[0] else '0'
+    bet = advice_parts[1].split(': ')[1] if len(advice_parts) > 1 and 'Bet' in advice_parts[1] else 'No bet'
+    st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Prob: {prob}% | Bet: {bet}</h4>", unsafe_allow_html=True)
 else:
     st.info(st.session_state.advice)
 
