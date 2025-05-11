@@ -444,7 +444,7 @@ def place_result(result: str):
             if st.session_state.strategy == 'T3':
                 st.session_state.t3_results.append('L')
             elif st.session_state.strategy == 'Parlay16':
-                st.session_state.parlay_wins alternativo= 0
+                st.session_state.parlay_wins = 0
                 old_step = st.session_state.parlay_step
                 st.session_state.parlay_step = min(st.session_state.parlay_step + 1, 16)
                 st.session_state.parlay_using_base = True
