@@ -3,7 +3,7 @@ from collections import defaultdict
 
 # --- APP CONFIG ---
 try:
-    st.set_page_config(layout="centered", page_title="BACCARAT PLAYER/BANKER PREDICTOR")
+    st.set_page_config(layout="centered", page_title="BACCARAT PLAYER/BANKER PredIctor")
 except Exception as e:
     st.error(f"Error setting page config: {e}")
 
@@ -11,6 +11,7 @@ except Exception as e:
 if 'sequence' not in st.session_state:
     st.session_state.sequence = []
     st.session_state.pending_prediction = None
+    st.session_state.current_bet_amount = 0.0  # Store current bet amount
     st.session_state.advice = ""
     st.session_state.insights = {}
     st.session_state.pattern_volatility = 0.0
@@ -133,12 +134,16 @@ def predict_next():
             overall_b = default_b
 
         # Betting strategy
-        if strategy == "T3":
-            bet_amount = base_bet * t3_level
-            bet_info = f"T3: Bet ${bet_amount:.2f} (Level {t3_level})"
+        if pred is None:
+            bet_amount = 0.0
+            bet_info = f"{strategy}: No bet" + (f" (Level {t3_level})" if strategy == "T3" else "")
         else:
-            bet_amount = flat_bet_amount
-            bet_info = f"FlatBet: ${bet_amount:.2f}"
+            if strategy == "T3":
+                bet_amount = base_bet * t3_level
+                bet_info = f"T3: Bet ${bet_amount:.2f} (Level {t3_level})"
+            else:
+                bet_amount = flat_bet_amount
+                bet_info = f"FlatBet: ${bet_amount:.2f}"
 
         insights = {
             'Overall': f"P: {overall_p*100:.1f}%, B: {overall_b*100:.1f}%",
@@ -172,6 +177,7 @@ def undo_last_action():
             last_state = st.session_state.undo_stack.pop()
             st.session_state.sequence = last_state['sequence']
             st.session_state.pending_prediction = last_state['pending_prediction']
+            st.session_state.current_bet_amount = last_state['current_bet_amount']
             st.session_state.advice = last_state['advice']
             st.session_state.insights = last_state['insights']
             st.session_state.pattern_volatility = last_state['pattern_volatility']
@@ -181,6 +187,7 @@ def undo_last_action():
             st.session_state.last_bet_outcome = last_state.get('last_bet_outcome', None)
             pred, conf, insights, bet_amount = predict_next()
             st.session_state.pending_prediction = pred
+            st.session_state.current_bet_amount = bet_amount
             st.session_state.insights = insights
             st.session_state.advice = (
                 f"Prediction: {pred} ({conf:.1f}%), {insights['Betting Strategy']}"
@@ -201,6 +208,7 @@ def place_result(result):
         current_state = {
             'sequence': st.session_state.sequence.copy(),
             'pending_prediction': st.session_state.pending_prediction,
+            'current_bet_amount': st.session_state.current_bet_amount,
             'advice': st.session_state.advice,
             'insights': st.session_state.insights.copy(),
             'pattern_volatility': st.session_state.pattern_volatility,
@@ -211,25 +219,25 @@ def place_result(result):
         }
         st.session_state.undo_stack.append(current_state)
 
-        # Use the current prediction to evaluate the result
+        # Use the current prediction and bet amount
         current_pred = st.session_state.pending_prediction
-        current_bet_amount = st.session_state.insights.get('Betting Strategy', '').split('$')[-1].split(' ')[0]
-        current_bet_amount = float(current_bet_amount) if current_bet_amount.replace('.', '', 1).isdigit() else 0.0
+        current_bet_amount = st.session_state.current_bet_amount
 
         # Evaluate win/loss based on current prediction and result
-        if current_pred is None:
+        if current_pred is None or current_bet_amount == 0.0:
             st.session_state.last_bet_outcome = "No bet placed"
         else:
             if current_pred == result:
-                # Win: Add bet_amount (1:1 payout for Player, 0.95:1 for Banker)
+                # Win: Add payout (1:1 for Player, 0.95:1 for Banker)
                 if current_pred == 'P':
                     st.session_state.bankroll += current_bet_amount
                     st.session_state.last_bet_outcome = f"Win: Bet on Player, Result Player (+${current_bet_amount:.2f})"
                 elif current_pred == 'B':
-                    st.session_state.bankroll += current_bet_amount * 0.95  # Banker commission
-                    st.session_state.last_bet_outcome = f"Win: Bet on Banker, Result Banker (+${current_bet_amount * 0.95:.2f})"
+                    payout = current_bet_amount * 0.95  # Banker commission
+                    st.session_state.bankroll += payout
+                    st.session_state.last_bet_outcome = f"Win: Bet on Banker, Result Banker (+${payout:.2f})"
             else:
-                # Loss: Subtract bet_amount
+                # Loss: Subtract bet amount
                 st.session_state.bankroll -= current_bet_amount
                 st.session_state.last_bet_outcome = f"Loss: Bet on {current_pred}, Result {result} (-${current_bet_amount:.2f})"
 
@@ -257,6 +265,7 @@ def place_result(result):
         # Generate the next prediction
         pred, conf, insights, bet_amount = predict_next()
         st.session_state.pending_prediction = pred
+        st.session_state.current_bet_amount = bet_amount
         st.session_state.insights = insights
         st.session_state.advice = (
             f"Prediction: {pred} ({conf:.1f}%), {insights['Betting Strategy']}"
@@ -277,6 +286,7 @@ try:
     # Generate initial prediction
     pred, conf, insights, bet_amount = predict_next()
     st.session_state.pending_prediction = pred
+    st.session_state.current_bet_amount = bet_amount
     st.session_state.insights = insights
     st.session_state.advice = (
         f"Prediction: {pred} ({conf:.1f}%), {insights['Betting Strategy']}"
