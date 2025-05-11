@@ -3,7 +3,7 @@ from collections import defaultdict
 
 # --- APP CONFIG ---
 try:
-    st.set_page_config(layout="centered", page_title="BACCARAT PLAYER/BANKER PredIctor")
+    st.set_page_config(layout="centered", page_title="BACCARAT PLAYER/BANKER PREDICTOR")
 except Exception as e:
     st.error(f"Error setting page config: {e}")
 
@@ -185,6 +185,7 @@ def undo_last_action():
             st.session_state.bet_history = last_state['bet_history']
             st.session_state.bankroll = last_state['bankroll']
             st.session_state.last_bet_outcome = last_state.get('last_bet_outcome', None)
+            # Recompute prediction for the restored state
             pred, conf, insights, bet_amount = predict_next()
             st.session_state.pending_prediction = pred
             st.session_state.current_bet_amount = bet_amount
@@ -219,7 +220,7 @@ def place_result(result):
         }
         st.session_state.undo_stack.append(current_state)
 
-        # Use the current prediction and bet amount
+        # Use the current prediction and bet amount (same as displayed in UI)
         current_pred = st.session_state.pending_prediction
         current_bet_amount = st.session_state.current_bet_amount
 
@@ -257,7 +258,7 @@ def place_result(result):
                         st.session_state.t3_level += 2
                     st.session_state.bet_history = []
 
-        # Append the result to the sequence
+        # Append the result to the sequence AFTER evaluating win/loss
         st.session_state.sequence.append(result)
         if len(st.session_state.sequence) > 100:
             st.session_state.sequence = st.session_state.sequence[-100:]
