@@ -1,3 +1,18 @@
+import streamlit as st
+from collections import defaultdict
+
+# --- APP CONFIG ---
+st.set_page_config(layout="centered", page_title="BACCARAT PLAYER/BANKER PREDICTOR")
+
+# --- SESSION STATE INIT ---
+if 'sequence' not in st.session_state:
+    st.session_state.sequence = []
+    st.session_state.pending_prediction = None
+    st.session_state.advice = ""
+    st.session_state.insights = {}
+    st.session_state.pattern_volatility = 0.0
+
+# --- PREDICTION FUNCTION ---
 def predict_next():
     sequence = st.session_state.sequence  # Contains only P, B
     # Define default probabilities (normalized P and B probabilities)
@@ -120,3 +135,138 @@ def predict_next():
         insights['Reason'] = "Confidence below threshold"
 
     return pred, conf, insights
+
+# --- PROCESS RESULT ---
+def place_result(result):
+    # Append to sequence (only P or B)
+    st.session_state.sequence.append(result)
+    if len(st.session_state.sequence) > 100:
+        st.session_state.sequence = st.session_state.sequence[-100:]
+
+    # Calculate next prediction
+    pred, conf, insights = predict_next()
+
+    if pred is None or conf < 48.0:
+        st.session_state.pending_prediction = None
+        st.session_state.advice = f"No prediction (Confidence: {conf:.1f}% too low)"
+        st.session_state.insights = insights
+    else:
+        st.session_state.pending_prediction = pred
+        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%)"
+        st.session_state.insights = insights
+
+    # Volatility check
+    if st.session_state.pattern_volatility > 0.5:
+        st.session_state.advice = f"No prediction: High pattern volatility ({st.session_state.pattern_volatility:.2f})"
+        st.session_state.pending_prediction = None
+        st.session_state.insights = insights
+
+# --- UI ---
+st.title("BACCARAT PLAYER/BANKER PREDICTOR")
+
+# Result Input
+st.subheader("Enter Game Result")
+st.markdown("""
+<style>
+div.stButton > button {
+    width: 90px;
+    height: 35px;
+    font-size: 14px;
+    font-weight: bold;
+    border-radius: 6px;
+    border: 1px solid;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+div.stButton > button:hover {
+    transform: scale(1.08);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+div.stButton > button:active {
+    transform: scale(0.95);
+    box-shadow: none;
+}
+div.stButton > button[kind="player_btn"] {
+    background: linear-gradient(to bottom, #007bff, #0056b3);
+    border-color: #0056b3;
+    color: white;
+}
+div.stButton > button[kind="player_btn"]:hover {
+    background: linear-gradient(to bottom, #339cff, #007bff);
+}
+div.stButton > button[kind="banker_btn"] {
+    background: linear-gradient(to bottom, #dc3545, #a71d2a);
+    border-color: #a71d2a;
+    color: white;
+}
+div.stButton > button[kind="banker_btn"]:hover {
+    background: linear-gradient(to bottom, #ff6666, #dc3545);
+}
+@media (max-width: 600px) {
+    div.stButton > button {
+        width: 80%;
+        max-width: 150px;
+        height: 40px;
+        font-size: 12px;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("Player", key="player_btn"):
+        place_result("P")
+with col2:
+    if st.button("Banker", key="banker_btn"):
+        place_result("B")
+
+# Bead Plate
+st.subheader("Current Sequence (Bead Plate)")
+sequence = st.session_state.sequence[-90:]  # Limit to 90 for display
+grid = [[] for _ in range(15)]
+for i, result in enumerate(sequence):
+    col_index = i // 6
+    if col_index < 15:
+        grid[col_index].append(result)
+for col in grid:
+    while len(col) < 6:
+        col.append('')
+bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 100%; overflow-x: auto;'>"
+for col in grid:
+    col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
+    for result in col:
+        if result == '':
+            col_html += "<div style='width: 20px; height: 20px; border: 1px solid #ddd; border-radius: 50%;'></div>"
+        elif result == 'P':
+            col_html += "<div style='width: 20px; height: 20px; background-color: blue; border-radius: 50%;'></div>"
+        elif result == 'B':
+            col_html += "<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>"
+    col_html += "</div>"
+    bead_plate_html += col_html
+bead_plate_html += "</div>"
+st.markdown(bead_plate_html, unsafe_allow_html=True)
+
+# Prediction Display
+if st.session_state.pending_prediction:
+    side = st.session_state.pending_prediction
+    color = 'blue' if side == 'P' else 'red'
+    conf = st.session_state.advice.split('(')[-1].split('%')[0] if '(' in st.session_state.advice else '0'
+    st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Win Prob: {conf}%</h4>", unsafe_allow_html=True)
+else:
+    st.info(st.session_state.advice)
+
+# Prediction Insights
+st.subheader("Prediction Insights")
+if st.session_state.insights:
+    st.markdown("**Factors Contributing to Prediction:**")
+    for factor, contribution in st.session_state.insights.items():
+        st.markdown(f"- **{factor}**: {contribution}")
+    if st.session_state.pattern_volatility > 0.5:
+        st.warning(f"**High Pattern Volatility**: {st.session_state.pattern_volatility:.2f} (Predicting paused)")
+else:
+    st.markdown("No insights available yet. Enter at least 2 Player or Banker results to generate predictions.")
