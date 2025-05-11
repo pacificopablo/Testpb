@@ -347,28 +347,28 @@ div.stButton > button:active {
     transform: scale(0.95);
     box-shadow: none;
 }
-div.stButton > button[kind="player_btn"] {
+div.stButton > button[playerbtn] {
     background: linear-gradient(to bottom, #007bff, #0056b3);
     border-color: #0056b3;
     color: white;
 }
-div.stButton > button[kind="player_btn"]:hover {
+div.stButton > button[playerbtn]:hover {
     background: linear-gradient(to bottom, #339cff, #007bff);
 }
-div.stButton > button[kind="banker_btn"] {
+div.stButton > button[bankerbtn] {
     background: linear-gradient(to bottom, #dc3545, #a71d2a);
     border-color: #a71d2a;
     color: white;
 }
-div.stButton > button[kind="banker_btn"]:hover {
+div.stButton > button[bankerbtn]:hover {
     background: linear-gradient(to bottom, #ff6666, #dc3545);
 }
-div.stButton > button[kind="undo_btn"] {
+div.stButton > button[undobtn] {
     background: linear-gradient(to bottom, #6c757d, #495057);
     border-color: #495057;
     color: white;
 }
-div.stButton > button[kind="undo_btn"]:hover {
+div.stButton > button[undobtn]:hover {
     background: linear-gradient(to bottom, #868e96, #6c757d);
 }
 @media (max-width: 600px) {
@@ -388,23 +388,23 @@ div.stButton > button[kind="undo_btn"]:hover {
 </style>
 """, unsafe_allow_html=True)
 
-cols = st.columns([1,1,1])
+cols = st.columns([1, 1, 1])
 with cols[0]:
-    if st.button("Player", key="player_btn", kind="player_btn"):
+    if st.button("Player", key="player_btn", args=None):
         log_result("P")
         try:
             st.experimental_rerun()
         except AttributeError:
             st.rerun()
 with cols[1]:
-    if st.button("Banker", key="banker_btn", kind="banker_btn"):
+    if st.button("Banker", key="banker_btn", args=None):
         log_result("B")
         try:
             st.experimental_rerun()
         except AttributeError:
             st.rerun()
 with cols[2]:
-    if st.button("Undo", key="undo_btn", kind="undo_btn"):
+    if st.button("Undo", key="undo_btn", args=None):
         if st.session_state.sequence:
             st.session_state.sequence.pop()
             st.session_state.loss_streak = 0  # Reset loss streak; will recalc on next input
@@ -466,4 +466,3 @@ if st.session_state.get("target_mode") == "Percentage":
     st.markdown(f"**Target**: {st.session_state['target_value']}%")
 else:
     st.markdown(f"**Target**: {st.session_state['target_value']} units")
-
