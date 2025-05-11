@@ -153,7 +153,7 @@ def predict_next():
             'Volatility': f"{st.session_state.pattern_volatility:.2f}",
             'Betting Strategy': bet_info,
             'Bigram Probabilities': bigram_insight,
-            'Trigram Probabilities': trigram_insight,
+            'Tr-Framgia Probabilities': trigram_insight,
         }
         if strategy == "T3":
             if len(st.session_state.t3_results) > 0:
