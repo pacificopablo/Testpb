@@ -20,6 +20,7 @@ if 'sequence' not in st.session_state:
     st.session_state.bet_history = []
     st.session_state.betting_strategy = "T3"
     st.session_state.undo_stack = []
+    st.session_state.bankroll = 1000.0  # Initialize bankroll
 
 # --- PREDICTION FUNCTION ---
 def predict_next():
@@ -166,6 +167,7 @@ def undo_last_action():
             st.session_state.pattern_volatility = last_state['pattern_volatility']
             st.session_state.t3_level = last_state['t3_level']
             st.session_state.bet_history = last_state['bet_history']
+            st.session_state.bankroll = last_state['bankroll']
             pred, conf, insights, bet_amount = predict_next()
             st.session_state.pending_prediction = pred
             st.session_state.insights = insights
@@ -192,6 +194,7 @@ def place_result(result):
             'pattern_volatility': st.session_state.pattern_volatility,
             't3_level': st.session_state.t3_level,
             'bet_history': st.session_state.bet_history.copy(),
+            'bankroll': st.session_state.bankroll,
         }
         st.session_state.undo_stack.append(current_state)
         st.session_state.sequence.append(result)
@@ -210,6 +213,15 @@ def place_result(result):
                 st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
             if st.session_state.betting_strategy == "T3":
                 st.session_state.bet_history.append((pred, result, bet_amount))
+                if pred == result:
+                    # Win: Add bet_amount (1:1 payout for Player, 0.95:1 for Banker)
+                    if pred == 'P':
+                        st.session_state.bankroll += bet_amount
+                    elif pred == 'B':
+                        st.session_state.bankroll += bet_amount * 0.95  # Banker commission
+                else:
+                    # Loss: Subtract bet_amount
+                    st.session_state.bankroll -= bet_amount
                 if len(st.session_state.bet_history) >= 3:
                     wins = sum(1 for p, a, _ in st.session_state.bet_history[-3:] if p == a)
                     losses = 3 - wins
@@ -222,7 +234,18 @@ def place_result(result):
                     elif losses == 3:
                         st.session_state.t3_level += 2
                     st.session_state.bet_history = []
+            else:  # FlatBet
+                if pred == result:
+                    if pred == 'P':
+                        st.session_state.bankroll += bet_amount
+                    elif pred == 'B':
+                        st.session_state.bankroll += bet_amount * 0.95
+                else:
+                    st.session_state.bankroll -= bet_amount
         st.session_state.insights = insights
+        # Warn if bankroll is low
+        if st.session_state.bankroll < st.session_state.base_bet:
+            st.session_state.advice += " | Warning: Bankroll too low for base bet!"
     except Exception as e:
         st.error(f"Error placing result: {e}")
 
@@ -238,6 +261,10 @@ try:
         "Base Bet Amount ($)", min_value=0.01, value=st.session_state.base_bet, step=1.0, format="%.2f"
     )
     st.markdown(f"**Current Base Bet**: ${st.session_state.base_bet:.2f}")
+    st.session_state.bankroll = st.number_input(
+        "Bankroll ($)", min_value=0.0, value=st.session_state.bankroll, step=10.0, format="%.2f"
+    )
+    st.markdown(f"**Current Bankroll**: ${st.session_state.bankroll:.2f}")
     if st.session_state.betting_strategy == "FlatBet":
         st.session_state.flat_bet_amount = st.number_input(
             "Flat Bet Amount ($)", min_value=0.01, value=st.session_state.flat_bet_amount, step=1.0, format="%.2f"
