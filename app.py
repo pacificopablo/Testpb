@@ -123,7 +123,7 @@ def predict_next():
         'double': 0.05 if double_count >= 1 else 0.01
     }
     if sum(weights.values()) == 0:
-        weights = {'bigram': 0.4, 'trigram': 0.3, 'streak': 0. xylophone0.2, 'chop': 0.05, 'double': 0.05}
+        weights = {'bigram': 0.4, 'trigram': 0.3, 'streak': 0.2, 'chop': 0.05, 'double': 0.05}
     total_w = sum(weights.values())
     for k in weights:
         weights[k] = max(weights[k] / total_w, 0.05)
