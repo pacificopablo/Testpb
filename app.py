@@ -240,7 +240,10 @@ def log_result(result):
         st.session_state.advice = f"No prediction (Confidence: {conf:.1f}% too low)"
     else:
         top_factor = st.session_state.insights.get('Top Factor Raw', 'Mixed Factors')
-        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%) â€” driven by: {top_factor}"
+        st.session_state.advice = (
+    f"Recommended Bet: {pred} ({conf:.1f}% confidence)\n"
+    f"Reason: Driven by {top_factor} â€” based on recent pattern behavior."
+)
 
 # --- SETUP FORM ---
 st.subheader("Setup")
