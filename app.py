@@ -11,15 +11,19 @@ if 'sequence' not in st.session_state:
     st.session_state.advice = ""
     st.session_state.insights = {}
     st.session_state.pattern_volatility = 0.0
-    st.session_state.t3_base_bet = 10.0  # Base bet for T3 strategy
-    st.session_state.t3_level = 1  # Current level (starts at 1)
-    st.session_state.bet_history = []  # List of (prediction, actual_outcome, bet_amount)
+    st.session_state.base_bet = 10.0  # Base bet for both strategies
+    st.session_state.flat_bet_amount = 10.0  # Fixed bet for FlatBet
+    st.session_state.t3_level = 1  # Current level for T3
+    st.session_state.bet_history = []  # List of (prediction, actual_outcome, bet_amount) for T3
+    st.session_state.betting_strategy = "T3"  # Default strategy
 
 # --- PREDICTION FUNCTION ---
 def predict_next():
     sequence = st.session_state.sequence  # Contains only P, B
-    t3_base_bet = st.session_state.t3_base_bet
+    base_bet = st.session_state.base_bet
     t3_level = st.session_state.t3_level
+    strategy = st.session_state.betting_strategy
+    flat_bet_amount = st.session_state.flat_bet_amount
     # Define default probabilities (normalized P and B probabilities)
     total_p_b = 0.4462 + 0.4586
     default_p = 0.4462 / total_p_b  # ~0.4931
@@ -28,15 +32,15 @@ def predict_next():
     if len(sequence) < 2:
         insights = {
             "Overall": f"No prediction: Need at least 2 outcomes (Current: {len(sequence)})",
-            "Betting Strategy": f"T3: No bet (Level {t3_level})",
+            "Betting Strategy": f"{strategy}: No bet" + (f" (Level {t3_level})" if strategy == "T3" else ""),
         }
-        return None, 0, insights, 0.0  # Return four values with default t3_bet
+        return None, 0, insights, 0.0  # Return four values with default bet_amount
     elif len(sequence) < 3:
         insights = {
             "Overall": f"No prediction: Need at least 3 outcomes for trigram (Current: {len(sequence)})",
-            "Betting Strategy": f"T3: No bet (Level {t3_level})",
+            "Betting Strategy": f"{strategy}: No bet" + (f" (Level {t3_level})" if strategy == "T3" else ""),
         }
-        return None, 0, insights, 0.0  # Return four values with default t3_bet
+        return None, 0, insights, 0.0  # Return four values with default bet_amount
 
     # Sliding window of 50 hands
     window_size = 50
@@ -123,15 +127,19 @@ def predict_next():
         overall_p = (bigram_p_prob + trigram_p_prob) / 2
         overall_b = (bigram_b_prob + trigram_b_prob) / 2
         conf = max(overall_p, overall_b) * 100
-        t3_bet = t3_base_bet * t3_level
-        bet_info = f"T3: Bet ${t3_bet:.2f} (Level {t3_level})"
+        if strategy == "T3":
+            bet_amount = base_bet * t3_level
+            bet_info = f"T3: Bet ${bet_amount:.2f} (Level {t3_level})"
+        else:  # FlatBet
+            bet_amount = flat_bet_amount
+            bet_info = f"FlatBet: ${bet_amount:.2f}"
     else:
         pred = None
         overall_p = (bigram_p_prob + trigram_p_prob) / 2
         overall_b = (bigram_b_prob + trigram_b_prob) / 2
         conf = max(overall_p, overall_b) * 100
-        t3_bet = 0.0  # Default t3_bet when no prediction
-        bet_info = f"T3: No bet (Level {t3_level})"
+        bet_amount = 0.0
+        bet_info = f"{strategy}: No bet" + (f" (Level {t3_level})" if strategy == "T3" else "")
 
     # Insights
     insights = {
@@ -141,7 +149,7 @@ def predict_next():
         'Volatility': f"{st.session_state.pattern_volatility:.2f}",
         'Betting Strategy': bet_info,
     }
-    if len(st.session_state.bet_history) > 0:
+    if strategy == "T3" and len(st.session_state.bet_history) > 0:
         wins = sum(1 for pred, actual, _ in st.session_state.bet_history[-3:] if pred == actual)
         total_bets = min(3, len(st.session_state.bet_history))
         win_rate = (wins / total_bets * 100) if total_bets > 0 else 0
@@ -149,7 +157,7 @@ def predict_next():
     if pred is None:
         insights['Status'] = "No prediction: Bigram and trigram predictions differ"
 
-    return pred, conf, insights, t3_bet
+    return pred, conf, insights, bet_amount
 
 # --- PROCESS RESULT ---
 def place_result(result):
@@ -159,7 +167,7 @@ def place_result(result):
         st.session_state.sequence = st.session_state.sequence[-100:]
 
     # Calculate next prediction
-    pred, conf, insights, t3_bet = predict_next()
+    pred, conf, insights, bet_amount = predict_next()
 
     # Update advice and history
     if pred is None:
@@ -172,31 +180,40 @@ def place_result(result):
         st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%), {insights['Betting Strategy']}"
         if st.session_state.pattern_volatility > 0.5:
             st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
-        # Update bet history with the prediction and actual outcome
-        st.session_state.bet_history.append((pred, result, t3_bet))
-        # Evaluate T3 level change if 3 bets are completed
-        if len(st.session_state.bet_history) >= 3:
-            wins = sum(1 for p, a, _ in st.session_state.bet_history[-3:] if p == a)
-            losses = 3 - wins
-            if wins == 3:
-                st.session_state.t3_level = max(1, st.session_state.t3_level - 2)
-            elif wins == 2 and losses == 1:
-                st.session_state.t3_level -= 1
-            elif wins == 1 and losses == 2:
-                st.session_state.t3_level += 1
-            elif losses == 3:
-                st.session_state.t3_level += 2
-            st.session_state.bet_history = []  # Reset for next level
+        # Update bet history based on strategy
+        if st.session_state.betting_strategy == "T3":
+            st.session_state.bet_history.append((pred, result, bet_amount))
+            # Evaluate T3 level change if 3 bets are completed
+            if len(st.session_state.bet_history) >= 3:
+                wins = sum(1 for p, a, _ in st.session_state.bet_history[-3:] if p == a)
+                losses = 3 - wins
+                if wins == 3:
+                    st.session_state.t3_level = max(1, st.session_state.t3_level - 2)
+                elif wins == 2 and losses == 1:
+                    st.session_state.t3_level -= 1
+                elif wins == 1 and losses == 2:
+                    st.session_state.t3_level += 1
+                elif losses == 3:
+                    st.session_state.t3_level += 2
+                st.session_state.bet_history = []  # Reset for next level
     st.session_state.insights = insights
 
 # --- UI ---
 st.title("BACCARAT PLAYER/BANKER PREDICTOR")
 
-# Result Input and T3 Base Bet
+# Result Input and Betting Strategy Selection
 st.subheader("Enter Game Result")
-st.session_state.t3_base_bet = st.number_input(
-    "T3 Base Bet Amount ($)", min_value=0.01, value=st.session_state.t3_base_bet, step=1.0, format="%.2f"
+st.session_state.betting_strategy = st.selectbox(
+    "Select Betting Strategy", ["T3", "FlatBet"], index=["T3", "FlatBet"].index(st.session_state.betting_strategy)
 )
+st.session_state.base_bet = st.number_input(
+    "Base Bet Amount ($)", min_value=0.01, value=st.session_state.base_bet, step=1.0, format="%.2f"
+)
+if st.session_state.betting_strategy == "FlatBet":
+    st.session_state.flat_bet_amount = st.number_input(
+        "Flat Bet Amount ($)", min_value=0.01, value=st.session_state.flat_bet_amount, step=1.0, format="%.2f"
+    )
+
 st.markdown("""
 <style>
 div.stButton > button {
@@ -288,8 +305,8 @@ if st.session_state.pending_prediction:
     color = 'blue' if side == 'P' else 'red'
     advice_parts = st.session_state.advice.split(', ')
     prob = advice_parts[0].split('(')[-1].split('%')[0] if '(' in advice_parts[0] else '0'
-    bet_info = advice_parts[1].replace('T3: ', '') if len(advice_parts) > 1 and 'T3' in advice_parts[1] else 'No bet'
-    st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Prob: {prob}% | T3: {bet_info}</h4>", unsafe_allow_html=True)
+    bet_info = advice_parts[1] if len(advice_parts) > 1 else 'No bet'
+    st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Prob: {prob}% | {bet_info}</h4>", unsafe_allow_html=True)
 else:
     st.info(st.session_state.advice)
 
