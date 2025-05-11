@@ -73,10 +73,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.consecutive_losses = 0
     st.session_state.loss_log = []
     st.session_state.last_was_tie = False
-    st.session_state.recovery_mode = False
     st.session_state.insights = {}
-    st.session_state.recovery_threshold = 15.0  # Lowered from 20%
-    st.session_state.recovery_bet_scale = 0.6  # Lowered from 0.7
     st.session_state.pattern_volatility = 0.0
     st.session_state.pattern_success = defaultdict(int)
     st.session_state.pattern_attempts = defaultdict(int)
@@ -276,11 +273,11 @@ def predict_next():
         prob_b = 0.9 * prob_b + 0.1 * b_prob * 100
         insights['Pattern Transition'] = f"10% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
 
-    # Adaptive confidence threshold (stricter)
+    # Adaptive confidence threshold
     recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
-    base_threshold = 50.0 if st.session_state.recovery_mode else 52.0  # Raised from 50.5
+    base_threshold = 52.0  # Fixed threshold
     threshold = base_threshold + (st.session_state.consecutive_losses * 1.0) - (recent_accuracy * 1.5)
-    threshold = min(max(threshold, 48.0 if st.session_state.recovery_mode else 50.0), 60.0)  # Adjusted bounds
+    threshold = min(max(threshold, 50.0), 60.0)  # Adjusted bounds
     insights['Threshold'] = f"{threshold:.1f}%"
 
     # Volatility adjustment
@@ -323,7 +320,6 @@ def reset_session_auto():
     st.session_state.consecutive_losses = 0
     st.session_state.loss_log = []
     st.session_state.last_was_tie = False
-    st.session_state.recovery_mode = False
     st.session_state.insights = {}
     st.session_state.pattern_volatility = 0.0
     st.session_state.pattern_success = defaultdict(int)
@@ -338,10 +334,6 @@ def place_result(result, manual_selection=None):
     bet_placed = False
     selection = None
     win = False
-
-    # Check recovery mode
-    loss_percentage = (st.session_state.initial_bankroll - st.session_state.bankroll) / st.session_state.initial_bankroll if st.session_state.initial_bankroll > 0 else 0
-    st.session_state.recovery_mode = loss_percentage >= st.session_state.recovery_threshold / 100
 
     # Store state
     previous_state = {
@@ -358,7 +350,6 @@ def place_result(result, manual_selection=None):
         "consecutive_losses": st.session_state.consecutive_losses,
         "t3_level_changes": st.session_state.t3_level_changes,
         "parlay_step_changes": st.session_state.parlay_step_changes,
-        "recovery_mode": st.session_state.recovery_mode,
         "pattern_volatility": st.session_state.pattern_volatility,
         "pattern_success": st.session_state.pattern_success.copy(),
         "pattern_attempts": st.session_state.pattern_attempts.copy()
@@ -435,7 +426,6 @@ def place_result(result, manual_selection=None):
         "Amount": bet_amount,
         "Win": win,
         "T3_Level": st.session_state.t3_level,
-        "T3_Results": st.session_state.t3_results.copy(),
         "Parlay_Step": st.session_state.parlay_step,
         "Parlay_Wins": st.session_state.parlay_wins,
         "Parlay_Using_Base": st.session_state.parlay_using_base,
@@ -455,15 +445,6 @@ def place_result(result, manual_selection=None):
         pred = manual_selection
         conf = max(conf, 50.0)
         st.session_state.advice = f"Manual Bet: {pred} (User override)"
-
-    # Dynamic bet sizing
-    bet_scaling = 1.0
-    if st.session_state.recovery_mode:
-        bet_scaling *= st.session_state.recovery_bet_scale
-    if st.session_state.consecutive_losses >= 2:
-        bet_scaling *= 0.8
-    if conf < 55.0:
-        bet_scaling *= 0.9
 
     # Loss streak pause
     if st.session_state.consecutive_losses >= 3 and conf < 60.0:
@@ -485,23 +466,23 @@ def place_result(result, manual_selection=None):
         st.session_state.insights = insights
     else:
         if st.session_state.strategy == 'Flatbet':
-            bet_amount = st.session_state.base_bet * bet_scaling
+            bet_amount = st.session_state.base_bet
         elif st.session_state.strategy == 'T3':
-            bet_amount = st.session_state.base_bet * st.session_state.t3_level * bet_scaling
+            bet_amount = st.session_state.base_bet * st.session_state.t3_level
         elif st.session_state.strategy == 'Parlay16':
             key = 'base' if st.session_state.parlay_using_base else 'parlay'
-            bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key] * bet_scaling
+            bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
             if bet_amount > st.session_state.bankroll:
                 old_step = st.session_state.parlay_step
                 st.session_state.parlay_step = 1
                 st.session_state.parlay_using_base = True
                 if old_step != st.session_state.parlay_step:
                     st.session_state.parlay_step_changes += 1
-                bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base'] * bet_scaling
+                bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base']
 
-        # Bankroll-aware filtering (stricter)
+        # Bankroll-aware filtering
         safe_bankroll = st.session_state.initial_bankroll * 0.2
-        max_bet_percent = 0.05  # Reduced from 0.1
+        max_bet_percent = 0.05
         if (bet_amount > st.session_state.bankroll or
             st.session_state.bankroll - bet_amount < safe_bankroll or
             bet_amount > st.session_state.bankroll * max_bet_percent):
@@ -548,8 +529,6 @@ with st.form("setup_form"):
     )
     target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
     target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
-    recovery_threshold = st.slider("Recovery Mode Threshold (% Loss)", 10.0, 30.0, st.session_state.recovery_threshold, step=5.0)
-    recovery_bet_scale = st.slider("Recovery Mode Bet Scaling", 0.5, 1.0, st.session_state.recovery_bet_scale, step=0.1)
     start_clicked = st.form_submit_button("Start Session")
 
 if start_clicked:
@@ -585,10 +564,7 @@ if start_clicked:
         st.session_state.consecutive_losses = 0
         st.session_state.loss_log = []
         st.session_state.last_was_tie = False
-        st.session_state.recovery_mode = False
         st.session_state.insights = {}
-        st.session_state.recovery_threshold = recovery_threshold
-        st.session_state.recovery_bet_scale = recovery_bet_scale
         st.session_state.pattern_volatility = 0.0
         st.session_state.pattern_success = defaultdict(int)
         st.session_state.pattern_attempts = defaultdict(int)
@@ -759,8 +735,6 @@ st.subheader("Prediction Insights")
 if st.session_state.insights:
     for factor, contribution in st.session_state.insights.items():
         st.markdown(f"**{factor}**: {contribution}")
-if st.session_state.recovery_mode:
-    st.warning("Recovery Mode: Reduced bet sizes due to significant losses.")
 if st.session_state.pattern_volatility > 0.5:
     st.warning(f"High Pattern Volatility: {st.session_state.pattern_volatility:.2f} (Betting paused)")
 
