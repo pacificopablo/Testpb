@@ -41,16 +41,11 @@ def predict_next():
                 "Betting Strategy": f"{strategy}: No bet" + (f" (Level {t3_level})" if strategy == "T3" else ""),
             }
             return None, 0, insights, 0.0
-        elif len(sequence) < 3:
-            insights = {
-                "Overall": f"No prediction: Need at least 3 outcomes for trigram (Current: {len(sequence)})",
-                "Betting Strategy": f"{strategy}: No bet" + (f" (Level {t3_level})" if strategy == "T3" else ""),
-            }
-            return None, 0, insights, 0.0
 
         window_size = 50
         recent_sequence = sequence[-window_size:]
 
+        # Calculate bigram and trigram for insights only
         bigram_transitions = defaultdict(lambda: defaultdict(int))
         trigram_transitions = defaultdict(lambda: defaultdict(int))
         pattern_transitions = defaultdict(lambda: defaultdict(int))
@@ -62,14 +57,17 @@ def predict_next():
         last_pattern = None
 
         for i in range(len(recent_sequence) - 1):
+            # Bigram transitions (for insights)
             if i < len(recent_sequence) - 2:
                 bigram = tuple(recent_sequence[i:i+2])
                 next_outcome = recent_sequence[i+2]
                 bigram_transitions[bigram][next_outcome] += 1
+            # Trigram transitions (for insights)
             if i < len(recent_sequence) - 3:
                 trigram = tuple(recent_sequence[i:i+3])
                 next_outcome = recent_sequence[i+3]
                 trigram_transitions[trigram][next_outcome] += 1
+            # Pattern analysis (for prediction and insights)
             if i > 0:
                 if recent_sequence[i] == recent_sequence[i-1]:
                     if current_streak == recent_sequence[i]:
@@ -94,49 +92,60 @@ def predict_next():
 
         st.session_state.pattern_volatility = pattern_changes / max(len(recent_sequence) - 2, 1)
 
-        bigram = tuple(recent_sequence[-2:])
-        total_transitions = sum(bigram_transitions[bigram].values())
-        if total_transitions > 0:
-            bigram_p_prob = bigram_transitions[bigram]['P'] / total_transitions
-            bigram_b_prob = bigram_transitions[bigram]['B'] / total_transitions
-        else:
-            bigram_p_prob = default_p
-            bigram_b_prob = default_b
-        bigram_pred = 'P' if bigram_p_prob > bigram_b_prob else 'B'
-
-        trigram = tuple(recent_sequence[-3:])
-        total_transitions = sum(trigram_transitions[trigram].values())
-        if total_transitions > 0:
-            trigram_p_prob = trigram_transitions[trigram]['P'] / total_transitions
-            trigram_b_prob = trigram_transitions[trigram]['B'] / total_transitions
-        else:
-            trigram_p_prob = default_p
-            trigram_b_prob = default_b
-        trigram_pred = 'P' if trigram_p_prob > trigram_b_prob else 'B'
-
-        if bigram_pred == trigram_pred:
-            pred = bigram_pred
-            overall_p = (bigram_p_prob + trigram_p_prob) / 2
-            overall_b = (bigram_b_prob + trigram_b_prob) / 2
-            conf = max(overall_p, overall_b) * 100
-            if strategy == "T3":
-                bet_amount = base_bet * t3_level
-                bet_info = f"T3: Bet ${bet_amount:.2f} (Level {t3_level})"
+        # Calculate bigram probabilities for insights
+        bigram_insight = "No bigram data"
+        if len(recent_sequence) >= 2:
+            bigram = tuple(recent_sequence[-2:])
+            total_transitions = sum(bigram_transitions[bigram].values())
+            if total_transitions > 0:
+                bigram_p_prob = bigram_transitions[bigram]['P'] / total_transitions
+                bigram_b_prob = bigram_transitions[bigram]['B'] / total_transitions
+                bigram_insight = f"Bigram (last 2: {', '.join(bigram)}): P: {bigram_p_prob*100:.1f}%, B: {bigram_b_prob*100:.1f}%"
             else:
-                bet_amount = flat_bet_amount
-                bet_info = f"FlatBet: ${bet_amount:.2f}"
+                bigram_insight = f"Bigram (last 2: {', '.join(bigram)}): P: {default_p*100:.1f}%, B: {default_b*100:.1f}% (default)"
+
+        # Calculate trigram probabilities for insights
+        trigram_insight = "No trigram data"
+        if len(recent_sequence) >= 3:
+            trigram = tuple(recent_sequence[-3:])
+            total_transitions = sum(trigram_transitions[trigram].values())
+            if total_transitions > 0:
+                trigram_p_prob = trigram_transitions[trigram]['P'] / total_transitions
+                trigram_b_prob = trigram_transitions[trigram]['B'] / total_transitions
+                trigram_insight = f"Trigram (last 3: {', '.join(trigram)}): P: {trigram_p_prob*100:.1f}%, B: {trigram_b_prob*100:.1f}%"
+            else:
+                trigram_insight = f"Trigram (last 3: {', '.join(trigram)}): P: {default_p*100:.1f}%, B: {default_b*100:.1f}% (default)"
+
+        # Prediction based on pattern transitions (not bigram/trigram)
+        current_pattern = 'streak' if streak_count >= 2 else 'chop' if chop_count >= 2 else 'double' if double_count >= 1 else 'other'
+        total_transitions = sum(pattern_transitions[current_pattern].values())
+        if total_transitions > 0:
+            pattern_p_prob = pattern_transitions[current_pattern]['P'] / total_transitions
+            pattern_b_prob = pattern_transitions[current_pattern]['B'] / total_transitions
+            pred = 'P' if pattern_p_prob > pattern_b_prob else 'B'
+            conf = max(pattern_p_prob, pattern_b_prob) * 100
+            overall_p = pattern_p_prob
+            overall_b = pattern_b_prob
         else:
-            pred = None
-            overall_p = (bigram_p_prob + trigram_p_prob) / 2
-            overall_b = (bigram_b_prob + trigram_b_prob) / 2
-            conf = max(overall_p, overall_b) * 100
-            bet_amount = 0.0
-            bet_info = f"{strategy}: No bet" + (f" (Level {t3_level})" if strategy == "T3" else "")
+            pred = 'P' if default_p > default_b else 'B'
+            conf = max(default_p, default_b) * 100
+            overall_p = default_p
+            overall_b = default_b
+
+        # Betting strategy
+        if strategy == "T3":
+            bet_amount = base_bet * t3_level
+            bet_info = f"T3: Bet ${bet_amount:.2f} (Level {t3_level})"
+        else:
+            bet_amount = flat_bet_amount
+            bet_info = f"FlatBet: ${bet_amount:.2f}"
 
         insights = {
             'Overall': f"P: {overall_p*100:.1f}%, B: {overall_b*100:.1f}%",
             'Volatility': f"{st.session_state.pattern_volatility:.2f}",
             'Betting Strategy': bet_info,
+            'Bigram Probabilities': bigram_insight,
+            'Trigram Probabilities': trigram_insight,
         }
         if strategy == "T3":
             if len(st.session_state.bet_history) > 0:
@@ -149,7 +158,7 @@ def predict_next():
             else:
                 insights['Current T3 Cycle'] = "W: 0, L: 0"
         if pred is None:
-            insights['Status'] = "No prediction: Bigram and trigram predictions differ"
+            insights['Status'] = "No prediction available"
 
         return pred, conf, insights, bet_amount
     except Exception as e:
@@ -176,7 +185,7 @@ def undo_last_action():
             st.session_state.advice = (
                 f"Prediction: {pred} ({conf:.1f}%), {insights['Betting Strategy']}"
                 if pred
-                else f"No prediction: {insights.get('Status', 'Bigram and trigram predictions differ')}, {insights['Betting Strategy']}"
+                else f"No prediction: {insights.get('Status', 'No prediction available')}, {insights['Betting Strategy']}"
             )
             if st.session_state.pattern_volatility > 0.5:
                 st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
@@ -252,7 +261,7 @@ def place_result(result):
         st.session_state.advice = (
             f"Prediction: {pred} ({conf:.1f}%), {insights['Betting Strategy']}"
             if pred
-            else f"No prediction: {insights.get('Status', 'Bigram and trigram predictions differ')}, {insights['Betting Strategy']}"
+            else f"No prediction: {insights.get('Status', 'No prediction available')}, {insights['Betting Strategy']}"
         )
         if st.session_state.pattern_volatility > 0.5:
             st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
@@ -272,7 +281,7 @@ try:
     st.session_state.advice = (
         f"Prediction: {pred} ({conf:.1f}%), {insights['Betting Strategy']}"
         if pred
-        else f"No prediction: {insights.get('Status', 'Bigram and trigram predictions differ')}, {insights['Betting Strategy']}"
+        else f"No prediction: {insights.get('Status', 'No prediction available')}, {insights['Betting Strategy']}"
     )
     if st.session_state.pattern_volatility > 0.5:
         st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
@@ -420,6 +429,6 @@ try:
         if st.session_state.pattern_volatility > 0.5:
             st.warning(f"**High Pattern Volatility**: {st.session_state.pattern_volatility:.2f}")
     else:
-        st.markdown("No insights available yet. Enter at least 3 Player or Banker results to generate predictions.")
+        st.markdown("No insights available yet. Enter at least 2 Player or Banker results to generate predictions.")
 except Exception as e:
     st.error(f"Error rendering UI: {e}")
