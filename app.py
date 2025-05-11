@@ -48,7 +48,7 @@ st.title("MANG BACCARAT GROUP")
 
 # --- SESSION STATE INIT ---
 if 'sequence' not in st.session_state:
-    st.session_state.sequence = ['P', 'B', 'P', 'B', 'P', 'B', 'P', 'B']  # Pre-populated sequence
+    st.session_state.sequence = []  # Start with empty sequence
     st.session_state.advice = ""
     st.session_state.insights = {}
     st.session_state.pattern_volatility = 0.0
@@ -91,7 +91,7 @@ def predict_next():
                 if current_streak == recent_sequence[i]:
                     streak_count += 1
                 else:
-                    current_streak = recent_sequence[i]
+                    current_streak = resultsrecent_sequence[i]
                     streak_count = 1
                 if i > 1 and recent_sequence[i-1] == recent_sequence[i-2]:
                     double_count += 1
@@ -241,13 +241,13 @@ with st.form("setup_form"):
     start_clicked = st.form_submit_button("Start Session")
 
 if start_clicked:
-    st.session_state.sequence = ['P', 'B', 'P', 'B', 'P', 'B', 'P', 'B']
+    st.session_state.sequence = []
     st.session_state.advice = ""
     st.session_state.insights = {}
     st.session_state.pattern_volatility = 0.0
     st.session_state.pattern_success = defaultdict(int)
     st.session_state.pattern_attempts = defaultdict(int)
-    st.success("Session started with sample sequence!")
+    st.success("Session started!")
 
 # --- RESULT INPUT ---
 st.subheader("Enter Result")
@@ -316,7 +316,7 @@ with col2:
 st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-90:] if 'sequence' in st.session_state else []
 if not sequence:
-    st.info("No sequence available. Start a session to initialize.")
+    st.info("No sequence available. Enter results using the Player or Banker buttons.")
 else:
     grid = [[] for _ in range(15)]
     for i, result in enumerate(sequence):
