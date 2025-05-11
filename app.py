@@ -1,3 +1,9 @@
+import streamlit as st
+from collections import defaultdict
+import os
+import time
+from datetime import datetime, timedelta
+import numpy as np
 
 def calculate_stake(confidence):
     strategy = st.session_state.get("management_strategy", "Flat")
@@ -20,13 +26,6 @@ def calculate_stake(confidence):
 
     return base_bet
 
-
-import streamlit as st
-from collections import defaultdict
-import os
-import time
-from datetime import datetime, timedelta
-import numpy as np
 
 # --- FILE-BASED SESSION TRACKING ---
 SESSION_FILE = "online_users.txt"
@@ -77,6 +76,9 @@ if 'sequence' not in st.session_state:
     st.session_state.pattern_volatility = 0.0
     st.session_state.pattern_success = defaultdict(int)
     st.session_state.pattern_attempts = defaultdict(int)
+    st.session_state.bankroll = 1000.0
+    st.session_state.base_bet = 10.0
+    st.session_state.loss_streak = 0
 
 # --- FUNCTIONS ---
 def predict_next():
@@ -257,13 +259,17 @@ def log_result(result):
 
     pred, conf, insights = predict_next()
     st.session_state.insights = insights
-    # Track loss streak for Progressive strategy
-    if pred and result != pred:
-        st.session_state.loss_streak = st.session_state.get("loss_streak", 0) + 1
-    else:
-        st.session_state.loss_streak = 0
 
     stake = calculate_stake(conf)
+
+    # Track loss streak for Progressive strategy and update bankroll
+    if pred and result != pred:
+        st.session_state.loss_streak = st.session_state.get("loss_streak", 0) + 1
+        st.session_state.bankroll = max(st.session_state.bankroll - stake, 0)
+    else:
+        st.session_state.loss_streak = 0
+        # Assumes winning returns the stake amount (can adjust multiplier if needed)
+        st.session_state.bankroll += stake
 
     if st.session_state.pattern_volatility > 0.5:
         st.session_state.advice = f"No prediction: High pattern volatility ({st.session_state.pattern_volatility:.2f})"
@@ -272,9 +278,9 @@ def log_result(result):
     else:
         top_factor = st.session_state.insights.get('Top Factor Raw', 'Mixed Factors')
         st.session_state.advice = (
-    f"Recommended Bet: {pred} (${stake:.2f} stake at {conf:.1f}% confidence)\n"
-    f"Reason: Driven by {top_factor} â€” based on recent pattern behavior."
-)
+            f"Recommended Bet: {pred} (${stake:.2f} stake at {conf:.1f}% confidence)\n"
+            f"Reason: Driven by {top_factor} — based on recent pattern behavior."
+        )
 
 # --- SETUP FORM ---
 st.subheader("Setup")
@@ -302,6 +308,7 @@ if start_clicked:
     st.session_state.pattern_volatility = 0.0
     st.session_state.pattern_success = defaultdict(int)
     st.session_state.pattern_attempts = defaultdict(int)
+    st.session_state.loss_streak = 0
 
     st.session_state.bankroll = bankroll
     st.session_state.base_bet = base_bet
@@ -368,11 +375,11 @@ col1, col2 = st.columns(2)
 with col1:
     if st.button("Player", key="player_btn"):
         log_result("P")
-        st.rerun()
+        st.experimental_rerun()
 with col2:
     if st.button("Banker", key="banker_btn"):
         log_result("B")
-        st.rerun()
+        st.experimental_rerun()
 
 # --- DISPLAY SEQUENCE ---
 st.subheader("Current Sequence (Bead Plate)")
@@ -425,3 +432,4 @@ if st.session_state.get("target_mode") == "Percentage":
     st.markdown(f"**Target**: {st.session_state['target_value']}%")
 else:
     st.markdown(f"**Target**: {st.session_state['target_value']} units")
+
