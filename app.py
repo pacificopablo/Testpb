@@ -297,8 +297,8 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
 
     # Adaptive confidence threshold
     recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
-    threshold = 52.0 + (st.session_state.consecutive_losses * 1.0) - (recent_accuracy * 1.5)
-    threshold = min(max(threshold, 50.0), 60.0)
+    threshold = 45.0 + (st.session_state.consecutive_losses * 0.5) - (recent_accuracy * 1.0)
+    threshold = min(max(threshold, 45.0), 55.0)
     insights['Threshold'] = f"{threshold:.1f}%"
 
     if st.session_state.pattern_volatility > 0.5:
@@ -350,7 +350,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         return None, f"No bet: Paused after {st.session_state.consecutive_losses} losses (Confidence: {conf:.1f}% < 60%)"
     if st.session_state.pattern_volatility > 0.5:
         return None, f"No bet: High pattern volatility ({st.session_state.pattern_volatility:.2f})"
-    if pred is None or conf < 48.0:
+    if pred is None or conf < 45.0:
         return None, f"No bet (Confidence: {conf:.1f}% too low)"
 
     if st.session_state.strategy == 'Flatbet':
