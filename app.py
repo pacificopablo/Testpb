@@ -79,6 +79,8 @@ if 'sequence' not in st.session_state:
     st.session_state.bankroll = 1000.0
     st.session_state.base_bet = 10.0
     st.session_state.loss_streak = 0
+    st.session_state.target_mode = "Percentage"  # Default initialization
+    st.session_state.target_value = 10.0  # Default initialization
 
 # --- FUNCTIONS ---
 def predict_next():
