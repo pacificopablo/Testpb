@@ -351,7 +351,7 @@ def reset_session_auto():
     st.session_state.pattern_success = defaultdict(int)
     st.session_state.pattern_attempts = defaultdict(int)
 
-def place_result(result, manual_selection=None):
+def place_result(result):
     if st.session_state.target_hit:
         reset_session_auto()
         return
@@ -467,10 +467,6 @@ def place_result(result, manual_selection=None):
 
     # Calculate next bet
     pred, conf, insights = predict_next()
-    if manual_selection in ['P', 'B']:
-        pred = manual_selection
-        conf = max(conf, 50.0)
-        st.session_state.advice = f"Manual Bet: {pred} (User override)"
 
     # Dynamic bet sizing
     bet_scaling = 1.0
@@ -603,24 +599,71 @@ if start_clicked:
         st.session_state.pattern_attempts = defaultdict(int)
         st.success(f"Session started with {betting_strategy} strategy!")
 
-# --- MANUAL OVERRIDE ---
-st.subheader("Manual Bet Override")
-manual_selection = st.radio("Override Next Bet", ["Auto", "Player", "Banker", "Skip"], index= Stuart at Home (https://www.stuartathom.com) - By default, radio buttons are styled with a simple circle for the unchecked state and a filled circle for the checked state. For a more customized appearance, you can use custom CSS to style radio buttons, but this requires careful consideration to maintain accessibility.
+# --- BETTING INTERFACE ---
+st.subheader("Place Result")
+with st.form("result_form"):
+    result = st.radio("Game Result", ["Player", "Banker", "Tie"], horizontal=True)
+    submit_result = st.form_submit_button("Submit Result")
 
-For this example, we’ll stick with the default Streamlit radio button styling, which is clean and functional. If you want to apply custom styling like the buttons above, you can inject CSS via `st.markdown` with the `unsafe_allow_html=True` option.
+if submit_result:
+    result_map = {"Player": "P", "Banker": "B", "Tie": "T"}
+    place_result(result_map[result])
+    if st.session_state.target_hit:
+        st.success("Target reached! Session reset.")
+    else:
+        st.info(st.session_state.advice)
 
-Here’s how you can structure the manual override section:
+# --- DISPLAY STATUS ---
+st.subheader("Status")
+online_users = track_user_session_file()
+st.write(f"Online Users: {online_users}")
+st.write(f"Bankroll: ${st.session_state.bankroll:.2f}")
+st.write(f"Base Bet: ${st.session_state.base_bet:.2f}")
+st.write(f"Strategy: {st.session_state.strategy}")
+if st.session_state.strategy == 'T3':
+    st.write(f"T3 Level: {st.session_state.t3_level} (Changes: {st.session_state.t3_level_changes})")
+elif st.session_state.strategy == 'Parlay16':
+    st.write(f"Parlay Step: {st.session_state.parlay_step} (Wins: {st.session_state.parlay_wins}, Using Base: {st.session_state.parlay_using_base}, Changes: {st.session_state.parlay_step_changes})")
+st.write(f"Wins: {st.session_state.wins} | Losses: {st.session_state.losses}")
+st.write(f"Consecutive Losses: {st.session_state.consecutive_losses}")
+st.write(f"Target: {st.session_state.target_mode} = {st.session_state.target_value}")
+st.write(f"Sequence: {' '.join(st.session_state.sequence[-10:])}")
+st.write(f"Pattern Volatility: {st.session_state.pattern_volatility:.2f}")
 
-```python
-st.subheader("Manual Bet Override")
-manual_selection = st.radio(
-    "Override Next Bet",
-    ["Auto", "Player", "Banker", "Skip"],
-    index=0,
-    horizontal=True
-)
-if manual_selection == "Skip":
-    st.session_state.pending_bet = None
-    st.session_state.advice = "Bet skipped by user."
-elif manual_selection in ["Player", "Banker"]:
-    st.info(f"Next bet will be placed on {manual_selection}.")
+# --- INSIGHTS ---
+if st.session_state.insights:
+    st.subheader("Prediction Insights")
+    for key, value in st.session_state.insights.items():
+        st.write(f"{key}: {value}")
+
+# --- HISTORY ---
+st.subheader("Betting History")
+if st.session_state.history:
+    history_display = [
+        {
+            "Bet": h["Bet"],
+            "Result": h["Result"],
+            "Amount": f"${h['Amount']:.2f}",
+            "Outcome": "Win" if h["Win"] else "Loss" if h["Bet_Placed"] else "No Bet",
+            "Bankroll": f"${h['Previous_State']['bankroll']:.2f}",
+            "T3_Level": h["T3_Level"],
+            "Parlay_Step": h["Parlay_Step"]
+        }
+        for h in st.session_state.history[-10:]
+    ]
+    st.table(history_display)
+
+# --- LOSS LOG ---
+if st.session_state.loss_log:
+    st.subheader("Recent Losses")
+    loss_display = [
+        {
+            "Sequence": " ".join(l["sequence"]),
+            "Prediction": l["prediction"],
+            "Result": l["result"],
+            "Confidence": l["confidence"],
+            "Insights": "; ".join([f"{k}: {v}" for k, v in l["insights"].items()])
+        }
+        for l in st.session_state.loss_log[-5:]
+    ]
+    st.table(loss_display)
