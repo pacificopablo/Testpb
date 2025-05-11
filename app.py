@@ -337,6 +337,7 @@ div.stButton > button {
     display: flex;
     align-items: center;
     justify-content: center;
+    margin-right: 10px;
 }
 div.stButton > button:hover {
     transform: scale(1.08);
@@ -362,29 +363,53 @@ div.stButton > button[kind="banker_btn"] {
 div.stButton > button[kind="banker_btn"]:hover {
     background: linear-gradient(to bottom, #ff6666, #dc3545);
 }
+div.stButton > button[kind="undo_btn"] {
+    background: linear-gradient(to bottom, #6c757d, #495057);
+    border-color: #495057;
+    color: white;
+}
+div.stButton > button[kind="undo_btn"]:hover {
+    background: linear-gradient(to bottom, #868e96, #6c757d);
+}
 @media (max-width: 600px) {
     div.stButton > button {
         width: 80%;
         max-width: 150px;
         height: 40px;
         font-size: 12px;
+        margin-bottom: 8px;
+    }
+    .button-row {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
     }
 }
 </style>
 """, unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("Player", key="player_btn"):
+cols = st.columns([1,1,1])
+with cols[0]:
+    if st.button("Player", key="player_btn", kind="player_btn"):
         log_result("P")
-        # Some Streamlit versions support st.experimental_rerun() for rerun; if not, fallback to st.rerun()
         try:
             st.experimental_rerun()
         except AttributeError:
             st.rerun()
-with col2:
-    if st.button("Banker", key="banker_btn"):
+with cols[1]:
+    if st.button("Banker", key="banker_btn", kind="banker_btn"):
         log_result("B")
+        try:
+            st.experimental_rerun()
+        except AttributeError:
+            st.rerun()
+with cols[2]:
+    if st.button("Undo", key="undo_btn", kind="undo_btn"):
+        if st.session_state.sequence:
+            st.session_state.sequence.pop()
+            st.session_state.loss_streak = 0  # Reset loss streak; will recalc on next input
+            st.session_state.advice = ""
+            st.session_state.insights = {}
         try:
             st.experimental_rerun()
         except AttributeError:
