@@ -149,11 +149,16 @@ def predict_next():
         'Volatility': f"{st.session_state.pattern_volatility:.2f}",
         'Betting Strategy': bet_info,
     }
-    if strategy == "T3" and len(st.session_state.bet_history) > 0:
-        wins = sum(1 for pred, actual, _ in st.session_state.bet_history[-3:] if pred == actual)
-        total_bets = min(3, len(st.session_state.bet_history))
-        win_rate = (wins / total_bets * 100) if total_bets > 0 else 0
-        insights['Bet History'] = f"Last 3 Bets: Win Rate: {win_rate:.1f}% ({wins}/{total_bets})"
+    if strategy == "T3":
+        if len(st.session_state.bet_history) > 0:
+            wins = sum(1 for pred, actual, _ in st.session_state.bet_history[-3:] if pred == actual)
+            total_bets = min(3, len(st.session_state.bet_history))
+            losses = total_bets - wins
+            win_rate = (wins / total_bets * 100) if total_bets > 0 else 0
+            insights['Current T3 Cycle'] = f"W: {wins}, L: {losses}"
+            insights['Bet History'] = f"Last 3 Bets: Win Rate: {win_rate:.1f}% ({wins}/{total_bets})"
+        else:
+            insights['Current T3 Cycle'] = "W: 0, L: 0"
     if pred is None:
         insights['Status'] = "No prediction: Bigram and trigram predictions differ"
 
