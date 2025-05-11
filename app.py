@@ -1,10 +1,6 @@
 import streamlit as st
 from collections import defaultdict
 
-# --- APP CONFIG ---
-st.set_page_config(layout="centered", page_title="BACCARAT PLAYER/BANKER PREDICTOR")
-st.title("BACCARAT PLAYER/BANKER PREDICTOR")
-
 # --- SESSION STATE INIT ---
 if 'sequence' not in st.session_state:
     st.session_state.sequence = []
@@ -17,7 +13,7 @@ if 'sequence' not in st.session_state:
 def predict_next():
     sequence = st.session_state.sequence  # Contains only P, B
     if len(sequence) < 3:
-        return 'B', 45.86, {}  # Default with empty insights
+        return 'B', 45.86, {}
 
     # Sliding window of 50 hands
     window_size = 50
@@ -106,7 +102,7 @@ def predict_next():
             p_prob = bigram_transitions[bigram]['P'] / total_transitions
             b_prob = bigram_transitions[bigram]['B'] / total_transitions
             prob_p += weights['bigram'] * (prior_p + p_prob) / (1 + total_transitions)
-            prob_b += weights['bigram'] * (prior_b +_b_prob) / (1 + total_transitions)
+            prob_b += weights['bigram'] * (prior_b + b_prob) / (1 + total_transitions)  # Corrected
             total_weight += weights['bigram']
             insights['Bigram'] = f"{weights['bigram']*100:.0f}% weight (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
 
@@ -223,68 +219,20 @@ def place_result(result):
         st.session_state.pending_prediction = None
         st.session_state.insights = insights
 
-# --- RESULT INPUT ---
-st.subheader("Enter Game Result")
-st.markdown("""
-<style>
-div.stButton > button {
-    width: 90px;
-    height: 35px;
-    font-size: 14px;
-    font-weight: bold;
-    border-radius: 6px;
-    border: 1px solid;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    cursor: pointer;
-    transition: all 0.15s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-div.stButton > button:hover {
-    transform: scale(1.08);
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
-}
-div.stButton > button:active {
-    transform: scale(0.95);
-    box-shadow: none;
-}
-div.stButton > button[kind="player_btn"] {
-    background: linear-gradient(to bottom, #007bff, #0056b3);
-    border-color: #0056b3;
-    color: white;
-}
-div.stButton > button[kind="player_btn"]:hover {
-    background: linear-gradient(to bottom, #339cff, #007bff);
-}
-div.stButton > button[kind="banker_btn"] {
-    background: linear-gradient(to bottom, #dc3545, #a71d2a);
-    border-color: #a71d2a;
-    color: white;
-}
-div.stButton > button[kind="banker_btn"]:hover {
-    background: linear-gradient(to bottom, #ff6666, #dc3545);
-}
-@media (max-width: 600px) {
-    div.stButton > button {
-        width: 80%;
-        max-width: 150px;
-        height: 40px;
-        font-size: 12px;
-    }
-}
-</style>
-""", unsafe_allow_html=True)
+# --- UI ---
+st.title("BACCARAT PLAYER/BANKER PREDICTOR")
 
+# Result Input
+st.subheader("Enter Game Result")
 col1, col2 = st.columns(2)
 with col1:
-    if st.button("Player", key="player_btn"):
+    if st.button("Player"):
         place_result("P")
 with col2:
-    if st.button("Banker", key="banker_btn"):
+    if st.button("Banker"):
         place_result("B")
 
-# --- DISPLAY SEQUENCE (BEAD PLATE) ---
+# Bead Plate
 st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-90:]  # Limit to 90 for display
 grid = [[] for _ in range(15)]
@@ -310,7 +258,7 @@ for col in grid:
 bead_plate_html += "</div>"
 st.markdown(bead_plate_html, unsafe_allow_html=True)
 
-# --- PREDICTION DISPLAY ---
+# Prediction Display
 if st.session_state.pending_prediction:
     side = st.session_state.pending_prediction
     color = 'blue' if side == 'P' else 'red'
@@ -319,10 +267,9 @@ if st.session_state.pending_prediction:
 else:
     st.info(st.session_state.advice)
 
-# --- PREDICTION INSIGHTS ---
+# Prediction Insights
 st.subheader("Prediction Insights")
 if st.session_state.insights:
-    st.markdown("**Factors Contributing to Prediction:**")
     for factor, contribution in st.session_state.insights.items():
         st.markdown(f"- **{factor}**: {contribution}")
     if st.session_state.pattern_volatility > 0.5:
