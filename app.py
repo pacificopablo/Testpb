@@ -305,68 +305,6 @@ def reset_session_auto():
     st.session_state.pattern_success = defaultdict(int)
     st.session_state.pattern_attempts = defaultdict(int)
 
-def log_result(result):
-    if st.session_state.target_hit:
-        reset_session_auto()
-        return
-    st.session_state.last_was_tie = (result == 'T')
-
-    # Check recovery mode
-    loss_percentage = (st.session_state.initial_bankroll - st.session_state.bankroll) / st.session_state.initial_bankroll if st.session_state.initial_bankroll > 0 else 0
-    st.session_state.recovery_mode = loss_percentage >= st.session_state.recovery_threshold / 100
-
-    # Store state
-    previous_state = {
-        "bankroll": st.session_state.bankroll,
-        "t3_level": st.session_state.t3_level,
-        "t3_results": st.session_state.t3_results.copy(),
-        "parlay_step": st.session_state.parlay_step,
-        "parlay_wins": st.session_state.parlay_wins,
-        "parlay_using_base": st.session_state.parlay_using_base,
-        "wins": st.session_state.wins,
-        "losses": st.session_state.losses,
-        "prediction_accuracy": st.session_state.prediction_accuracy.copy(),
-        "consecutive_losses": st.session_state.consecutive_losses,
-        "t3_level_changes": st.session_state.t3_level_changes,
-        "parlay_step_changes": st.session_state.parlay_step_changes,
-        "recovery_mode": st.session_state.recovery_mode,
-        "pattern_volatility": st.session_state.pattern_volatility,
-        "pattern_success": st.session_state.pattern_success.copy(),
-        "pattern_attempts": st.session_state.pattern_attempts.copy()
-    }
-
-    # Append to sequence
-    st.session_state.sequence.append(result)
-    if len(st.session_state.sequence) > 100:
-        st.session_state.sequence = st.session_state.sequence[-100:]
-
-    # Store history
-    st.session_state.history.append({
-        "Result": result,
-        "Previous_State": previous_state
-    })
-    if len(st.session_state.history) > 1000:
-        st.session_state.history = st.session_state.history[-1000:]
-
-    if check_target_hit():
-        st.session_state.target_hit = True
-        return
-
-    # Generate prediction
-    pred, conf, insights = predict_next()
-
-    if st.session_state.pattern_volatility > 0.5:
-        st.session_state.advice = f"No prediction: High pattern volatility ({st.session_state.pattern_volatility:.2f})"
-        st.session_state.insights = insights
-        return
-
-    if pred is None or conf < 48.0:
-        st.session_state.advice = f"No prediction (Confidence: {conf:.1f}% too low)"
-        st.session_state.insights = insights
-    else:
-        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%)"
-        st.session_state.insights = insights
-
 # --- SETUP FORM ---
 st.subheader("Setup")
 with st.form("setup_form"):
@@ -428,34 +366,48 @@ if start_clicked:
 # --- DISPLAY SEQUENCE ---
 st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-90:] if 'sequence' in st.session_state else []
-grid = [[] for _ in range(15)]
-for i, result in enumerate(sequence):
-    col_index = i // 6
-    if col_index < 15:
-        grid[col_index].append(result)
-for col in grid:
-    while len(col) < 6:
-        col.append('')
-bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 100%; overflow-x: auto;'>"
-for col in grid:
-    col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
-    for result in col:
-        if result == '':
-            col_html += "<div style='width: 20px; height: 20px; border: 1px solid #ddd; border-radius: 50%;'></div>"
-        elif result == 'P':
-            col_html += "<div style='width: 20px; height: 20px; background-color: blue; border-radius: 50%;'></div>"
-        elif result == 'B':
-            col_html += "<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>"
-        elif result == 'T':
-            col_html += "<div style='width: 20px; height: 20px; background-color: green; border-radius: 50%;'></div>"
-    col_html += "</div>"
-    bead_plate_html += col_html
-bead_plate_html += "</div>"
-st.markdown(bead_plate_html, unsafe_allow_html=True)
+if not sequence:
+    st.info("No sequence available. Start a session to initialize.")
+else:
+    grid = [[] for _ in range(15)]
+    for i, result in enumerate(sequence):
+        col_index = i // 6
+        if col_index < 15:
+            grid[col_index].append(result)
+    for col in grid:
+        while len(col) < 6:
+            col.append('')
+    bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 100%; overflow-x: auto;'>"
+    for col in grid:
+        col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
+        for result in col:
+            if result == '':
+                col_html += "<div style='width: 20px; height: 20px; border: 1px solid #ddd; border-radius: 50%;'></div>"
+            elif result == 'P':
+                col_html += "<div style='width: 20px; height: 20px; background-color: blue; border-radius: 50%;'></div>"
+            elif result == 'B':
+                col_html += "<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>"
+            elif result == 'T':
+                col_html += "<div style='width: 20px; height: 20px; background-color: green; border-radius: 50%;'></div>"
+        col_html += "</div>"
+        bead_plate_html += col_html
+    bead_plate_html += "</div>"
+    st.markdown(bead_plate_html, unsafe_allow_html=True)
 
 # --- PREDICTION DISPLAY ---
+st.subheader("Prediction")
 if not st.session_state.target_hit:
+    pred, conf, insights = predict_next()
+    st.session_state.insights = insights
+    if st.session_state.pattern_volatility > 0.5:
+        st.session_state.advice = f"No prediction: High pattern volatility ({st.session_state.pattern_volatility:.2f})"
+    elif pred is None or conf < 48.0:
+        st.session_state.advice = f"No prediction (Confidence: {conf:.1f}% too low)"
+    else:
+        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%)"
     st.info(st.session_state.advice)
+else:
+    st.info("Target reached. Session reset.")
 
 # --- PREDICTION INSIGHTS ---
 st.subheader("Prediction Insights")
