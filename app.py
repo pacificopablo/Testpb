@@ -365,28 +365,6 @@ try:
         if st.button("Undo", key="undo_btn", disabled=undo_disabled):
             undo_last_action()
 
-    st.subheader("Current Prediction")
-    if st.session_state.pending_prediction:
-        side = st.session_state.pending_prediction
-        color = 'blue' if side == 'P' else 'red'
-        advice_parts = st.session_state.advice.split(', ')
-        prob = advice_parts[0].split('(')[-1].split('%')[0] if '(' in advice_parts[0] else '0'
-        bet_info = advice_parts[1] if len(advice_parts) > 1 else 'No bet'
-        st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Prob: {prob}% | {bet_info}</h4>", unsafe_allow_html=True)
-    else:
-        st.info(st.session_state.advice)
-
-    st.subheader("Last Bet Outcome")
-    if st.session_state.last_bet_outcome:
-        if "Win" in st.session_state.last_bet_outcome:
-            st.success(st.session_state.last_bet_outcome)
-        elif "Loss" in st.session_state.last_bet_outcome:
-            st.error(st.session_state.last_bet_outcome)
-        else:
-            st.info(st.session_state.last_bet_outcome)
-    else:
-        st.info("No bets placed yet.")
-
     st.subheader("Current Sequence (Bead Plate)")
     sequence = st.session_state.sequence[-90:]
     grid = [[] for _ in range(15)]
@@ -411,6 +389,28 @@ try:
         bead_plate_html += col_html
     bead_plate_html += "</div>"
     st.markdown(bead_plate_html, unsafe_allow_html=True)
+
+    st.subheader("Current Prediction")
+    if st.session_state.pending_prediction:
+        side = st.session_state.pending_prediction
+        color = 'blue' if side == 'P' else 'red'
+        advice_parts = st.session_state.advice.split(', ')
+        prob = advice_parts[0].split('(')[-1].split('%')[0] if '(' in advice_parts[0] else '0'
+        bet_info = advice_parts[1] if len(advice_parts) > 1 else 'No bet'
+        st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Prob: {prob}% | {bet_info}</h4>", unsafe_allow_html=True)
+    else:
+        st.info(st.session_state.advice)
+
+    st.subheader("Last Bet Outcome")
+    if st.session_state.last_bet_outcome:
+        if "Win" in st.session_state.last_bet_outcome:
+            st.success(st.session_state.last_bet_outcome)
+        elif "Loss" in st.session_state.last_bet_outcome:
+            st.error(st.session_state.last_bet_outcome)
+        else:
+            st.info(st.session_state.last_bet_outcome)
+    else:
+        st.info("No bets placed yet.")
 
     st.subheader("Prediction Insights")
     if st.session_state.insights:
