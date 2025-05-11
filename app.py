@@ -184,7 +184,6 @@ def undo_last_action():
 # --- PROCESS RESULT ---
 def place_result(result):
     try:
-        print(f"Placing result: {result}")
         current_state = {
             'sequence': st.session_state.sequence.copy(),
             'pending_prediction': st.session_state.pending_prediction,
@@ -238,6 +237,7 @@ try:
     st.session_state.base_bet = st.number_input(
         "Base Bet Amount ($)", min_value=0.01, value=st.session_state.base_bet, step=1.0, format="%.2f"
     )
+    st.markdown(f"**Current Base Bet**: ${st.session_state.base_bet:.2f}")
     if st.session_state.betting_strategy == "FlatBet":
         st.session_state.flat_bet_amount = st.number_input(
             "Flat Bet Amount ($)", min_value=0.01, value=st.session_state.flat_bet_amount, step=1.0, format="%.2f"
