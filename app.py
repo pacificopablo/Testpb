@@ -13,7 +13,7 @@ if 'sequence' not in st.session_state:
     st.session_state.pattern_volatility = 0.0
     st.session_state.base_bet = 10.0  # Base bet for both strategies
     st.session_state.flat_bet_amount = 10.0  # Fixed bet for FlatBet
-    st.session_state.t3_level = 1  # Current level for T3
+    st.session_state.t3_level = 1  # Current level for T3 (no upper limit)
     st.session_state.bet_history = []  # List of (prediction, actual_outcome, bet_amount) for T3
     st.session_state.betting_strategy = "T3"  # Default strategy
 
@@ -188,13 +188,13 @@ def place_result(result):
                 wins = sum(1 for p, a, _ in st.session_state.bet_history[-3:] if p == a)
                 losses = 3 - wins
                 if wins == 3:
-                    st.session_state.t3_level = max(1, st.session_state.t3_level - 2)
+                    st.session_state.t3_level = max(1, st.session_state.t3_level - 2)  # 3 Wins: Go back 2 levels
                 elif wins == 2 and losses == 1:
-                    st.session_state.t3_level -= 1
+                    st.session_state.t3_level = max(1, st.session_state.t3_level - 1)  # 2 Wins, 1 Loss: Go back 1 level
                 elif wins == 1 and losses == 2:
-                    st.session_state.t3_level += 1
+                    st.session_state.t3_level += 1  # 2 Losses, 1 Win: Go to next level
                 elif losses == 3:
-                    st.session_state.t3_level += 2
+                    st.session_state.t3_level += 2  # 3 Losses: Go forward 2 levels
                 st.session_state.bet_history = []  # Reset for next level
     st.session_state.insights = insights
 
