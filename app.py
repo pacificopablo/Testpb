@@ -382,7 +382,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
 
     return bet_amount, f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
 
-def place_result(result: str, manual_selection: Optional[str] = None):
+def place_result(result: str):
     """Process a game result and update session state."""
     if st.session_state.target_hit:
         reset_session()
@@ -444,7 +444,7 @@ def place_result(result: str, manual_selection: Optional[str] = None):
             if st.session_state.strategy == 'T3':
                 st.session_state.t3_results.append('L')
             elif st.session_state.strategy == 'Parlay16':
-                st.session_state.parlay_wins = 0
+                st.session_state.parlay_wins alternativo= 0
                 old_step = st.session_state.parlay_step
                 st.session_state.parlay_step = min(st.session_state.parlay_step + 1, 16)
                 st.session_state.parlay_using_base = True
@@ -479,7 +479,7 @@ def place_result(result: str, manual_selection: Optional[str] = None):
         "T3_Level": st.session_state.t3_level,
         "Parlay_Step": st.session_state.parlay_step,
         "Parlay_Wins": st.session_state.parlay_wins,
-        "Parlay_Using_base": st.session_state.parlay_using_base,
+        "Parlay_Using_Base": st.session_state.parlay_using_base,
         "Previous_State": previous_state,
         "Bet_Placed": bet_placed
     })
@@ -491,11 +491,6 @@ def place_result(result: str, manual_selection: Optional[str] = None):
         return
 
     pred, conf, insights = predict_next()
-    if manual_selection in ['P', 'B']:
-        pred = manual_selection
-        conf = max(conf, 50.0)
-        st.session_state.advice = f"Manual Bet: {pred} (User override)"
-
     bet_amount, advice = calculate_bet_amount(pred, conf)
     st.session_state.pending_bet = (bet_amount, pred) if bet_amount else None
     st.session_state.advice = advice
@@ -561,17 +556,6 @@ def render_setup_form():
                 })
                 st.success(f"Session started with {betting_strategy} strategy!")
 
-def render_manual_override():
-    """Render the manual bet override section."""
-    st.subheader("Manual Bet Override")
-    manual_selection = st.radio("Override Next Bet", ["Auto", "Player", "Banker", "Skip"], index=0, horizontal=True)
-    if manual_selection == "Skip":
-        st.session_state.pending_bet = None
-        st.session_state.advice = "Bet skipped by user."
-    elif manual_selection in ["Player", "Banker"]:
-        st.info(f"Next bet will be placed on {manual_selection}.")
-    return manual_selection if manual_selection in ['P', 'B'] else None
-
 def render_result_input():
     """Render the result input buttons."""
     st.subheader("Enter Result")
@@ -599,13 +583,13 @@ def render_result_input():
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("Player", key="player_btn"):
-            place_result("P", render_manual_override())
+            place_result("P")
     with col2:
         if st.button("Banker", key="banker_btn"):
-            place_result("B", render_manual_override())
+            place_result("B")
     with col3:
         if st.button("Tie", key="tie_btn"):
-            place_result("T", render_manual_override())
+            place_result("T")
     with col4:
         if st.button("Undo Last", key="undo_btn"):
             if not st.session_state.sequence:
@@ -779,7 +763,6 @@ def main():
     initialize_session_state()
 
     render_setup_form()
-    render_manual_override()
     render_result_input()
     render_bead_plate()
     render_prediction()
