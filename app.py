@@ -207,6 +207,12 @@ def predict_next():
         prob_b = 0.9 * prob_b + 0.1 * b_prob * 100
         insights['Pattern Transition'] = f"10% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
 
+    
+    # Highlight strongest factor used for prediction
+    strongest_factor = max(weights.items(), key=lambda x: x[1])
+    insights['Top Factor'] = f"Bet driven by: {strongest_factor[0].capitalize()} Pattern (Weight: {strongest_factor[1]*100:.1f}%)"
+    insights['Top Factor Raw'] = strongest_factor[0].capitalize() + " Pattern"  # for advice message
+
     threshold = 50.0
     insights['Threshold'] = f"{threshold:.1f}%"
 
@@ -233,7 +239,8 @@ def log_result(result):
     elif pred is None or conf < 48.0:
         st.session_state.advice = f"No prediction (Confidence: {conf:.1f}% too low)"
     else:
-        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%)"
+        top_factor = st.session_state.insights.get('Top Factor Raw', 'Mixed Factors')
+        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%) â€” driven by: {top_factor}"
 
 # --- SETUP FORM ---
 st.subheader("Setup")
