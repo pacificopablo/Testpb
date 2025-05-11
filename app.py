@@ -63,7 +63,7 @@ if 'loss_log' not in st.session_state:
 if 'last_was_tie' not in st.session_state:
     st.session_state.last_was_tie = False
 if 'recovery_mode' not in st.session_state:
-    st.session_state.recovery_mode = False  # Disabled as per request
+    st.session_state.recovery_mode = False  # Already disabled
 if 'insights' not in st.session_state:
     st.session_state.insights = {}
 if 'pattern_volatility' not in st.session_state:
@@ -78,14 +78,6 @@ if 'session_profit' not in st.session_state:
     st.session_state.session_profit = 0.0
 if 'session_active' not in st.session_state:
     st.session_state.session_active = False
-if 'win_limit_percent' not in st.session_state:
-    st.session_state.win_limit_percent = 25.0  # Kept in state but unused
-if 'loss_limit_percent' not in st.session_state:
-    st.session_state.loss_limit_percent = 50.0  # Kept in state but unused
-if 'recovery_threshold' not in st.session_state:
-    st.session_state.recovery_threshold = 15.0  # Kept in state but unused
-if 'recovery_bet_scale' not in st.session_state:
-    st.session_state.recovery_bet_scale = 0.6  # Kept in state but unused
 if 'optimized_weights' not in st.session_state:
     st.session_state.optimized_weights = {'bigram': 0.4, 'trigram': 0.3, 'streak': 0.2, 'chop': 0.05, 'double': 0.05}
 if 'optimization_status' not in st.session_state:
@@ -102,6 +94,8 @@ if 'pattern_transitions' not in st.session_state:
     st.session_state.pattern_transitions = defaultdict(lambda: defaultdict(int))
 if 'last_pattern' not in st.session_state:
     st.session_state.last_pattern = None
+
+# Removed: win_limit_percent, loss_limit_percent, recovery_threshold, recovery_bet_scale from session state
 
 # --- PARLAY TABLE ---
 PARLAY_TABLE = {
@@ -152,7 +146,7 @@ def reset_session_auto():
     st.session_state.consecutive_losses = 0
     st.session_state.loss_log = []
     st.session_state.last_was_tie = False
-    st.session_state.recovery_mode = False  # Disabled
+    st.session_state.recovery_mode = False  # Already disabled
     st.session_state.insights = {}
     st.session_state.pattern_volatility = 0.0
     st.session_state.pattern_success = defaultdict(int)
@@ -426,7 +420,7 @@ def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, con
     # Dynamic confidence threshold based on pattern strength
     recent_accuracy = (prediction_accuracy['P'] + prediction_accuracy['B']) / max(prediction_accuracy['total'], 1)
     threshold = st.session_state.dynamic_threshold + (consecutive_losses * 1.0) - (recent_accuracy * 1.5)
-    threshold = min(max(threshold, 50.0), 65.0)  # Removed recovery_mode adjustment
+    threshold = min(max(threshold, 50.0), 65.0)
     dominant_pattern = max(weights, key=lambda k: weights[k] if k in insights else 0)
     if pattern_accuracy[dominant_pattern]['attempts'] > 10:
         pattern_acc = pattern_accuracy[dominant_pattern]['success'] / pattern_accuracy[dominant_pattern]['attempts']
@@ -453,8 +447,8 @@ def place_result(result, manual_selection=None):
     selection = None
     win = False
 
-    # Remove recovery mode check (set to False permanently)
-    st.session_state.recovery_mode = False  # Disabled as per request
+    # Recovery mode is already disabled
+    st.session_state.recovery_mode = False
 
     # Store state
     previous_state = {
@@ -563,9 +557,7 @@ def place_result(result, manual_selection=None):
             st.session_state.total_bankroll += session_profit
             st.warning(f"Loss: ${-session_profit:.2f}")
 
-        # Remove win/loss limit checks (disabled as per request)
-        # Previously: Paused session if win/loss limits were hit
-        # Now: Session continues regardless of profit/loss
+        # Win/loss limit checks are already removed
 
         if st.session_state.total_bankroll < st.session_state.initial_total_bankroll * 0.8:
             new_session_bankroll = max(st.session_state.total_bankroll / 10, 10.0)
@@ -647,9 +639,8 @@ def place_result(result, manual_selection=None):
         conf = max(conf, 50.0)
         st.session_state.advice = f"Manual Bet: {pred} (User override)"
 
-    # Bet sizing (remove recovery mode scaling)
+    # Bet sizing (recovery mode scaling already removed)
     bet_scaling = 1.0
-    # Removed: Recovery mode scaling (st.session_state.recovery_bet_scale)
     if st.session_state.consecutive_losses >= 2:
         bet_scaling *= 0.8
     if conf < 55.0:
@@ -776,10 +767,7 @@ with st.form("setup_form"):
         index={'T3': 0, 'Flatbet': 1, 'Parlay16': 2}.get(st.session_state.strategy, 0),
         help="T3: Adjusts bet size based on wins/losses. Flatbet: Fixed bet size. Parlay16: 16-step progression."
     )
-    recovery_threshold = st.slider("Recovery Mode Threshold (% Loss)", 10.0, 30.0, st.session_state.recovery_threshold, 1.0)
-    recovery_bet_scale = st.slider("Recovery Mode Bet Scaling", 0.50, 1.00, st.session_state.recovery_bet_scale, 0.05)
-    win_limit_percent = st.slider("Win Limit (% of Session Bankroll)", 20.0, 30.0, st.session_state.win_limit_percent, 1.0)
-    loss_limit_percent = st.slider("Loss Limit (% of Session Bankroll)", 40.0, 60.0, st.session_state.loss_limit_percent, 1.0)
+    # Removed: recovery_threshold, recovery_bet_scale, win_limit_percent, loss_limit_percent
     target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0 if st.session_state.target_mode == "Profit %" else 1, horizontal=True)
     target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
     start_clicked = st.form_submit_button("Start Session")
@@ -824,7 +812,7 @@ if start_clicked:
         st.session_state.consecutive_losses = 0
         st.session_state.loss_log = []
         st.session_state.last_was_tie = False
-        st.session_state.recovery_mode = False  # Disabled
+        st.session_state.recovery_mode = False
         st.session_state.insights = {}
         st.session_state.pattern_volatility = 0.0
         st.session_state.pattern_success = defaultdict(int)
@@ -832,10 +820,6 @@ if start_clicked:
         st.session_state.saved_profits = 0.0
         st.session_state.session_profit = 0.0
         st.session_state.session_active = True
-        st.session_state.win_limit_percent = win_limit_percent  # Kept but unused
-        st.session_state.loss_limit_percent = loss_limit_percent  # Kept but unused
-        st.session_state.recovery_threshold = recovery_threshold  # Kept but unused
-        st.session_state.recovery_bet_scale = recovery_bet_scale  # Kept but unused
         st.session_state.optimized_weights = {'bigram': 0.4, 'trigram': 0.3, 'streak': 0.2, 'chop': 0.05, 'double': 0.05}
         st.session_state.optimization_status = []
         st.session_state.dynamic_threshold = 53.0
@@ -872,7 +856,6 @@ st.markdown(strategy_status)
 st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
 online_users = track_user_session_file()
 st.markdown(f"**Online Users**: {online_users}")
-# Removed: Win/Loss limit pause message (no longer relevant)
 
 # --- PREDICTION INSIGHTS ---
 st.subheader("Prediction Insights")
@@ -881,7 +864,6 @@ if st.session_state.insights:
         st.markdown(f"**{factor}**: {contribution}")
 if st.session_state.pattern_volatility > 0.6:
     st.warning(f"High Pattern Volatility: {st.session_state.pattern_volatility:.2f} (Betting paused)")
-# Removed: Recovery mode warning
 
 # --- HISTORY ---
 st.subheader("History (Last 10 Hands)")
