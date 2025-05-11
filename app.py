@@ -11,42 +11,41 @@ if 'sequence' not in st.session_state:
     st.session_state.advice = ""
     st.session_state.insights = {}
     st.session_state.pattern_volatility = 0.0
-    st.session_state.base_bet = 10.0  # Base bet for both strategies
-    st.session_state.flat_bet_amount = 10.0  # Fixed bet for FlatBet
-    st.session_state.t3_level = 1  # Current level for T3 (no upper limit)
-    st.session_state.bet_history = []  # List of (prediction, actual_outcome, bet_amount) for T3
-    st.session_state.betting_strategy = "T3"  # Default strategy
+    st.session_state.base_bet = 10.0
+    st.session_state.flat_bet_amount = 10.0
+    st.session_state.t3_level = 1
+    st.session_state.bet_history = []
+    st.session_state.betting_strategy = "T3"
+    st.session_state.undo_stack = []  # New: Stack to store states for undo
 
 # --- PREDICTION FUNCTION ---
+# (Unchanged, kept as provided)
 def predict_next():
-    sequence = st.session_state.sequence  # Contains only P, B
+    sequence = st.session_state.sequence
     base_bet = st.session_state.base_bet
     t3_level = st.session_state.t3_level
     strategy = st.session_state.betting_strategy
     flat_bet_amount = st.session_state.flat_bet_amount
-    # Define default probabilities (normalized P and B probabilities)
-    total_p_b = 0.4462 + 0.4586
-    default_p = 0.4462 / total_p_b  # ~0.4931
-    default_b = 0.4586 / total_p_b  # ~0.5069
+    total cors = 0.4462 + 0.4586
+    default_p = 0.4462 / total_p_b
+    default_b = 0.4586 / total_p_b
 
     if len(sequence) < 2:
         insights = {
             "Overall": f"No prediction: Need at least 2 outcomes (Current: {len(sequence)})",
             "Betting Strategy": f"{strategy}: No bet" + (f" (Level {t3_level})" if strategy == "T3" else ""),
         }
-        return None, 0, insights, 0.0  # Return four values with default bet_amount
+        return None, 0, insights, 0.0
     elif len(sequence) < 3:
         insights = {
             "Overall": f"No prediction: Need at least 3 outcomes for trigram (Current: {len(sequence)})",
             "Betting Strategy": f"{strategy}: No bet" + (f" (Level {t3_level})" if strategy == "T3" else ""),
         }
-        return None, 0, insights, 0.0  # Return four values with default bet_amount
+        return None, 0, insights, 0.0
 
-    # Sliding window of 50 hands
     window_size = 50
     recent_sequence = sequence[-window_size:]
 
-    # Initialize data structures
     bigram_transitions = defaultdict(lambda: defaultdict(int))
     trigram_transitions = defaultdict(lambda: defaultdict(int))
     pattern_transitions = defaultdict(lambda: defaultdict(int))
@@ -57,21 +56,15 @@ def predict_next():
     pattern_changes = 0
     last_pattern = None
 
-    # Analyze patterns
     for i in range(len(recent_sequence) - 1):
-        # Bigram transitions
         if i < len(recent_sequence) - 2:
             bigram = tuple(recent_sequence[i:i+2])
             next_outcome = recent_sequence[i+2]
             bigram_transitions[bigram][next_outcome] += 1
-
-        # Trigram transitions
         if i < len(recent_sequence) - 3:
             trigram = tuple(recent_sequence[i:i+3])
             next_outcome = recent_sequence[i+3]
             trigram_transitions[trigram][next_outcome] += 1
-
-        # Pattern detection
         if i > 0:
             if recent_sequence[i] == recent_sequence[i-1]:
                 if current_streak == recent_sequence[i]:
@@ -86,8 +79,6 @@ def predict_next():
                 streak_count = 0
                 if i > 1 and recent_sequence[i] != recent_sequence[i-2]:
                     chop_count += 1
-
-        # Pattern transitions and volatility
         if i < len(recent_sequence) - 2:
             current_pattern = 'streak' if streak_count >= 2 else 'chop' if chop_count >= 2 else 'double' if double_count >= 1 else 'other'
             if last_pattern and last_pattern != current_pattern:
@@ -96,10 +87,8 @@ def predict_next():
             next_outcome = recent_sequence[i+2]
             pattern_transitions[current_pattern][next_outcome] += 1
 
-    # Calculate volatility (pattern changes per hand)
     st.session_state.pattern_volatility = pattern_changes / max(len(recent_sequence) - 2, 1)
 
-    # Compute bigram probabilities for the last two outcomes
     bigram = tuple(recent_sequence[-2:])
     total_transitions = sum(bigram_transitions[bigram].values())
     if total_transitions > 0:
@@ -110,7 +99,6 @@ def predict_next():
         bigram_b_prob = default_b
     bigram_pred = 'P' if bigram_p_prob > bigram_b_prob else 'B'
 
-    # Compute trigram probabilities for the last three outcomes
     trigram = tuple(recent_sequence[-3:])
     total_transitions = sum(trigram_transitions[trigram].values())
     if total_transitions > 0:
@@ -121,7 +109,6 @@ def predict_next():
         trigram_b_prob = default_b
     trigram_pred = 'P' if trigram_p_prob > trigram_b_prob else 'B'
 
-    # Combine probabilities only if predictions agree
     if bigram_pred == trigram_pred:
         pred = bigram_pred
         overall_p = (bigram_p_prob + trigram_p_prob) / 2
@@ -130,7 +117,7 @@ def predict_next():
         if strategy == "T3":
             bet_amount = base_bet * t3_level
             bet_info = f"T3: Bet ${bet_amount:.2f} (Level {t3_level})"
-        else:  # FlatBet
+        else:
             bet_amount = flat_bet_amount
             bet_info = f"FlatBet: ${bet_amount:.2f}"
     else:
@@ -141,7 +128,6 @@ def predict_next():
         bet_amount = 0.0
         bet_info = f"{strategy}: No bet" + (f" (Level {t3_level})" if strategy == "T3" else "")
 
-    # Insights (removed Bigram and Trigram prediction comparisons)
     insights = {
         'Overall': f"P: {overall_p*100:.1f}%, B: {overall_b*100:.1f}%",
         'Volatility': f"{st.session_state.pattern_volatility:.2f}",
@@ -162,9 +148,46 @@ def predict_next():
 
     return pred, conf, insights, bet_amount
 
+# --- UNDO FUNCTION ---
+def undo_last_action():
+    if st.session_state.undo_stack:
+        # Pop the last saved state
+        last_state = st.session_state.undo_stack.pop()
+        # Restore the state
+        st.session_state.sequence = last_state['sequence']
+        st.session_state.pending_prediction = last_state['pending_prediction']
+        st.session_state.advice = last_state['advice']
+        st.session_state.insights = last_state['insights']
+        st.session_state.pattern_volatility = last_state['pattern_volatility']
+        st.session_state.t3_level = last_state['t3_level']
+        st.session_state.bet_history = last_state['bet_history']
+        # Recalculate prediction based on restored sequence
+        pred, conf, insights, bet_amount = predict_next()
+        st.session_state.pending_prediction = pred
+        st.session_state.insights = insights
+        st.session_state.advice = (
+            f"Prediction: {pred} ({conf:.1f}%), {insights['Betting Strategy']}"
+            if pred
+            else f"No prediction: {insights.get('Status', 'Bigram and trigram predictions differ')}, {insights['Betting Strategy']}"
+        )
+        if st.session_state.pattern_volatility > 0.5:
+            st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
+
 # --- PROCESS RESULT ---
 def place_result(result):
-    # Append to sequence (only P or B)
+    # Save current state for undo
+    current_state = {
+        'sequence': st.session_state.sequence.copy(),
+        'pending_prediction': st.session_state.pending_prediction,
+        'advice': st.session_state.advice,
+        'insights': st.session_state.insights.copy(),
+        'pattern_volatility': st.session_state.pattern_volatility,
+        't3_level': st.session_state.t3_level,
+        'bet_history': st.session_state.bet_history.copy(),
+    }
+    st.session_state.undo_stack.append(current_state)
+
+    # Append to sequence
     st.session_state.sequence.append(result)
     if len(st.session_state.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
@@ -183,22 +206,20 @@ def place_result(result):
         st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%), {insights['Betting Strategy']}"
         if st.session_state.pattern_volatility > 0.5:
             st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
-        # Update bet history based on strategy
         if st.session_state.betting_strategy == "T3":
             st.session_state.bet_history.append((pred, result, bet_amount))
-            # Evaluate T3 level change if 3 bets are completed
             if len(st.session_state.bet_history) >= 3:
                 wins = sum(1 for p, a, _ in st.session_state.bet_history[-3:] if p == a)
                 losses = 3 - wins
                 if wins == 3:
-                    st.session_state.t3_level = max(1, st.session_state.t3_level - 2)  # 3 Wins: Go back 2 levels
+                    st.session_state.t3_level = max(1, st.session_state.t3_level - 2)
                 elif wins == 2 and losses == 1:
-                    st.session_state.t3_level = max(1, st.session_state.t3_level - 1)  # 2 Wins, 1 Loss: Go back 1 level
+                    st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
                 elif wins == 1 and losses == 2:
-                    st.session_state.t3_level += 1  # 2 Losses, 1 Win: Go to next level
+                    st.session_state.t3_level += 1
                 elif losses == 3:
-                    st.session_state.t3_level += 2  # 3 Losses: Go forward 2 levels
-                st.session_state.bet_history = []  # Reset for next level
+                    st.session_state.t3_level += 2
+                st.session_state.bet_history = []
     st.session_state.insights = insights
 
 # --- UI ---
@@ -217,6 +238,7 @@ if st.session_state.betting_strategy == "FlatBet":
         "Flat Bet Amount ($)", min_value=0.01, value=st.session_state.flat_bet_amount, step=1.0, format="%.2f"
     )
 
+# Button Styling
 st.markdown("""
 <style>
 div.stButton > button {
@@ -257,6 +279,14 @@ div.stButton > button[kind="banker_btn"] {
 div.stButton > button[kind="banker_btn"]:hover {
     background: linear-gradient(to bottom, #ff6666, #dc3545);
 }
+div.stButton > button[kind="undo_btn"] {
+    background: linear-gradient(to bottom, #6c757d, #495057);
+    border-color: #495057;
+    color: white;
+}
+div.stButton > button[kind="undo_btn"]:hover {
+    background: linear-gradient(to bottom, #adb5bd, #6c757d);
+}
 @media (max-width: 600px) {
     div.stButton > button {
         width: 80%;
@@ -268,17 +298,22 @@ div.stButton > button[kind="banker_btn"]:hover {
 </style>
 """, unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
+# Input Buttons with Undo
+col1, col2, col3 = st.columns([1, 1, 1])  # Adjusted for three buttons
 with col1:
     if st.button("Player", key="player_btn"):
         place_result("P")
 with col2:
     if st.button("Banker", key="banker_btn"):
         place_result("B")
+with col3:
+    undo_disabled = len(st.session_state.undo_stack) == 0
+    if st.button("Undo", key="undo_btn", disabled=undo_disabled):
+        undo_last_action()
 
 # Bead Plate
 st.subheader("Current Sequence (Bead Plate)")
-sequence = st.session_state.sequence[-90:]  # Limit to 90 for display
+sequence = st.session_state.sequence[-90:]
 grid = [[] for _ in range(15)]
 for i, result in enumerate(sequence):
     col_index = i // 6
