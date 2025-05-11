@@ -141,10 +141,8 @@ def predict_next():
         bet_amount = 0.0
         bet_info = f"{strategy}: No bet" + (f" (Level {t3_level})" if strategy == "T3" else "")
 
-    # Insights
+    # Insights (removed Bigram and Trigram prediction comparisons)
     insights = {
-        'Bigram': f"Prediction: {bigram_pred}, P: {bigram_p_prob*100:.1f}%, B: {bigram_b_prob*100:.1f}%",
-        'Trigram': f"Prediction: {trigram_pred}, P: {trigram_p_prob*100:.1f}%, B: {trigram_b_prob*100:.1f}%",
         'Overall': f"P: {overall_p*100:.1f}%, B: {overall_b*100:.1f}%",
         'Volatility': f"{st.session_state.pattern_volatility:.2f}",
         'Betting Strategy': bet_info,
