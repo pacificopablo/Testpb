@@ -47,6 +47,7 @@ st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
 st.title("MANG BACCARAT GROUP")
 
 # --- SESSION STATE INIT ---
+# Modified: Added t3_results, t3_level_changes
 if 'bankroll' not in st.session_state:
     st.session_state.bankroll = 0.0
     st.session_state.base_bet = 0.0
@@ -73,11 +74,14 @@ if 'bankroll' not in st.session_state:
     st.session_state.consecutive_losses = 0
     st.session_state.loss_log = []
     st.session_state.last_was_tie = False
+    st.session_state.recovery_mode = False
     st.session_state.insights = {}
+    st.session_state.recovery_threshold = 15.0
+    st.session_state.recovery_bet_scale = 0.6
     st.session_state.pattern_volatility = 0.0
     st.session_state.pattern_success = defaultdict(int)
     st.session_state.pattern_attempts = defaultdict(int)
-    st.session_state.last_bet_amount = 0.0
+    st.session_state.last_bet_amount = 0.0  # Added for 50% increase rule
 
 # Validate strategy
 if 'strategy' in st.session_state and st.session_state.strategy not in ['T3', 'Flatbet', 'Parlay16']:
@@ -108,10 +112,8 @@ def predict_next():
     sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]
     if len(sequence) < 3:
         return 'B', 45.86, {}
-
     window_size = 50
     recent_sequence = sequence[-window_size:]
-
     bigram_transitions = defaultdict(lambda: defaultdict(int))
     trigram_transitions = defaultdict(lambda: defaultdict(int))
     pattern_transitions = defaultdict(lambda: defaultdict(int))
@@ -122,18 +124,15 @@ def predict_next():
     insights = {}
     pattern_changes = 0
     last_pattern = None
-
     for i in range(len(recent_sequence) - 1):
         if i < len(recent_sequence) - 2:
             bigram = tuple(recent_sequence[i:i+2])
             next_outcome = recent_sequence[i+2]
             bigram_transitions[bigram][next_outcome] += 1
-
         if i < len(recent_sequence) - 3:
             trigram = tuple(recent_sequence[i:i+3])
             next_outcome = recent_sequence[i+3]
             trigram_transitions[trigram][next_outcome] += 1
-
         if i > 0:
             if recent_sequence[i] == recent_sequence[i-1]:
                 if current_streak == recent_sequence[i]:
@@ -148,7 +147,6 @@ def predict_next():
                 streak_count = 0
                 if i > 1 and recent_sequence[i] != recent_sequence[i-2]:
                     chop_count += 1
-
         if i < len(recent_sequence) - 2:
             current_pattern = 'streak' if streak_count >= 2 else 'chop' if chop_count >= 2 else 'double' if double_count >= 1 else 'other'
             if last_pattern and last_pattern != current_pattern:
@@ -156,12 +154,9 @@ def predict_next():
             last_pattern = current_pattern
             next_outcome = recent_sequence[i+2]
             pattern_transitions[current_pattern][next_outcome] += 1
-
     st.session_state.pattern_volatility = pattern_changes / max(len(recent_sequence) - 2, 1)
-
     prior_p = 44.62 / 100
     prior_b = 45.86 / 100
-
     total_bets = max(st.session_state.pattern_attempts['bigram'], 1)
     weights = {
         'bigram': 0.4 * (st.session_state.pattern_success['bigram'] / total_bets if st.session_state.pattern_attempts['bigram'] > 0 else 0.5),
@@ -175,11 +170,9 @@ def predict_next():
     total_w = sum(weights.values())
     for k in weights:
         weights[k] = max(weights[k] / total_w, 0.05)
-
     prob_p = 0
     prob_b = 0
     total_weight = 0
-
     if len(recent_sequence) >= 2:
         bigram = tuple(recent_sequence[-2:])
         total_transitions = sum(bigram_transitions[bigram].values())
@@ -190,7 +183,6 @@ def predict_next():
             prob_b += weights['bigram'] * (prior_b + b_prob) / (1 + total_transitions)
             total_weight += weights['bigram']
             insights['Bigram'] = f"{weights['bigram']*100:.0f}% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
-
     if len(recent_sequence) >= 3:
         trigram = tuple(recent_sequence[-3:])
         total_transitions = sum(trigram_transitions[trigram].values())
@@ -201,7 +193,6 @@ def predict_next():
             prob_b += weights['trigram'] * (prior_b + b_prob) / (1 + total_transitions)
             total_weight += weights['trigram']
             insights['Trigram'] = f"{weights['trigram']*100:.0f}% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
-
     if streak_count >= 2:
         streak_prob = min(0.7, 0.5 + streak_count * 0.05) * (0.8 if streak_count > 4 else 1.0)
         if current_streak == 'P':
@@ -212,7 +203,6 @@ def predict_next():
             prob_p += weights['streak'] * (1 - streak_prob)
         total_weight += weights['streak']
         insights['Streak'] = f"{weights['streak']*100:.0f}% ({streak_count} {current_streak})"
-
     if chop_count >= 2:
         next_pred = 'B' if recent_sequence[-1] == 'P' else 'P'
         if next_pred == 'P':
@@ -223,7 +213,6 @@ def predict_next():
             prob_p += weights['chop'] * 0.4
         total_weight += weights['chop']
         insights['Chop'] = f"{weights['chop']*100:.0f}% ({chop_count} alternations)"
-
     if double_count >= 1 and len(recent_sequence) >= 2 and recent_sequence[-1] == recent_sequence[-2]:
         double_prob = 0.6
         if recent_sequence[-1] == 'P':
@@ -234,18 +223,15 @@ def predict_next():
             prob_p += weights['double'] * (1 - double_prob)
         total_weight += weights['double']
         insights['Double'] = f"{weights['double']*100:.0f}% ({recent_sequence[-1]}{recent_sequence[-1]})"
-
     if total_weight > 0:
         prob_p = (prob_p / total_weight) * 100
         prob_b = (prob_b / total_weight) * 100
     else:
         prob_p = 44.62
         prob_b = 45.86
-
     if abs(prob_p - prob_b) < 2:
         prob_p += 0.5
         prob_b -= 0.5
-
     current_pattern = 'streak' if streak_count >= 2 else 'chop' if chop_count >= 2 else 'double' if double_count >= 1 else 'other'
     total_transitions = sum(pattern_transitions[current_pattern].values())
     if total_transitions > 0:
@@ -254,17 +240,14 @@ def predict_next():
         prob_p = 0.9 * prob_p + 0.1 * p_prob * 100
         prob_b = 0.9 * prob_b + 0.1 * b_prob * 100
         insights['Pattern Transition'] = f"10% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
-
     recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
-    base_threshold = 45.0
-    threshold = base_threshold + (st.session_state.consecutive_losses * 0.5) - (recent_accuracy * 1.0)
-    threshold = min(max(threshold, 42.0), 55.0)
+    base_threshold = 50.0 if st.session_state.recovery_mode else 52.0
+    threshold = base_threshold + (st.session_state.consecutive_losses * 1.0) - (recent_accuracy * 1.5)
+    threshold = min(max(threshold, 48.0 if st.session_state.recovery_mode else 50.0), 60.0)
     insights['Threshold'] = f"{threshold:.1f}%"
-
-    if st.session_state.pattern_volatility > 0.75:
+    if st.session_state.pattern_volatility > 0.5:
         threshold += 2.0
         insights['Volatility'] = f"High (Adjustment: +2% threshold)"
-
     if prob_p > prob_b and prob_p >= threshold:
         return 'P', prob_p, insights
     elif prob_b >= threshold:
@@ -281,6 +264,7 @@ def check_target_hit():
         return unit_profit >= st.session_state.target_value
 
 def reset_session_auto():
+    # Modified: Include t3_results, t3_level_changes
     st.session_state.bankroll = st.session_state.initial_bankroll
     st.session_state.sequence = []
     st.session_state.pending_bet = None
@@ -299,6 +283,7 @@ def reset_session_auto():
     st.session_state.consecutive_losses = 0
     st.session_state.loss_log = []
     st.session_state.last_was_tie = False
+    st.session_state.recovery_mode = False
     st.session_state.insights = {}
     st.session_state.pattern_volatility = 0.0
     st.session_state.pattern_success = defaultdict(int)
@@ -306,6 +291,7 @@ def reset_session_auto():
     st.session_state.last_bet_amount = 0.0
 
 def is_bet_safe(bet_amount):
+    # Modified: Relaxed reserve to $1 or 1%
     reserve = min(1.0, st.session_state.initial_bankroll * 0.01)
     return bet_amount <= st.session_state.bankroll - reserve
 
@@ -319,6 +305,11 @@ def place_result(result, manual_selection=None):
     selection = None
     win = False
 
+    # Check recovery mode (for prediction threshold only)
+    loss_percentage = (st.session_state.initial_bankroll - st.session_state.bankroll) / st.session_state.initial_bankroll if st.session_state.initial_bankroll > 0 else 0
+    st.session_state.recovery_mode = loss_percentage >= st.session_state.recovery_threshold / 100
+
+    # Store state
     previous_state = {
         "bankroll": st.session_state.bankroll,
         "t3_level": st.session_state.t3_level,
@@ -333,6 +324,7 @@ def place_result(result, manual_selection=None):
         "consecutive_losses": st.session_state.consecutive_losses,
         "t3_level_changes": st.session_state.t3_level_changes,
         "parlay_step_changes": st.session_state.parlay_step_changes,
+        "recovery_mode": st.session_state.recovery_mode,
         "pattern_volatility": st.session_state.pattern_volatility,
         "pattern_success": st.session_state.pattern_success.copy(),
         "pattern_attempts": st.session_state.pattern_attempts.copy(),
@@ -349,6 +341,7 @@ def place_result(result, manual_selection=None):
             else:
                 st.session_state.bankroll += bet_amount
             if st.session_state.strategy == 'T3':
+                # Modified: Restore original T3 outcome tracking
                 st.session_state.t3_results.append('W')
             elif st.session_state.strategy == 'Parlay16':
                 st.session_state.parlay_wins += 1
@@ -371,6 +364,7 @@ def place_result(result, manual_selection=None):
         else:
             st.session_state.bankroll -= bet_amount
             if st.session_state.strategy == 'T3':
+                # Modified: Restore original T3 outcome tracking
                 st.session_state.t3_results.append('L')
             elif st.session_state.strategy == 'Parlay16':
                 st.session_state.parlay_wins = 0
@@ -407,6 +401,7 @@ def place_result(result, manual_selection=None):
         "Amount": bet_amount,
         "Win": win,
         "T3_Level": st.session_state.t3_level,
+        "T3_Results": st.session_state.t3_results.copy(),
         "Parlay_Step": st.session_state.parlay_step,
         "Parlay_Wins": st.session_state.parlay_wins,
         "Parlay_Using_Base": st.session_state.parlay_using_base,
@@ -426,23 +421,24 @@ def place_result(result, manual_selection=None):
         conf = max(conf, 50.0)
         st.session_state.advice = f"Manual Bet: {pred} (User override)"
 
-    if st.session_state.consecutive_losses >= 4 and conf < 55.0:
+    if st.session_state.consecutive_losses >= 3 and conf < 60.0:
         st.session_state.pending_bet = None
-        st.session_state.advice = f"No bet: Paused after {st.session_state.consecutive_losses} losses (Confidence: {conf:.1f}% < 55%)"
+        st.session_state.advice = f"No bet: Paused after {st.session_state.consecutive_losses} losses (Confidence: {conf:.1f}% < 60%)"
         st.session_state.insights = insights
         return
 
-    if st.session_state.pattern_volatility > 0.75 and conf < 55.0:
+    if st.session_state.pattern_volatility > 0.5:
         st.session_state.advice = f"No bet: High pattern volatility ({st.session_state.pattern_volatility:.2f})"
         st.session_state.pending_bet = None
         st.session_state.insights = insights
         return
 
-    if pred is None or conf < 45.0:
+    if pred is None or conf < 48.0:
         st.session_state.pending_bet = None
         st.session_state.advice = f"No bet (Confidence: {conf:.1f}% too low)"
         st.session_state.insights = insights
     else:
+        # Modified: Apply 50% increase and relaxed bankroll rules
         min_bet = st.session_state.last_bet_amount * 1.5 if st.session_state.last_bet_amount > 0 else st.session_state.base_bet
         max_affordable = max(st.session_state.bankroll - min(1.0, st.session_state.initial_bankroll * 0.01), 0.0)
         if st.session_state.strategy == 'Flatbet':
@@ -452,6 +448,7 @@ def place_result(result, manual_selection=None):
                 st.session_state.base_bet = bet_amount
                 st.session_state.advice += f" (Adjusted to ${bet_amount:.0f} due to bankroll)"
         elif st.session_state.strategy == 'T3':
+            # Modified: Original T3 bet calculation with new money management
             bet_amount = st.session_state.base_bet * st.session_state.t3_level
             if bet_amount < min_bet:
                 st.session_state.t3_level = max(1, int(min_bet / st.session_state.base_bet + 0.99))
@@ -493,6 +490,7 @@ def place_result(result, manual_selection=None):
             st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%){st.session_state.advice if '(Adjusted' in st.session_state.advice else ''}"
             st.session_state.insights = insights
 
+    # Modified: Restore original T3 level adjustment
     if st.session_state.strategy == 'T3' and len(st.session_state.t3_results) == 3:
         wins = st.session_state.t3_results.count('W')
         losses = st.session_state.t3_results.count('L')
@@ -522,6 +520,8 @@ with st.form("setup_form"):
     )
     target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
     target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
+    recovery_threshold = st.slider("Recovery Mode Threshold (% Loss)", 10.0, 30.0, st.session_state.recovery_threshold, step=5.0)
+    recovery_bet_scale = st.slider("Recovery Mode Bet Scaling", 0.5, 1.0, st.session_state.recovery_bet_scale, step=0.1)
     start_clicked = st.form_submit_button("Start Session")
 
 if start_clicked:
@@ -557,7 +557,10 @@ if start_clicked:
         st.session_state.consecutive_losses = 0
         st.session_state.loss_log = []
         st.session_state.last_was_tie = False
+        st.session_state.recovery_mode = False
         st.session_state.insights = {}
+        st.session_state.recovery_threshold = recovery_threshold
+        st.session_state.recovery_bet_scale = recovery_bet_scale
         st.session_state.pattern_volatility = 0.0
         st.session_state.pattern_success = defaultdict(int)
         st.session_state.pattern_attempts = defaultdict(int)
@@ -718,7 +721,7 @@ st.markdown(bead_plate_html, unsafe_allow_html=True)
 if st.session_state.pending_bet:
     amount, side = st.session_state.pending_bet
     color = 'blue' if side == 'P' else 'red'
-    conf = st.session_state.advice.split('(')[-2].split('%')[0] if '%' in st.session_state.advice else '0'
+    conf = st.session_state.advice.split('(')[-1].split('%')[0] if '(' in st.session_state.advice else '0'
     st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.0f} | Win Prob: {conf}%</h4>", unsafe_allow_html=True)
 else:
     if not st.session_state.target_hit:
@@ -729,8 +732,10 @@ st.subheader("Prediction Insights")
 if st.session_state.insights:
     for factor, contribution in st.session_state.insights.items():
         st.markdown(f"**{factor}**: {contribution}")
-if st.session_state.pattern_volatility > 0.75:
-    st.warning(f"High Pattern Volatility: {st.session_state.pattern_volatility:.2f} (Betting paused unless confidence > 55%)")
+if st.session_state.recovery_mode:
+    st.warning("Recovery Mode: Stricter prediction thresholds due to significant losses.")
+if st.session_state.pattern_volatility > 0.5:
+    st.warning(f"High Pattern Volatility: {st.session_state.pattern_volatility:.2f} (Betting paused)")
 
 # --- UNIT PROFIT ---
 if st.session_state.initial_base_bet > 0 and st.session_state.initial_bankroll > 0:
@@ -746,6 +751,7 @@ st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
 st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
 strategy_status = f"**Betting Strategy**: {st.session_state.strategy}"
 if st.session_state.strategy == 'T3':
+    # Modified: Restore t3_level_changes
     strategy_status += f" | T3 Level: {st.session_state.t3_level} | Level Changes: {st.session_state.t3_level_changes}"
 elif st.session_state.strategy == 'Parlay16':
     strategy_status += f" | Parlay Step: {st.session_state.parlay_step}/16 | Step Changes: {st.session_state.parlay_step_changes} | Consecutive Wins: {st.session_state.parlay_wins}"
@@ -803,6 +809,7 @@ if st.session_state.history:
             "Amount": f"${h['Amount']:.0f}" if h["Bet_Placed"] else "-",
             "Outcome": "Win" if h["Win"] else "Loss" if h["Bet_Placed"] else "-",
             "T3_Level": h["T3_Level"] if st.session_state.strategy == 'T3' else "-",
+            "T3_Results": ", ".join(h["T3_Results"]) if st.session_state.strategy == 'T3' and h["T3_Results"] else "-",
             "Parlay_Step": h["Parlay_Step"] if st.session_state.strategy == 'Parlay16' else "-"
         }
         for h in st.session_state.history[-n:]
@@ -811,7 +818,8 @@ if st.session_state.history:
 # --- EXPORT SESSION ---
 st.subheader("Export Session")
 if st.button("Download Session Data"):
-    csv_data = "Bet,Result,Amount,Win,T3_Level,Parlay_Step\n"
+    csv_data = "Bet,Result,Amount,Win,T3_Level,T3_Results,Parlay_Step\n"
     for h in st.session_state.history:
-        csv_data += f"{h['Bet'] or '-'},{h['Result']},${h['Amount']:.0f},{h['Win']},{h['T3_Level']},{h['Parlay_Step']}\n"
+        t3_results_str = ",".join(h["T3_Results"]) if h["T3_Results"] else ""
+        csv_data += f"{h['Bet'] or '-'},{h['Result']},${h['Amount']:.0f},{h['Win']},{h['T3_Level']},\"{t3_results_str}\",{h['Parlay_Step']}\n"
     st.download_button("Download CSV", csv_data, "session_data.csv", "text/csv")
