@@ -340,12 +340,6 @@ def update_t3_level():
 
 def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optional[str]]:
     """Calculate the next bet amount based on strategy and conditions."""
-    bet_scaling = 1.0
-    if st.session_state.consecutive_losses >= 2:
-        bet_scaling *= 0.8
-    if conf < 55.0:
-        bet_scaling *= 0.9
-
     if st.session_state.consecutive_losses >= 3 and conf < 45.0:
         return None, f"No bet: Paused after {st.session_state.consecutive_losses} losses (Confidence: {conf:.1f}% < 45%)"
     if st.session_state.pattern_volatility > 0.5:
@@ -354,19 +348,19 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         return None, f"No bet (Confidence: {conf:.1f}% too low)"
 
     if st.session_state.strategy == 'Flatbet':
-        bet_amount = st.session_state.base_bet * bet_scaling
+        bet_amount = st.session_state.base_bet
     elif st.session_state.strategy == 'T3':
-        bet_amount = st.session_state.base_bet * st.session_state.t3_level * bet_scaling
+        bet_amount = st.session_state.base_bet * st.session_state.t3_level
     else:  # Parlay16
         key = 'base' if st.session_state.parlay_using_base else 'parlay'
-        bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key] * bet_scaling
+        bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
         if bet_amount > st.session_state.bankroll:
             old_step = st.session_state.parlay_step
             st.session_state.parlay_step = 1
             st.session_state.parlay_using_base = True
             if old_step != st.session_state.parlay_step:
                 st.session_state.parlay_step_changes += 1
-            bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base'] * bet_scaling
+            bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base']
 
     safe_bankroll = st.session_state.initial_bankroll * 0.2
     if (bet_amount > st.session_state.bankroll or
