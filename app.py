@@ -110,12 +110,14 @@ if 'bankroll' not in st.session_state:
     st.session_state.session_active = True
     st.session_state.win_limit_percent = 0.25
     st.session_state.loss_limit_percent = 0.5
-    # New variables for bet selection optimization
     st.session_state.optimized_weights = {'bigram': 0.4, 'trigram': 0.3, 'streak': 0.2, 'chop': 0.05, 'double': 0.05}
     st.session_state.optimization_status = []
     st.session_state.dynamic_threshold = 53.0
     st.session_state.cool_off_counter = 0
-    st.session_state.last_bet_outcomes = {'P': [], 'B': []}  # Track recent bet outcomes per side
+    st.session_state.last_bet_outcomes = {'P': [], 'B': []}
+    st.session_state.pattern_accuracy = defaultdict(lambda: {'success': 0, 'attempts': 0})  # Track accuracy per pattern
+    st.session_state.pattern_transitions = defaultdict(lambda: defaultdict(int))  # Track pattern transitions
+    st.session_state.last_pattern = None  # Track last pattern for transition
 
 # Validate strategy
 if 'strategy' in st.session_state and st.session_state.strategy not in ['T3', 'Flatbet', 'Parlay16']:
@@ -142,25 +144,29 @@ PARLAY_TABLE = {
 }
 
 # --- PREDICTION FUNCTION ---
-def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, recovery_mode, consecutive_losses):
-    sequence = [x for x in sequence if x in ['P', 'B']]
-    if len(sequence) < 3:
+def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, recovery_mode, consecutive_losses, pattern_accuracy, pattern_transitions, last_pattern):
+    # Include ties in the sequence for analysis
+    cleaned_sequence = [x for x in sequence if x in ['P', 'B']]
+    if len(cleaned_sequence) < 3:
         return 'B', 45.86, {}
 
     window_size = 50
-    recent_sequence = sequence[-window_size:]
+    recent_sequence = cleaned_sequence[-window_size:]
+    full_sequence = sequence[-window_size:]  # Include ties for tie influence
 
     bigram_transitions = defaultdict(lambda: defaultdict(int))
     trigram_transitions = defaultdict(lambda: defaultdict(int))
-    pattern_transitions = defaultdict(lambda: defaultdict(int))
+    pattern_transitions = pattern_transitions
     streak_count = 0
     current_streak = None
     chop_count = 0
     double_count = 0
     insights = {}
     pattern_changes = 0
-    last_pattern = None
+    last_pattern = last_pattern
+    current_pattern = None
 
+    # Pattern detection
     for i in range(len(recent_sequence) - 1):
         if i < len(recent_sequence) - 2:
             bigram = tuple(recent_sequence[i:i+2])
@@ -191,9 +197,9 @@ def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, rec
             current_pattern = 'streak' if streak_count >= 2 else 'chop' if chop_count >= 2 else 'double' if double_count >= 1 else 'other'
             if last_pattern and last_pattern != current_pattern:
                 pattern_changes += 1
+                # Update transition matrix
+                pattern_transitions[last_pattern][current_pattern] += 1
             last_pattern = current_pattern
-            next_outcome = recent_sequence[i+2]
-            pattern_transitions[current_pattern][next_outcome] += 1
 
     pattern_volatility = pattern_changes / max(len(recent_sequence) - 2, 1)
 
@@ -208,6 +214,7 @@ def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, rec
     prob_b = 0
     total_weight = 0
 
+    # Bigram pattern
     if len(recent_sequence) >= 2:
         bigram = tuple(recent_sequence[-2:])
         total_transitions = sum(bigram_transitions[bigram].values())
@@ -219,6 +226,7 @@ def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, rec
             total_weight += weights['bigram']
             insights['Bigram'] = f"{weights['bigram']*100:.0f}% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
 
+    # Trigram pattern
     if len(recent_sequence) >= 3:
         trigram = tuple(recent_sequence[-3:])
         total_transitions = sum(trigram_transitions[trigram].values())
@@ -230,6 +238,7 @@ def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, rec
             total_weight += weights['trigram']
             insights['Trigram'] = f"{weights['trigram']*100:.0f}% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
 
+    # Streak pattern
     if streak_count >= 2:
         streak_prob = min(0.7, 0.5 + streak_count * 0.05) * (0.7 if streak_count > 4 else 1.0)
         if current_streak == 'P':
@@ -241,6 +250,7 @@ def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, rec
         total_weight += weights['streak']
         insights['Streak'] = f"{weights['streak']*100:.0f}% ({streak_count} {current_streak})"
 
+    # Chop pattern
     if chop_count >= 2:
         next_pred = 'B' if recent_sequence[-1] == 'P' else 'P'
         if next_pred == 'P':
@@ -252,6 +262,7 @@ def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, rec
         total_weight += weights['chop']
         insights['Chop'] = f"{weights['chop']*100:.0f}% ({chop_count} alternations)"
 
+    # Double pattern
     if double_count >= 1 and len(recent_sequence) >= 2 and recent_sequence[-1] == recent_sequence[-2]:
         double_prob = 0.6
         if recent_sequence[-1] == 'P':
@@ -263,6 +274,7 @@ def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, rec
         total_weight += weights['double']
         insights['Double'] = f"{weights['double']*100:.0f}% ({recent_sequence[-1]}{recent_sequence[-1]})"
 
+    # Normalize probabilities
     if total_weight > 0:
         prob_p = (prob_p / total_weight) * 100
         prob_b = (prob_b / total_weight) * 100
@@ -276,23 +288,72 @@ def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, rec
 
     # Contextual matchup analysis (hotness boost)
     recent_wins = defaultdict(int)
-    for result in sequence[-10:]:
+    for result in cleaned_sequence[-10:]:
         if result in ['P', 'B']:
             recent_wins[result] += 1
-    if len(sequence[-10:]) >= 5:
+    if len(cleaned_sequence[-10:]) >= 5:
         if recent_wins['P'] / 10 >= 0.7 and pattern_volatility < 0.5:
             prob_p = min(75.0, prob_p + 5.0)
+            insights['Hotness Boost'] = "Player (+5%)"
         elif recent_wins['B'] / 10 >= 0.7 and pattern_volatility < 0.5:
             prob_b = min(75.0, prob_b + 5.0)
+            insights['Hotness Boost'] = "Banker (+5%)"
 
-    current_pattern = 'streak' if streak_count >= 2 else 'chop' if chop_count >= 2 else 'double' if double_count >= 1 else 'other'
-    total_transitions = sum(pattern_transitions[current_pattern].values())
-    if total_transitions > 0:
-        p_prob = pattern_transitions[current_pattern]['P'] / total_transitions
-        b_prob = pattern_transitions[current_pattern]['B'] / total_transitions
-        prob_p = 0.9 * prob_p + 0.1 * p_prob * 100
-        prob_b = 0.9 * prob_b + 0.1 * b_prob * 100
-        insights['Pattern Transition'] = f"10% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
+    # Trend momentum adjustment
+    if streak_count >= 3:
+        momentum_boost = min(15.0, (streak_count - 2) * 3.0)  # 3% per streak length beyond 2, capped at 15%
+        if current_streak == 'P':
+            prob_p = min(80.0, prob_p + momentum_boost)
+            prob_b = max(20.0, prob_b - momentum_boost / 2)
+        else:
+            prob_b = min(80.0, prob_b + momentum_boost)
+            prob_p = max(20.0, prob_p - momentum_boost / 2)
+        insights['Momentum Boost'] = f"{current_streak} (+{momentum_boost:.1f}%)"
+
+    # Pattern transition probability
+    if last_pattern and current_pattern:
+        total_trans = sum(pattern_transitions[last_pattern].values())
+        if total_trans > 0:
+            transition_probs = {next_pattern: pattern_transitions[last_pattern][next_pattern] / total_trans for next_pattern in pattern_transitions[last_pattern]}
+            if current_pattern == 'streak' and 'chop' in transition_probs and transition_probs['chop'] >= 0.7:
+                next_pred = 'B' if recent_sequence[-1] == 'P' else 'P'
+                if next_pred == 'P':
+                    prob_p += 10.0
+                    prob_b -= 5.0
+                else:
+                    prob_b += 10.0
+                    prob_p -= 5.0
+                insights['Transition Adjustment'] = f"Streak to Chop (+10% for {next_pred})"
+            elif current_pattern == 'chop' and 'streak' in transition_probs and transition_probs['streak'] >= 0.7:
+                if recent_sequence[-1] == 'P':
+                    prob_p += 10.0
+                    prob_b -= 5.0
+                else:
+                    prob_b += 10.0
+                    prob_p -= 5.0
+                insights['Transition Adjustment'] = f"Chop to Streak (+10% for {recent_sequence[-1]})"
+
+    # Tie influence factor
+    if len(full_sequence) >= 2 and full_sequence[-1] == 'T':
+        if streak_count >= 3:
+            # Tie after a streak may signal a break
+            if current_streak == 'P':
+                prob_p = max(20.0, prob_p - 5.0)
+                prob_b += 2.5
+            else:
+                prob_b = max(20.0, prob_b - 5.0)
+                prob_p += 2.5
+            insights['Tie Influence'] = "Streak Break (-5%)"
+        elif chop_count >= 2:
+            # Tie after a chop may reinforce alternation
+            next_pred = 'B' if recent_sequence[-1] == 'P' else 'P'
+            if next_pred == 'P':
+                prob_p += 3.0
+                prob_b -= 1.5
+            else:
+                prob_b += 3.0
+                prob_p -= 1.5
+            insights['Tie Influence'] = f"Chop Continuation (+3% for {next_pred})"
 
     # Pattern confidence score with conflict penalty
     pattern_conflicts = abs((prob_p - prob_b) / max(prob_p, prob_b)) if max(prob_p, prob_b) > 0 else 0
@@ -302,16 +363,24 @@ def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, rec
         prob_b = max(50.0, prob_b - confidence_penalty)
         insights['Conflict Penalty'] = f"-{confidence_penalty:.1f}%"
 
+    # Dynamic confidence threshold based on pattern strength
     recent_accuracy = (prediction_accuracy['P'] + prediction_accuracy['B']) / max(prediction_accuracy['total'], 1)
     threshold = st.session_state.dynamic_threshold + (consecutive_losses * 1.0) - (recent_accuracy * 1.5)
     threshold = min(max(threshold, 50.0 if recovery_mode else 53.0), 65.0)
+    dominant_pattern = max(weights, key=lambda k: weights[k] if k in insights else 0)
+    if pattern_accuracy[dominant_pattern]['attempts'] > 10:
+        pattern_acc = pattern_accuracy[dominant_pattern]['success'] / pattern_accuracy[dominant_pattern]['attempts']
+        if pattern_acc >= 0.75 and pattern_volatility < 0.5:
+            threshold = max(50.0, threshold - 2.0)
+            insights['Threshold Adjustment'] = f"Lowered to {threshold:.1f}% (Strong {dominant_pattern})"
 
+    # Final prediction
     if prob_p > prob_b and prob_p >= threshold:
-        return 'P', prob_p, insights
+        return 'P', prob_p, insights, last_pattern
     elif prob_b >= threshold:
-        return 'B', prob_b, insights
+        return 'B', prob_b, insights, last_pattern
     else:
-        return None, max(prob_p, prob_b), insights
+        return None, max(prob_p, prob_b), insights, last_pattern
 
 # --- TARGET CHECK AND RESET FUNCTIONS ---
 def check_target_hit():
@@ -353,6 +422,9 @@ def reset_session_auto():
     st.session_state.dynamic_threshold = 53.0
     st.session_state.cool_off_counter = 0
     st.session_state.last_bet_outcomes = {'P': [], 'B': []}
+    st.session_state.pattern_accuracy = defaultdict(lambda: {'success': 0, 'attempts': 0})
+    st.session_state.pattern_transitions = defaultdict(lambda: defaultdict(int))
+    st.session_state.last_pattern = None
 
 # --- PLACE RESULT FUNCTION ---
 def place_result(result, manual_selection=None):
@@ -390,7 +462,10 @@ def place_result(result, manual_selection=None):
         "pattern_attempts": st.session_state.pattern_attempts.copy(),
         "session_profit": st.session_state.session_profit,
         "cool_off_counter": st.session_state.cool_off_counter,
-        "last_bet_outcomes": st.session_state.last_bet_outcomes.copy()
+        "last_bet_outcomes": st.session_state.last_bet_outcomes.copy(),
+        "pattern_accuracy": st.session_state.pattern_accuracy.copy(),
+        "pattern_transitions": st.session_state.pattern_transitions.copy(),
+        "last_pattern": st.session_state.last_pattern
     }
 
     if st.session_state.pending_bet and result != 'T':
@@ -420,11 +495,13 @@ def place_result(result, manual_selection=None):
             st.session_state.prediction_accuracy[selection] += 1
             st.session_state.consecutive_losses = 0
             st.session_state.cool_off_counter = 0
-            st.session_state.last_bet_outcomes[selection] = [1] + st.session_state.last_bet_outcomes[selection][:2]  # Track last 3 wins
+            st.session_state.last_bet_outcomes[selection] = [1] + st.session_state.last_bet_outcomes[selection][:2]
             for pattern in ['bigram', 'trigram', 'streak', 'chop', 'double']:
                 if pattern in st.session_state.insights:
                     st.session_state.pattern_success[pattern] += 1
                     st.session_state.pattern_attempts[pattern] += 1
+                    st.session_state.pattern_accuracy[pattern]['success'] += 1
+                    st.session_state.pattern_accuracy[pattern]['attempts'] += 1
         else:
             st.session_state.bankroll -= bet_amount
             if st.session_state.strategy == 'T3':
@@ -440,7 +517,7 @@ def place_result(result, manual_selection=None):
             st.session_state.consecutive_losses += 1
             if st.session_state.consecutive_losses >= 2:
                 st.session_state.cool_off_counter = 2
-            st.session_state.last_bet_outcomes[selection] = [0] + st.session_state.last_bet_outcomes[selection][:2]  # Track last 3 losses
+            st.session_state.last_bet_outcomes[selection] = [0] + st.session_state.last_bet_outcomes[selection][:2]
             st.session_state.loss_log.append({
                 'sequence': st.session_state.sequence[-10:],
                 'prediction': selection,
@@ -453,6 +530,7 @@ def place_result(result, manual_selection=None):
             for pattern in ['bigram', 'trigram', 'streak', 'chop', 'double']:
                 if pattern in st.session_state.insights:
                     st.session_state.pattern_attempts[pattern] += 1
+                    st.session_state.pattern_accuracy[pattern]['attempts'] += 1
         st.session_state.prediction_accuracy['total'] += 1
         st.session_state.pending_bet = None
 
@@ -524,14 +602,16 @@ def place_result(result, manual_selection=None):
     # Compute prob_variance for volatility check
     prob_history = []
     temp_sequence = st.session_state.sequence.copy()
+    temp_last_pattern = st.session_state.last_pattern
     for _ in range(min(20, len(temp_sequence))):
-        pred, conf, _ = predict_next(temp_sequence, st.session_state.pattern_volatility, st.session_state.optimized_weights,
-                                     st.session_state.prediction_accuracy, st.session_state.recovery_mode,
-                                     st.session_state.consecutive_losses)
+        pred, conf, _, temp_last_pattern = predict_next(temp_sequence, st.session_state.pattern_volatility, st.session_state.optimized_weights,
+                                                        st.session_state.prediction_accuracy, st.session_state.recovery_mode,
+                                                        st.session_state.consecutive_losses, st.session_state.pattern_accuracy,
+                                                        st.session_state.pattern_transitions, temp_last_pattern)
         if pred:
             prob_history.append(conf)
         if temp_sequence:
-            temp_sequence.pop()  # Simulate past predictions
+            temp_sequence.pop()
     prob_variance = np.std(prob_history) if prob_history else 0
 
     # Update pattern volatility
@@ -547,9 +627,11 @@ def place_result(result, manual_selection=None):
     st.session_state.pattern_volatility = pattern_changes / max(len(sequence) - 2, 1)
 
     # Calculate next bet
-    pred, conf, insights = predict_next(st.session_state.sequence, st.session_state.pattern_volatility,
-                                        st.session_state.optimized_weights, st.session_state.prediction_accuracy,
-                                        st.session_state.recovery_mode, st.session_state.consecutive_losses)
+    pred, conf, insights, st.session_state.last_pattern = predict_next(st.session_state.sequence, st.session_state.pattern_volatility,
+                                                                       st.session_state.optimized_weights, st.session_state.prediction_accuracy,
+                                                                       st.session_state.recovery_mode, st.session_state.consecutive_losses,
+                                                                       st.session_state.pattern_accuracy, st.session_state.pattern_transitions,
+                                                                       st.session_state.last_pattern)
     if prob_variance > 15.0:
         insights['Volatility (Variance)'] = f"High (Adjustment: +3% threshold)"
     if manual_selection in ['P', 'B']:
@@ -557,7 +639,7 @@ def place_result(result, manual_selection=None):
         conf = max(conf, 50.0)
         st.session_state.advice = f"Manual Bet: {pred} (User override)"
 
-    # Bet sizing (unchanged from original logic)
+    # Bet sizing (unchanged)
     bet_scaling = 1.0
     if st.session_state.recovery_mode:
         bet_scaling *= st.session_state.recovery_bet_scale
@@ -566,12 +648,28 @@ def place_result(result, manual_selection=None):
     if conf < 55.0:
         bet_scaling *= 0.9
 
-    # Secondary validation check
-    if pred and len(st.session_state.last_bet_outcomes[pred]) >= 3 and sum(st.session_state.last_bet_outcomes[pred][-3:]) == 0 and conf < 70.0:
-        st.session_state.pending_bet = None
-        st.session_state.advice = f"No bet: {pred} lost last 3 times (Confidence: {conf:.1f}% < 70%)"
-        st.session_state.insights = insights
-        return
+    # Secondary validation check with pattern shift reset
+    if pred:
+        # Check for pattern shift to reset loss streak penalty
+        recent_sequence = [x for x in st.session_state.sequence[-10:] if x in ['P', 'B']]
+        streak_count = 0
+        chop_count = 0
+        for i in range(len(recent_sequence) - 1):
+            if recent_sequence[i] == recent_sequence[i-1]:
+                streak_count += 1
+            else:
+                if i > 1 and recent_sequence[i] != recent_sequence[i-2]:
+                    chop_count += 1
+        current_pattern = 'streak' if streak_count >= 2 else 'chop' if chop_count >= 2 else 'other'
+        if current_pattern != st.session_state.last_pattern and st.session_state.last_pattern:
+            st.session_state.last_bet_outcomes[pred] = []  # Reset loss streak on pattern shift
+            insights['Loss Streak Reset'] = f"Pattern shift to {current_pattern}"
+
+        if len(st.session_state.last_bet_outcomes[pred]) >= 3 and sum(st.session_state.last_bet_outcomes[pred][-3:]) == 0 and conf < 70.0:
+            st.session_state.pending_bet = None
+            st.session_state.advice = f"No bet: {pred} lost last 3 times (Confidence: {conf:.1f}% < 70%)"
+            st.session_state.insights = insights
+            return
 
     # Stricter loss streak pause
     if st.session_state.consecutive_losses >= 2 and conf < 65.0:
@@ -720,6 +818,9 @@ if start_clicked:
         st.session_state.dynamic_threshold = 53.0
         st.session_state.cool_off_counter = 0
         st.session_state.last_bet_outcomes = {'P': [], 'B': []}
+        st.session_state.pattern_accuracy = defaultdict(lambda: {'success': 0, 'attempts': 0})
+        st.session_state.pattern_transitions = defaultdict(lambda: defaultdict(int))
+        st.session_state.last_pattern = None
         st.success(f"Session started with {betting_strategy} strategy!")
 
 # --- MANUAL OVERRIDE ---
@@ -829,7 +930,9 @@ with col4:
                         amount, pred = st.session_state.pending_bet
                         conf = predict_next(st.session_state.sequence, st.session_state.pattern_volatility,
                                             st.session_state.optimized_weights, st.session_state.prediction_accuracy,
-                                            st.session_state.recovery_mode, st.session_state.consecutive_losses)[1]
+                                            st.session_state.recovery_mode, st.session_state.consecutive_losses,
+                                            st.session_state.pattern_accuracy, st.session_state.pattern_transitions,
+                                            st.session_state.last_pattern)[1]
                         st.session_state.advice = f"Next Bet: ${amount:.0f} on {pred} ({conf:.1f}%)"
                     else:
                         st.session_state.advice = "No bet pending."
