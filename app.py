@@ -95,7 +95,7 @@ def predict_next():
         st.session_state.pattern_volatility = pattern_changes / max(len(recent_sequence) - 2, 1)
 
         bigram = tuple(recent_sequence[-2:])
-        total_transitions = sum(bigram_trans LPActions[bigram].values())
+        total_transitions = sum(bigram_transitions[bigram].values())
         if total_transitions > 0:
             bigram_p_prob = bigram_transitions[bigram]['P'] / total_transitions
             bigram_b_prob = bigram_transitions[bigram]['B'] / total_transitions
