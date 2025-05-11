@@ -48,7 +48,7 @@ st.title("MANG BACCARAT GROUP")
 
 # --- SESSION STATE INIT ---
 if 'sequence' not in st.session_state:
-    st.session_state.sequence = ['P', 'B', 'P', 'T', 'B', 'P', 'B', 'P', 'T', 'B']  # Pre-populated sequence
+    st.session_state.sequence = ['P', 'B', 'P', 'B', 'P', 'B', 'P', 'B']  # Pre-populated sequence
     st.session_state.advice = ""
     st.session_state.insights = {}
     st.session_state.pattern_volatility = 0.0
@@ -123,7 +123,7 @@ def predict_next():
         'double': 0.05 if double_count >= 1 else 0.01
     }
     if sum(weights.values()) == 0:
-        weights = {'bigram': 0.4, 'trigram': 0.3, 'streak': 0.2, 'chop': 0.05, 'double': 0.05}
+        weights = {'bigram': 0.4, 'trigram': 0.3, 'streak': 0. xylophone0.2, 'chop': 0.05, 'double': 0.05}
     total_w = sum(weights.values())
     for k in weights:
         weights[k] = max(weights[k] / total_w, 0.05)
@@ -221,19 +221,96 @@ def predict_next():
     else:
         return None, max(prob_p, prob_b), insights
 
+def log_result(result):
+    st.session_state.sequence.append(result)
+    if len(st.session_state.sequence) > 100:
+        st.session_state.sequence = st.session_state.sequence[-100:]
+
+    pred, conf, insights = predict_next()
+    st.session_state.insights = insights
+    if st.session_state.pattern_volatility > 0.5:
+        st.session_state.advice = f"No prediction: High pattern volatility ({st.session_state.pattern_volatility:.2f})"
+    elif pred is None or conf < 48.0:
+        st.session_state.advice = f"No prediction (Confidence: {conf:.1f}% too low)"
+    else:
+        st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%)"
+
 # --- SETUP FORM ---
 st.subheader("Setup")
 with st.form("setup_form"):
     start_clicked = st.form_submit_button("Start Session")
 
 if start_clicked:
-    st.session_state.sequence = ['P', 'B', 'P', 'T', 'B', 'P', 'B', 'P', 'T', 'B']
+    st.session_state.sequence = ['P', 'B', 'P', 'B', 'P', 'B', 'P', 'B']
     st.session_state.advice = ""
     st.session_state.insights = {}
     st.session_state.pattern_volatility = 0.0
     st.session_state.pattern_success = defaultdict(int)
     st.session_state.pattern_attempts = defaultdict(int)
     st.success("Session started with sample sequence!")
+
+# --- RESULT INPUT ---
+st.subheader("Enter Result")
+st.markdown("""
+<style>
+div.stButton > button {
+    width: 90px;
+    height: 35px;
+    font-size: 14px;
+    font-weight: bold;
+    border-radius: 6px;
+    border: 1px solid;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+div.stButton > button:hover {
+    transform: scale(1.08);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+div.stButton > button:active {
+    transform: scale(0.95);
+    box-shadow: none;
+}
+div.stButton > button[kind="player_btn"] {
+    background: linear-gradient(to bottom, #007bff, #0056b3);
+    border-color: #0056b3;
+    color: white;
+}
+div.stButton > button[kind="player_btn"]:hover {
+    background: linear-gradient(to bottom, #339cff, #007bff);
+}
+div.stButton > button[kind="banker_btn"] {
+    background: linear-gradient(to bottom, #dc3545, #a71d2a);
+    border-color: #a71d2a;
+    color: white;
+}
+div.stButton > button[kind="banker_btn"]:hover {
+    background: linear-gradient(to bottom, #ff6666, #dc3545);
+}
+@media (max-width: 600px) {
+    div.stButton > button {
+        width: 80%;
+        max-width: 150px;
+        height: 40px;
+        font-size: 12px;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("Player", key="player_btn"):
+        log_result("P")
+        st.rerun()
+with col2:
+    if st.button("Banker", key="banker_btn"):
+        log_result("B")
+        st.rerun()
 
 # --- DISPLAY SEQUENCE ---
 st.subheader("Current Sequence (Bead Plate)")
@@ -259,8 +336,6 @@ else:
                 col_html += "<div style='width: 20px; height: 20px; background-color: blue; border-radius: 50%;'></div>"
             elif result == 'B':
                 col_html += "<div style='width: 20px; height: 20px; background-color: red; border-radius: 50%;'></div>"
-            elif result == 'T':
-                col_html += "<div style='width: 20px; height: 20px; background-color: green; border-radius: 50%;'></div>"
         col_html += "</div>"
         bead_plate_html += col_html
     bead_plate_html += "</div>"
@@ -268,14 +343,6 @@ else:
 
 # --- PREDICTION DISPLAY ---
 st.subheader("Prediction")
-pred, conf, insights = predict_next()
-st.session_state.insights = insights
-if st.session_state.pattern_volatility > 0.5:
-    st.session_state.advice = f"No prediction: High pattern volatility ({st.session_state.pattern_volatility:.2f})"
-elif pred is None or conf < 48.0:
-    st.session_state.advice = f"No prediction (Confidence: {conf:.1f}% too low)"
-else:
-    st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%)"
 st.info(st.session_state.advice)
 
 # --- PREDICTION INSIGHTS ---
