@@ -349,28 +349,423 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
 
     if st.session_state.strategy == 'Flatbet':
         bet_amount = st.session_state.base_bet
-    elif st.session_state.strategy ==nhance the user experience by making the interface cleaner and more focused on actionable information.
+    elif st.session_state.strategy == 'T3':
+        bet_amount = st.session_state.base_bet * st.session_state.t3_level
+    else:  # Parlay16
+        key = 'base' if st.session_state.parlay_using_base else 'parlay'
+        bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
+        if bet_amount > st.session_state.bankroll:
+            old_step = st.session_state.parlay_step
+            st.session_state.parlay_step = 1
+            st.session_state.parlay_using_base = True
+            if old_step != st.session_state.parlay_step:
+                st.session_state.parlay_step_changes += 1
+            bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base']
 
-### Testing Instructions
+    safe_bankroll = st.session_state.initial_bankroll * 0.2
+    if (bet_amount > st.session_state.bankroll or
+        st.session_state.bankroll - bet_amount < safe_bankroll or
+        bet_amount > st.session_state.bankroll * 0.05):
+        if st.session_state.strategy == 'Parlay16':
+            old_step = st.session_state.parlay_step
+            st.session_state.parlay_step = 1
+            st.session_state.parlay_using_base = True
+            if old_step != st.session_state.parlay_step:
+                st.session_state.parlay_step_changes += 1
+        return None, "No bet: Risk too high for current bankroll."
 
-1. Save the code as `app.py` in `/mount/src/testpb/app.py`.
-2. Install dependencies: `pip install streamlit numpy`.
-3. Run: `streamlit run app.py`.
-4. Test scenarios:
-   - **Low Confidence**: Start a session (e.g., $1000 bankroll, $10 base bet, Flatbet). Simulate a sequence yielding low confidence (e.g., enter 'P', 'B', 'P' with weak patterns). When confidence < 41% (e.g., 22.5%), verify the message in the “Prediction” section is `"No bet: Confidence too low"`.
-   - **Consecutive Losses**: Simulate 3 losses (e.g., predict 'P', enter 'B' three times). If confidence < 45% (e.g., 43%), confirm the message is `"No bet: Paused after 3 losses"`.
-   - **High Volatility**: Enter a sequence with frequent pattern changes (e.g., 'P', 'B', 'P', 'B'). If `pattern_volatility > 0.5`, check for `"No bet: High pattern volatility"`.
-   - **Bankroll Risk**: Reduce bankroll (e.g., set $20 bankroll, $10 bet) and verify `"No bet: Risk too high for current bankroll."`.
-   - **Successful Bet**: Place a bet with confidence ≥ 41% (e.g., 45%). Confirm the message shows confidence, e.g., `"Next Bet: $10 on P (45.0%)"`, as this is necessary for bet details.
-   - **UI Consistency**: Ensure “Prediction Insights” still shows the threshold (e.g., “Threshold: 41.0%”) and confidence details for transparency, but pause messages remain simple.
-   - **Loss Log**: Check “Recent Losses” to ensure logged confidence values are still recorded (for your analysis, not displayed in UI messages).
+    return bet_amount, f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
 
-### Considerations
+def place_result(result: str):
+    """Process a game result and update session state."""
+    if st.session_state.target_hit:
+        reset_session()
+        return
 
-- **User Experience**: The simplified messages make the UI cleaner, focusing on why a bet is skipped without technical details, aligning with your request for necessary information only. Confidence percentages remain in “Prediction Insights” and “Recent Losses” for debugging or analysis.
-- **Conservative Strategy**: The change is cosmetic and doesn’t affect your conservative safeguards (41%/45% thresholds, volatility pause, bankroll checks), ensuring risk management remains intact.
-- **Performance Monitoring**: With your noted performance (3 wins, 13 losses), the clearer messages may help you focus on betting decisions. If losses persist, share loss log details from “Recent Losses” (sequence, prediction, confidence), and I can suggest adjustments (e.g., raise thresholds to 43%/47%).
-- **Further Simplification**: If you want other messages simplified (e.g., remove loss count in `"Paused after X losses"`), let me know.
-- **Additional Features**: If you want to enhance the UI further (e.g., a “skip bet” button, toggle to show/hide confidence in messages, or performance alerts), I can implement them.
+    st.session_state.last_was_tie = (result == 'T')
+    bet_amount = 0
+    bet_placed = False
+    selection = None
+    win = False
 
-If you encounter issues, want to tweak other messages, or need analysis of specific loss patterns, please share details, and I’ll assist!
+    previous_state = {
+        "bankroll": st.session_state.bankroll,
+        "t3_level": st.session_state.t3_level,
+        "t3_results": st.session_state.t3_results.copy(),
+        "parlay_step": st.session_state.parlay_step,
+        "parlay_wins": st.session_state.parlay_wins,
+        "parlay_using_base": st.session_state.parlay_using_base,
+        "pending_bet": st.session_state.pending_bet,
+        "wins": st.session_state.wins,
+        "losses": st.session_state.losses,
+        "prediction_accuracy": st.session_state.prediction_accuracy.copy(),
+        "consecutive_losses": st.session_state.consecutive_losses,
+        "t3_level_changes": st.session_state.t3_level_changes,
+        "parlay_step_changes": st.session_state.parlay_step_changes,
+        "pattern_volatility": st.session_state.pattern_volatility,
+        "pattern_success": st.session_state.pattern_success.copy(),
+        "pattern_attempts": st.session_state.pattern_attempts.copy()
+    }
+
+    if st.session_state.pending_bet and result != 'T':
+        bet_amount, selection = st.session_state.pending_bet
+        win = result == selection
+        bet_placed = True
+        if win:
+            st.session_state.bankroll += bet_amount * (0.95 if selection == 'B' else 1.0)
+            if st.session_state.strategy == 'T3':
+                st.session_state.t3_results.append('W')
+            elif st.session_state.strategy == 'Parlay16':
+                st.session_state.parlay_wins += 1
+                if st.session_state.parlay_wins == 2:
+                    old_step = st.session_state.parlay_step
+                    st.session_state.parlay_step = 1
+                    st.session_state.parlay_wins = 0
+                    st.session_state.parlay_using_base = True
+                    if old_step != st.session_state.parlay_step:
+                        st.session_state.parlay_step_changes += 1
+                else:
+                    st.session_state.parlay_using_base = False
+            st.session_state.wins += 1
+            st.session_state.prediction_accuracy[selection] += 1
+            st.session_state.consecutive_losses = 0
+            for pattern in ['bigram', 'trigram', 'streak', 'chop', 'double']:
+                if pattern in st.session_state.insights:
+                    st.session_state.pattern_success[pattern] += 1
+                    st.session_state.pattern_attempts[pattern] += 1
+        else:
+            st.session_state.bankroll -= bet_amount
+            if st.session_state.strategy == 'T3':
+                st.session_state.t3_results.append('L')
+            elif st.session_state.strategy == 'Parlay16':
+                st.session_state.parlay_wins = 0
+                old_step = st.session_state.parlay_step
+                st.session_state.parlay_step = min(st.session_state.parlay_step + 1, 16)
+                st.session_state.parlay_using_base = True
+                if old_step != st.session_state.parlay_step:
+                    st.session_state.parlay_step_changes += 1
+            st.session_state.losses += 1
+            st.session_state.consecutive_losses += 1
+            st.session_state.loss_log.append({
+                'sequence': st.session_state.sequence[-10:],
+                'prediction': selection,
+                'result': result,
+                'confidence': st.session_state.advice.split('(')[-1].split('%')[0] if '(' in st.session_state.advice else '0',
+                'insights': st.session_state.insights.copy()
+            })
+            if len(st.session_state.loss_log) > LOSS_LOG_LIMIT:
+                st.session_state.loss_log = st.session_state.loss_log[-LOSS_LOG_LIMIT:]
+            for pattern in ['bigram', 'trigram', 'streak', 'chop', 'double']:
+                if pattern in st.session_state.insights:
+                    st.session_state.pattern_attempts[pattern] += 1
+        st.session_state.prediction_accuracy['total'] += 1
+        st.session_state.pending_bet = None
+
+    st.session_state.sequence.append(result)
+    if len(st.session_state.sequence) > SEQUENCE_LIMIT:
+        st.session_state.sequence = st.session_state.sequence[-SEQUENCE_LIMIT:]
+
+    st.session_state.history.append({
+        "Bet": selection,
+        "Result": result,
+        "Amount": bet_amount,
+        "Win": win,
+        "T3_Level": st.session_state.t3_level,
+        "Parlay_Step": st.session_state.parlay_step,
+        "Parlay_Wins": st.session_state.parlay_wins,
+        "Parlay_Using_Base": st.session_state.parlay_using_base,
+        "Previous_State": previous_state,
+        "Bet_Placed": bet_placed
+    })
+    if len(st.session_state.history) > HISTORY_LIMIT:
+        st.session_state.history = st.session_state.history[-HISTORY_LIMIT:]
+
+    if check_target_hit():
+        st.session_state.target_hit = True
+        return
+
+    pred, conf, insights = predict_next()
+    bet_amount, advice = calculate_bet_amount(pred, conf)
+    st.session_state.pending_bet = (bet_amount, pred) if bet_amount else None
+    st.session_state.advice = advice
+    st.session_state.insights = insights
+
+    if st.session_state.strategy == 'T3':
+        update_t3_level()
+
+# --- UI Components ---
+def render_setup_form():
+    """Render the setup form for session configuration."""
+    st.subheader("Setup")
+    with st.form("setup_form"):
+        bankroll = st.number_input("Enter Bankroll ($)", min_value=0.0, value=st.session_state.bankroll, step=10.0)
+        base_bet = st.number_input("Enter Base Bet ($)", min_value=0.0, value=st.session_state.base_bet, step=1.0)
+        betting_strategy = st.selectbox(
+            "Choose Betting Strategy", STRATEGIES,
+            index=STRATEGIES.index(st.session_state.strategy),
+            help="T3: Adjusts bet size based on wins/losses. Flatbet: Fixed bet size. Parlay16: 16-step progression."
+        )
+        target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
+        target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
+        start_clicked = st.form_submit_button("Start Session")
+
+        if start_clicked:
+            if bankroll <= 0:
+                st.error("Bankroll must be positive.")
+            elif base_bet <= 0:
+                st.error("Base bet must be positive.")
+            elif base_bet > bankroll:
+                st.error("Base bet cannot exceed bankroll.")
+            else:
+                st.session_state.update({
+                    'bankroll': bankroll,
+                    'base_bet': base_bet,
+                    'initial_base_bet': base_bet,
+                    'strategy': betting_strategy,
+                    'sequence': [],
+                    'pending_bet': None,
+                    't3_level': 1,
+                    't3_results': [],
+                    't3_level_changes': 0,
+                    'parlay_step': 1,
+                    'parlay_wins': 0,
+                    'parlay_using_base': True,
+                    'parlay_step_changes': 0,
+                    'advice': "",
+                    'history': [],
+                    'wins': 0,
+                    'losses': 0,
+                    'target_mode': target_mode,
+                    'target_value': target_value,
+                    'initial_bankroll': bankroll,
+                    'target_hit': False,
+                    'prediction_accuracy': {'P': 0, 'B': 0, 'total': 0},
+                    'consecutive_losses': 0,
+                    'loss_log': [],
+                    'last_was_tie': False,
+                    'insights': {},
+                    'pattern_volatility': 0.0,
+                    'pattern_success': defaultdict(int),
+                    'pattern_attempts': defaultdict(int)
+                })
+                st.success(f"Session started with {betting_strategy} strategy!")
+
+def render_result_input():
+    """Render the result input buttons."""
+    st.subheader("Enter Result")
+    st.markdown("""
+    <style>
+    div.stButton > button {
+        width: 90px; height: 35px; font-size: 14px; font-weight: bold; border-radius: 6px; border: 1px solid;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); cursor: pointer; transition: all 0.15s ease;
+        display: flex; align-items: center; justify-content: center;
+    }
+    div.stButton > button:hover { transform: scale(1.08); box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3); }
+    div.stButton > button:active { transform: scale(0.95); box-shadow: none; }
+    div.stButton > button[kind="player_btn"] { background: linear-gradient(to bottom, #007bff, #0056b3); border-color: #0056b3; color: white; }
+    div.stButton > button[kind="player_btn"]:hover { background: linear-gradient(to bottom, #339cff, #007bff); }
+    div.stButton > button[kind="banker_btn"] { background: linear-gradient(to bottom, #dc3545, #a71d2a); border-color: #a71d2a; color: white; }
+    div.stButton > button[kind="banker_btn"]:hover { background: linear-gradient(to bottom, #ff6666, #dc3545); }
+    div.stButton > button[kind="tie_btn"] { background: linear-gradient(to bottom, #28a745, #1e7e34); border-color: #1e7e34; color: white; }
+    div.stButton > button[kind="tie_btn"]:hover { background: linear-gradient(to bottom, #4caf50, #28a745); }
+    div.stButton > button[kind="undo_btn"] { background: linear-gradient(to bottom, #6c757d, #545b62); border-color: #545b62; color: white; }
+    div.stButton > button[kind="undo_btn"]:hover { background: linear-gradient(to bottom, #8e959c, #6c757d); }
+    @media (max-width: 600px) { div.stButton > BUTTON { width: 80%; max-width: 150px; height: 40px; font-size: 12px; } }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        if st.button("Player", key="player_btn"):
+            place_result("P")
+    with col2:
+        if st.button("Banker", key="banker_btn"):
+            place_result("B")
+    with col3:
+        if st.button("Tie", key="tie_btn"):
+            place_result("T")
+    with col4:
+        if st.button("Undo Last", key="undo_btn"):
+            if not st.session_state.sequence:
+                st.warning("No results to undo.")
+            else:
+                try:
+                    if st.session_state.history:
+                        last = st.session_state.history.pop()
+                        previous_state = last['Previous_State']
+                        for key, value in previous_state.items():
+                            st.session_state[key] = value
+                        st.session_state.sequence.pop()
+                        if last['Bet_Placed'] and not last['Win'] and st.session_state.loss_log:
+                            if st.session_state.loss_log[-1]['result'] == last['Result']:
+                                st.session_state.loss_log.pop()
+                        if st.session_state.pending_bet:
+                            amount, pred = st.session_state.pending_bet
+                            conf = predict_next()[1]
+                            st.session_state.advice = f"Next Bet: ${amount:.0f} on {pred} ({conf:.1f}%)"
+                        else:
+                            st.session_state.advice = "No bet pending."
+                        st.session_state.last_was_tie = False
+                        st.success("Undone last action.")
+                        st.rerun()
+                    else:
+                        st.session_state.sequence.pop()
+                        st.session_state.pending_bet = None
+                        st.session_state.advice = "No bet pending."
+                        st.session_state.last_was_tie = False
+                        st.success("Undone last result.")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error undoing last action: {str(e)}")
+
+def render_bead_plate():
+    """Render the current sequence as a bead plate."""
+    st.subheader("Current Sequence (Bead Plate)")
+    sequence = st.session_state.sequence[-90:]
+    grid = [[] for _ in range(15)]
+    for i, result in enumerate(sequence):
+        col_index = i // 6
+        if col_index < 15:
+            grid[col_index].append(result)
+    for col in grid:
+        while len(col) < 6:
+            col.append('')
+
+    bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 100%; overflow-x: auto;'>"
+    for col in grid:
+        col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
+        for result in col:
+            style = (
+                "width: 20px; height: 20px; border: 1px solid #ddd; border-radius: 50%;" if result == '' else
+                f"width: 20px; height: 20px; background-color: {'blue' if result == 'P' else 'red' if result == 'B' else 'green'}; border-radius: 50%;"
+            )
+            col_html += f"<div style='{style}'></div>"
+        col_html += "</div>"
+        bead_plate_html += col_html
+    bead_plate_html += "</div>"
+    st.markdown(bead_plate_html, unsafe_allow_html=True)
+
+def render_prediction():
+    """Render the current prediction and advice."""
+    if st.session_state.pending_bet:
+        amount, side = st.session_state.pending_bet
+        color = 'blue' if side == 'P' else 'red'
+        conf = st.session_state.advice.split('(')[-1].split('%')[0] if '(' in st.session_state.advice else '0'
+        st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.0f} | Win Prob: {conf}%</h4>", unsafe_allow_html=True)
+    elif not st.session_state.target_hit:
+        st.info(st.session_state.advice)
+
+def render_insights():
+    """Render prediction insights and volatility warnings."""
+    st.subheader("Prediction Insights")
+    if st.session_state.insights:
+        for factor, contribution in st.session_state.insights.items():
+            st.markdown(f"**{factor}**: {contribution}")
+    if st.session_state.pattern_volatility > 0.5:
+        st.warning(f"High Pattern Volatility: {st.session_state.pattern_volatility:.2f} (Betting paused)")
+
+def render_status():
+    """Render session status information."""
+    st.subheader("Status")
+    st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
+    st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
+    strategy_status = f"**Betting Strategy**: {st.session_state.strategy}"
+    if st.session_state.strategy == 'T3':
+        strategy_status += f" | T3 Level: {st.session_state.t3_level} | Level Changes: {st.session_state.t3_level_changes}"
+    elif st.session_state.strategy == 'Parlay16':
+        strategy_status += f" | Parlay Step: {st.session_state.parlay_step}/16 | Step Changes: {st.session_state.parlay_step_changes} | Consecutive Wins: {st.session_state.parlay_wins}"
+    st.markdown(strategy_status)
+    st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
+    st.markdown(f"**Online Users**: {track_user_session()}")
+
+    if st.session_state.initial_base_bet > 0 and st.session_state.initial_bankroll > 0:
+        profit = st.session_state.bankroll - st.session_state.initial_bankroll
+        units_profit = profit / st.session_state.initial_base_bet
+        st.markdown(f"**Units Profit**: {units_profit:.2f} units (${profit:.2f})")
+    else:
+        st.markdown("**Units Profit**: 0.00 units ($0.00)")
+
+def render_accuracy():
+    """Render prediction accuracy metrics and trend chart."""
+    st.subheader("Prediction Accuracy")
+    total = st.session_state.prediction_accuracy['total']
+    if total > 0:
+        p_accuracy = (st.session_state.prediction_accuracy['P'] / total) * 100
+        b_accuracy = (st.session_state.prediction_accuracy['B'] / total) * 100
+        st.markdown(f"**Player Bets**: {st.session_state.prediction_accuracy['P']}/{total} ({p_accuracy:.1f}%)")
+        st.markdown(f"**Banker Bets**: {st.session_state.prediction_accuracy['B']}/{total} ({b_accuracy:.1f}%)")
+
+    st.subheader("Prediction Accuracy Trend")
+    if st.session_state.history:
+        accuracy_data = []
+        correct = total = 0
+        for h in st.session_state.history[-50:]:
+            if h['Bet_Placed'] and h['Bet'] in ['P', 'B']:
+                total += 1
+                if h['Win']:
+                    correct += 1
+                accuracy_data.append(correct / max(total, 1) * 100)
+        if accuracy_data:
+            st.line_chart(accuracy_data, use_container_width=True)
+
+def render_loss_log():
+    """Render recent loss log."""
+    if st.session_state.loss_log:
+        st.subheader("Recent Losses")
+        st.dataframe([
+            {
+                "Sequence": ", ".join(log['sequence']),
+                "Prediction": log['prediction'],
+                "Result": log['result'],
+                "Confidence": f"{log['confidence']}%",
+                "Insights": "; ".join([f"{k}: {v}" for k, v in log['insights'].items()])
+            }
+            for log in st.session_state.loss_log[-5:]
+        ])
+
+def render_history():
+    """Render betting history table."""
+    if st.session_state.history:
+        st.subheader("Bet History")
+        n = st.slider("Show last N bets", 5, 50, 10)
+        st.dataframe([
+            {
+                "Bet": h["Bet"] if h["Bet"] else "-",
+                "Result": h["Result"],
+                "Amount": f"${h['Amount']:.0f}" if h["Bet_Placed"] else "-",
+                "Outcome": "Win" if h["Win"] else "Loss" if h["Bet_Placed"] else "-",
+                "T3_Level": h["T3_Level"] if st.session_state.strategy == 'T3' else "-",
+                "Parlay_Step": h["Parlay_Step"] if st.session_state.strategy == 'Parlay16' else "-"
+            }
+            for h in st.session_state.history[-n:]
+        ])
+
+def render_export():
+    """Render session data export option."""
+    st.subheader("Export Session")
+    if st.button("Download Session Data"):
+        csv_data = "Bet,Result,Amount,Win,T3_Level,Parlay_Step\n"
+        for h in st.session_state.history:
+            csv_data += f"{h['Bet'] or '-'},{h['Result']},${h['Amount']:.0f},{h['Win']},{h['T3_Level']},{h['Parlay_Step']}\n"
+        st.download_button("Download CSV", csv_data, "session_data.csv", "text/csv")
+
+# --- Main Application ---
+def main():
+    """Main application function."""
+    st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
+    st.title("MANG BACCARAT GROUP")
+    initialize_session_state()
+
+    render_setup_form()
+    render_result_input()
+    render_bead_plate()
+    render_prediction()
+    render_insights()
+    render_status()
+    render_accuracy()
+    render_loss_log()
+    render_history()
+    render_export()
+
+if __name__ == "__main__":
+    main()
