@@ -188,6 +188,7 @@ def undo_last_action():
 # --- PROCESS RESULT ---
 def place_result(result):
     try:
+        # Save current state for undo
         current_state = {
             'sequence': st.session_state.sequence.copy(),
             'pending_prediction': st.session_state.pending_prediction,
@@ -200,33 +201,32 @@ def place_result(result):
             'last_bet_outcome': st.session_state.last_bet_outcome,
         }
         st.session_state.undo_stack.append(current_state)
-        st.session_state.sequence.append(result)
-        if len(st.session_state.sequence) > 100:
-            st.session_state.sequence = st.session_state.sequence[-100:]
-        pred, conf, insights, bet_amount = predict_next()
-        if pred is None:
-            st.session_state.pending_prediction = None
-            st.session_state.advice = f"No prediction: Bigram and trigram predictions differ, {insights['Betting Strategy']}"
+
+        # Use the current prediction to evaluate the result
+        current_pred = st.session_state.pending_prediction
+        current_bet_amount = st.session_state.insights.get('Betting Strategy', '').split('$')[-1].split(' ')[0]
+        current_bet_amount = float(current_bet_amount) if current_bet_amount.replace('.', '', 1).isdigit() else 0.0
+
+        # Evaluate win/loss based on current prediction and result
+        if current_pred is None:
             st.session_state.last_bet_outcome = "No bet placed"
-            if st.session_state.pattern_volatility > 0.5:
-                st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
         else:
-            st.session_state.pending_prediction = pred
-            st.session_state.advice = f"Prediction: {pred} ({conf:.1f}%), {insights['Betting Strategy']}"
+            if current_pred == result:
+                # Win: Add bet_amount (1:1 payout for Player, 0.95:1 for Banker)
+                if current_pred == 'P':
+                    st.session_state.bankroll += current_bet_amount
+                    st.session_state.last_bet_outcome = f"Win: Bet on Player, Result Player (+${current_bet_amount:.2f})"
+                elif current_pred == 'B':
+                    st.session_state.bankroll += current_bet_amount * 0.95  # Banker commission
+                    st.session_state.last_bet_outcome = f"Win: Bet on Banker, Result Banker (+${current_bet_amount * 0.95:.2f})"
+            else:
+                # Loss: Subtract bet_amount
+                st.session_state.bankroll -= current_bet_amount
+                st.session_state.last_bet_outcome = f"Loss: Bet on {current_pred}, Result {result} (-${current_bet_amount:.2f})"
+
+            # Update bet history for T3 strategy
             if st.session_state.betting_strategy == "T3":
-                st.session_state.bet_history.append((pred, result, bet_amount))
-                if pred == result:
-                    # Win: Add bet_amount (1:1 payout for Player, 0.95:1 for Banker)
-                    if pred == 'P':
-                        st.session_state.bankroll += bet_amount
-                        st.session_state.last_bet_outcome = f"Win: Bet on Player, Result Player (+${bet_amount:.2f})"
-                    elif pred == 'B':
-                        st.session_state.bankroll += bet_amount * 0.95  # Banker commission
-                        st.session_state.last_bet_outcome = f"Win: Bet on Banker, Result Banker (+${bet_amount * 0.95:.2f})"
-                else:
-                    # Loss: Subtract bet_amount
-                    st.session_state.bankroll -= bet_amount
-                    st.session_state.last_bet_outcome = f"Loss: Bet on {pred}, Result {result} (-${bet_amount:.2f})"
+                st.session_state.bet_history.append((current_pred, result, current_bet_amount))
                 if len(st.session_state.bet_history) >= 3:
                     wins = sum(1 for p, a, _ in st.session_state.bet_history[-3:] if p == a)
                     losses = 3 - wins
@@ -239,21 +239,23 @@ def place_result(result):
                     elif losses == 3:
                         st.session_state.t3_level += 2
                     st.session_state.bet_history = []
-            else:  # FlatBet
-                if pred == result:
-                    if pred == 'P':
-                        st.session_state.bankroll += bet_amount
-                        st.session_state.last_bet_outcome = f"Win: Bet on Player, Result Player (+${bet_amount:.2f})"
-                    elif pred == 'B':
-                        st.session_state.bankroll += bet_amount * 0.95
-                        st.session_state.last_bet_outcome = f"Win: Bet on Banker, Result Banker (+${bet_amount * 0.95:.2f})"
-                else:
-                    st.session_state.bankroll -= bet_amount
-                    st.session_state.last_bet_outcome = f"Loss: Bet on {pred}, Result {result} (-${bet_amount:.2f})"
-            if st.session_state.pattern_volatility > 0.5:
-                st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
+
+        # Append the result to the sequence
+        st.session_state.sequence.append(result)
+        if len(st.session_state.sequence) > 100:
+            st.session_state.sequence = st.session_state.sequence[-100:]
+
+        # Generate the next prediction
+        pred, conf, insights, bet_amount = predict_next()
+        st.session_state.pending_prediction = pred
         st.session_state.insights = insights
-        # Warn if bankroll is low
+        st.session_state.advice = (
+            f"Prediction: {pred} ({conf:.1f}%), {insights['Betting Strategy']}"
+            if pred
+            else f"No prediction: {insights.get('Status', 'Bigram and trigram predictions differ')}, {insights['Betting Strategy']}"
+        )
+        if st.session_state.pattern_volatility > 0.5:
+            st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
         if st.session_state.bankroll < st.session_state.base_bet:
             st.session_state.advice += " | Warning: Bankroll too low for base bet!"
     except Exception as e:
@@ -262,6 +264,18 @@ def place_result(result):
 # --- UI ---
 try:
     st.title("BACCARAT PLAYER/BANKER PREDICTOR")
+
+    # Generate initial prediction
+    pred, conf, insights, bet_amount = predict_next()
+    st.session_state.pending_prediction = pred
+    st.session_state.insights = insights
+    st.session_state.advice = (
+        f"Prediction: {pred} ({conf:.1f}%), {insights['Betting Strategy']}"
+        if pred
+        else f"No prediction: {insights.get('Status', 'Bigram and trigram predictions differ')}, {insights['Betting Strategy']}"
+    )
+    if st.session_state.pattern_volatility > 0.5:
+        st.session_state.advice += f", High pattern volatility ({st.session_state.pattern_volatility:.2f})"
 
     st.subheader("Enter Game Result")
     st.session_state.betting_strategy = st.selectbox(
@@ -351,6 +365,28 @@ try:
         if st.button("Undo", key="undo_btn", disabled=undo_disabled):
             undo_last_action()
 
+    st.subheader("Current Prediction")
+    if st.session_state.pending_prediction:
+        side = st.session_state.pending_prediction
+        color = 'blue' if side == 'P' else 'red'
+        advice_parts = st.session_state.advice.split(', ')
+        prob = advice_parts[0].split('(')[-1].split('%')[0] if '(' in advice_parts[0] else '0'
+        bet_info = advice_parts[1] if len(advice_parts) > 1 else 'No bet'
+        st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Prob: {prob}% | {bet_info}</h4>", unsafe_allow_html=True)
+    else:
+        st.info(st.session_state.advice)
+
+    st.subheader("Last Bet Outcome")
+    if st.session_state.last_bet_outcome:
+        if "Win" in st.session_state.last_bet_outcome:
+            st.success(st.session_state.last_bet_outcome)
+        elif "Loss" in st.session_state.last_bet_outcome:
+            st.error(st.session_state.last_bet_outcome)
+        else:
+            st.info(st.session_state.last_bet_outcome)
+    else:
+        st.info("No bets placed yet.")
+
     st.subheader("Current Sequence (Bead Plate)")
     sequence = st.session_state.sequence[-90:]
     grid = [[] for _ in range(15)]
@@ -375,25 +411,6 @@ try:
         bead_plate_html += col_html
     bead_plate_html += "</div>"
     st.markdown(bead_plate_html, unsafe_allow_html=True)
-
-    if st.session_state.pending_prediction:
-        side = st.session_state.pending_prediction
-        color = 'blue' if side == 'P' else 'red'
-        advice_parts = st.session_state.advice.split(', ')
-        prob = advice_parts[0].split('(')[-1].split('%')[0] if '(' in advice_parts[0] else '0'
-        bet_info = advice_parts[1] if len(advice_parts) > 1 else 'No bet'
-        st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Prob: {prob}% | {bet_info}</h4>", unsafe_allow_html=True)
-    else:
-        st.info(st.session_state.advice)
-
-    # Display latest bet outcome
-    if st.session_state.last_bet_outcome:
-        if "Win" in st.session_state.last_bet_outcome:
-            st.success(st.session_state.last_bet_outcome)
-        elif "Loss" in st.session_state.last_bet_outcome:
-            st.error(st.session_state.last_bet_outcome)
-        else:
-            st.info(st.session_state.last_bet_outcome)
 
     st.subheader("Prediction Insights")
     if st.session_state.insights:
