@@ -88,7 +88,8 @@ def initialize_session_state():
         'insights': {},
         'pattern_volatility': 0.0,
         'pattern_success': defaultdict(int),
-        'pattern_attempts': defaultdict(int)
+        'pattern_attempts': defaultdict(int),
+        'safety_net_percentage': 20.0  # New: Default safety net percentage
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -123,7 +124,8 @@ def reset_session():
         'insights': {},
         'pattern_volatility': 0.0,
         'pattern_success': defaultdict(int),
-        'pattern_attempts': defaultdict(int)
+        'pattern_attempts': defaultdict(int),
+        'safety_net_percentage': 20.0  # New: Reset to default
     })
 
 # --- Prediction Logic ---
@@ -362,7 +364,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
                 st.session_state.parlay_step_changes += 1
             bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base']
 
-    safe_bankroll = st.session_state.initial_bankroll * 0.2
+    safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
     if (bet_amount > st.session_state.bankroll or
         st.session_state.bankroll - bet_amount < safe_bankroll or
         bet_amount > st.session_state.bankroll * 0.05):
@@ -404,7 +406,8 @@ def place_result(result: str):
         "parlay_step_changes": st.session_state.parlay_step_changes,
         "pattern_volatility": st.session_state.pattern_volatility,
         "pattern_success": st.session_state.pattern_success.copy(),
-        "pattern_attempts": st.session_state.pattern_attempts.copy()
+        "pattern_attempts": st.session_state.pattern_attempts.copy(),
+        "safety_net_percentage": st.session_state.safety_net_percentage  # New
     }
 
     if st.session_state.pending_bet and result != 'T':
@@ -446,7 +449,7 @@ def place_result(result: str):
                     st.session_state.parlay_step_changes += 1
             st.session_state.losses += 1
             st.session_state.consecutive_losses += 1
-            _, conf, _ = predict_next()  # Get confidence directly
+            _, conf, _ = predict_next()
             st.session_state.loss_log.append({
                 'sequence': st.session_state.sequence[-10:],
                 'prediction': selection,
@@ -508,6 +511,11 @@ def render_setup_form():
         )
         target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
         target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
+        safety_net_percentage = st.number_input(
+            "Safety Net Percentage (%)",
+            min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
+            help="Percentage of initial bankroll to keep as a safety net after each bet."
+        )
         start_clicked = st.form_submit_button("Start Session")
 
         if start_clicked:
@@ -547,7 +555,8 @@ def render_setup_form():
                     'insights': {},
                     'pattern_volatility': 0.0,
                     'pattern_success': defaultdict(int),
-                    'pattern_attempts': defaultdict(int)
+                    'pattern_attempts': defaultdict(int),
+                    'safety_net_percentage': safety_net_percentage  # New
                 })
                 st.success(f"Session started with {betting_strategy} strategy!")
 
@@ -669,11 +678,10 @@ def render_status():
     st.subheader("Status")
     st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
     st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
+    st.markdown(f"**Safety Net Percentage**: {st.session_state.safety_net_percentage:.1f}%")  # New
     strategy_status = f"**Betting Strategy**: {st.session_state.strategy}"
     if st.session_state.strategy == 'T3':
-        strategy_status += f" | T3 Level: {st.session_state.t3_level} | Level Changes: {st.session_state.t3_level_changes}"
-    elif st.session_state.strategy == 'Parlay16':
-        strategy_status += f" | Parlay Step: {st.session_state.parlay_step}/16 | Step Changes: {st.session_state.parlay_step_changes} | Consecutive Wins: {st.session_state.parlay_wins}"
+        strategy_status oily = 0
     st.markdown(strategy_status)
     st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
     st.markdown(f"**Online Users**: {track_user_session()}")
