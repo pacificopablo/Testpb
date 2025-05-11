@@ -28,15 +28,15 @@ def predict_next():
     if len(sequence) < 2:
         insights = {
             "Overall": f"No prediction: Need at least 2 outcomes (Current: {len(sequence)})",
-            "Betting Strategy": "T3: No bet (Level {t3_level})",
+            "Betting Strategy": f"T3: No bet (Level {t3_level})",
         }
-        return None, 0, insights
+        return None, 0, insights, 0.0  # Return four values with default t3_bet
     elif len(sequence) < 3:
         insights = {
             "Overall": f"No prediction: Need at least 3 outcomes for trigram (Current: {len(sequence)})",
-            "Betting Strategy": "T3: No bet (Level {t3_level})",
+            "Betting Strategy": f"T3: No bet (Level {t3_level})",
         }
-        return None, 0, insights
+        return None, 0, insights, 0.0  # Return four values with default t3_bet
 
     # Sliding window of 50 hands
     window_size = 50
@@ -130,7 +130,7 @@ def predict_next():
         overall_p = (bigram_p_prob + trigram_p_prob) / 2
         overall_b = (bigram_b_prob + trigram_b_prob) / 2
         conf = max(overall_p, overall_b) * 100
-        t3_bet = t3_base_bet * t3_level
+        t3_bet = 0.0  # Default t3_bet when no prediction
         bet_info = f"T3: No bet (Level {t3_level})"
 
     # Insights
