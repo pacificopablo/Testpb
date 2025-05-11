@@ -247,7 +247,20 @@ def log_result(result):
 
 # --- SETUP FORM ---
 st.subheader("Setup")
+
 with st.form("setup_form"):
+    bankroll = st.number_input("Initial Bankroll ($)", min_value=1.0, value=1000.0, step=10.0)
+    base_bet = st.number_input("Base Bet Unit ($)", min_value=1.0, value=10.0, step=1.0)
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        target_mode = st.radio("Target Mode", ["Percentage", "Units"], horizontal=True)
+    with col2:
+        if target_mode == "Percentage":
+            target_value = st.number_input("Target Profit (%)", min_value=1.0, value=10.0, step=1.0)
+        else:
+            target_value = st.number_input("Target Profit (Units)", min_value=1.0, value=10.0, step=1.0)
+
     start_clicked = st.form_submit_button("Start Session")
 
 if start_clicked:
@@ -257,6 +270,12 @@ if start_clicked:
     st.session_state.pattern_volatility = 0.0
     st.session_state.pattern_success = defaultdict(int)
     st.session_state.pattern_attempts = defaultdict(int)
+
+    st.session_state.bankroll = bankroll
+    st.session_state.base_bet = base_bet
+    st.session_state.target_mode = target_mode
+    st.session_state.target_value = target_value
+
     st.success("Session started!")
 
 # --- RESULT INPUT ---
@@ -367,3 +386,9 @@ if st.session_state.pattern_volatility > 0.5:
 st.subheader("Status")
 online_users = track_user_session_file()
 st.markdown(f"**Online Users**: {online_users}")
+st.markdown(f"**Bankroll**: ${st.session_state.get('bankroll', 0):,.2f}")
+st.markdown(f"**Base Bet**: ${st.session_state.get('base_bet', 0):,.2f}")
+if st.session_state.get("target_mode") == "Percentage":
+    st.markdown(f"**Target**: {st.session_state['target_value']}%")
+else:
+    st.markdown(f"**Target**: {st.session_state['target_value']} units")
