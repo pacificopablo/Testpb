@@ -377,11 +377,18 @@ col1, col2 = st.columns(2)
 with col1:
     if st.button("Player", key="player_btn"):
         log_result("P")
-        st.experimental_rerun()
+        # Some Streamlit versions support st.experimental_rerun() for rerun; if not, fallback to st.rerun()
+        try:
+            st.experimental_rerun()
+        except AttributeError:
+            st.rerun()
 with col2:
     if st.button("Banker", key="banker_btn"):
         log_result("B")
-        st.experimental_rerun()
+        try:
+            st.experimental_rerun()
+        except AttributeError:
+            st.rerun()
 
 # --- DISPLAY SEQUENCE ---
 st.subheader("Current Sequence (Bead Plate)")
