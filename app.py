@@ -306,11 +306,11 @@ def reset_session_auto():
     st.session_state.last_bet_amount = 0.0
 
 def is_bet_safe(bet_amount):
-    max_bet_percent = 0.1 if st.session_state.strategy == 'Flatbet' else 0.07
-    safe_bankroll = st.session_state.initial_bankroll * 0.1
-    return (bet_amount <= st.session_state.bankroll and
-            st.session_state.bankroll - bet_amount >= safe_bankroll and
-            bet_amount <= st.session_state.bankroll * max_bet_percent)
+    # Modified: Relaxed bankroll limits to allow betting with minimal reserve
+    # Old: Required 10% reserve and max bet 10% (Flatbet) or 7% (others)
+    # New: Only requires $1 reserve (or 1% of initial bankroll, whichever is smaller)
+    reserve = min(1.0, st.session_state.initial_bankroll * 0.01)
+    return bet_amount <= st.session_state.bankroll - reserve
 
 def place_result(result, manual_selection=None):
     if st.session_state.target_hit:
@@ -447,30 +447,43 @@ def place_result(result, manual_selection=None):
         st.session_state.insights = insights
     else:
         min_bet = st.session_state.last_bet_amount * 1.5 if st.session_state.last_bet_amount > 0 else st.session_state.base_bet
+        max_affordable = max(st.session_state.bankroll - min(1.0, st.session_state.initial_bankroll * 0.01), 0.0)  # Modified: Max bet based on relaxed reserve
         if st.session_state.strategy == 'Flatbet':
             bet_amount = max(st.session_state.base_bet, min_bet)
-            st.session_state.base_bet = bet_amount
+            if bet_amount > max_affordable:
+                bet_amount = max(min_bet, max_affordable) if max_affordable >= min_bet else max_affordable
+                st.session_state.base_bet = bet_amount
+                st.session_state.advice += f" (Adjusted to ${bet_amount:.0f} due to bankroll)"
         elif st.session_state.strategy == 'T3':
             bet_amount = st.session_state.base_bet * st.session_state.t3_level
             if bet_amount < min_bet:
                 st.session_state.t3_level = max(1, int(min_bet / st.session_state.base_bet + 0.99))
                 bet_amount = st.session_state.base_bet * st.session_state.t3_level
+            if bet_amount > max_affordable:
+                st.session_state.t3_level = max(1, int(max_affordable / st.session_state.base_bet))
+                bet_amount = st.session_state.base_bet * st.session_state.t3_level
+                if bet_amount < min_bet and max_affordable >= min_bet:
+                    bet_amount = min_bet
+                    st.session_state.t3_level = max(1, int(min_bet / st.session_state.base_bet + 0.99))
+                st.session_state.advice += f" (Adjusted to ${bet_amount:.0f} due to bankroll)"
         elif st.session_state.strategy == 'Parlay16':
             key = 'base' if st.session_state.parlay_using_base else 'parlay'
+            bet_amount = None
             for step in range(st.session_state.parlay_step, 17):
                 candidate_bet = st.session_state.initial_base_bet * PARLAY_TABLE[step][key]
-                if candidate_bet >= min_bet:
+                if candidate_bet >= min_bet and candidate_bet <= max_affordable:
                     st.session_state.parlay_step = step
                     bet_amount = candidate_bet
                     break
-            else:
-                bet_amount = min_bet
+            if bet_amount is None:
+                bet_amount = min(min_bet, max_affordable) if max_affordable >= min_bet else max_affordable
                 st.session_state.parlay_step = 1
                 st.session_state.parlay_using_base = True
+                st.session_state.advice += f" (Adjusted to ${bet_amount:.0f} due to bankroll)"
 
-        if not is_bet_safe(bet_amount):
+        if not is_bet_safe(bet_amount) or bet_amount <= 0:
             st.session_state.pending_bet = None
-            st.session_state.advice = f"No bet: Risk too high for current bankroll (Required: ${bet_amount:.0f})"
+            st.session_state.advice = f"No bet: Insufficient bankroll for ${bet_amount:.0f}"
             st.session_state.insights = insights
             if st.session_state.strategy == 'Parlay16':
                 old_step = st.session_state.parlay_step
@@ -480,7 +493,7 @@ def place_result(result, manual_selection=None):
                     st.session_state.parlay_step_changes += 1
         else:
             st.session_state.pending_bet = (bet_amount, pred)
-            st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
+            st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%){st.session_state.advice if '(Adjusted' in st.session_state.advice else ''}"
             st.session_state.insights = insights
 
     if st.session_state.strategy == 'T3' and len(st.session_state.t3_results) == 3:
@@ -708,7 +721,7 @@ st.markdown(bead_plate_html, unsafe_allow_html=True)
 if st.session_state.pending_bet:
     amount, side = st.session_state.pending_bet
     color = 'blue' if side == 'P' else 'red'
-    conf = st.session_state.advice.split('(')[-1].split('%')[0] if '(' in st.session_state.advice else '0'
+    conf = st.session_state.advice.split('(')[-2].split('%')[0] if '%' in st.session_state.advice else '0'
     st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.0f} | Win Prob: {conf}%</h4>", unsafe_allow_html=True)
 else:
     if not st.session_state.target_hit:
@@ -750,7 +763,7 @@ total = st.session_state.prediction_accuracy['total']
 if total > 0:
     p_accuracy = (st.session_state.prediction_accuracy['P'] / total) * 100
     b_accuracy = (st.session_state.prediction_accuracy['B'] / total) * 100
-    st.markdown(f"**Player Bets**: {st.session_state.prediction_accuracy['P']}/{total} ({p_accuracy:.1f}%)")
+    st.markdown(f"。可谓是“龙飞凤舞”的大戏，跌宕起伏，扣人心弦！(Player Bets): {st.session_state.prediction_accuracy['P']}/{total} ({p_accuracy:.1f}%)
     st.markdown(f"**Banker Bets**: {st.session_state.prediction_accuracy['B']}/{total} ({b_accuracy:.1f}%)")
 
 # --- PREDICTION ACCURACY CHART ---
