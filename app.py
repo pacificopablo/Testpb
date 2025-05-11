@@ -306,9 +306,6 @@ def reset_session_auto():
     st.session_state.last_bet_amount = 0.0
 
 def is_bet_safe(bet_amount):
-    # Modified: Relaxed bankroll limits to allow betting with minimal reserve
-    # Old: Required 10% reserve and max bet 10% (Flatbet) or 7% (others)
-    # New: Only requires $1 reserve (or 1% of initial bankroll, whichever is smaller)
     reserve = min(1.0, st.session_state.initial_bankroll * 0.01)
     return bet_amount <= st.session_state.bankroll - reserve
 
@@ -447,7 +444,7 @@ def place_result(result, manual_selection=None):
         st.session_state.insights = insights
     else:
         min_bet = st.session_state.last_bet_amount * 1.5 if st.session_state.last_bet_amount > 0 else st.session_state.base_bet
-        max_affordable = max(st.session_state.bankroll - min(1.0, st.session_state.initial_bankroll * 0.01), 0.0)  # Modified: Max bet based on relaxed reserve
+        max_affordable = max(st.session_state.bankroll - min(1.0, st.session_state.initial_bankroll * 0.01), 0.0)
         if st.session_state.strategy == 'Flatbet':
             bet_amount = max(st.session_state.base_bet, min_bet)
             if bet_amount > max_affordable:
@@ -763,7 +760,7 @@ total = st.session_state.prediction_accuracy['total']
 if total > 0:
     p_accuracy = (st.session_state.prediction_accuracy['P'] / total) * 100
     b_accuracy = (st.session_state.prediction_accuracy['B'] / total) * 100
-    st.markdown(f"。可谓是“龙飞凤舞”的大戏，跌宕起伏，扣人心弦！(Player Bets): {st.session_state.prediction_accuracy['P']}/{total} ({p_accuracy:.1f}%)
+    st.markdown(f"**Player Bets**: {st.session_state.prediction_accuracy['P']}/{total} ({p_accuracy:.1f}%)")
     st.markdown(f"**Banker Bets**: {st.session_state.prediction_accuracy['B']}/{total} ({b_accuracy:.1f}%)")
 
 # --- PREDICTION ACCURACY CHART ---
