@@ -63,7 +63,7 @@ if 'loss_log' not in st.session_state:
 if 'last_was_tie' not in st.session_state:
     st.session_state.last_was_tie = False
 if 'recovery_mode' not in st.session_state:
-    st.session_state.recovery_mode = False  # Already disabled
+    st.session_state.recovery_mode = False
 if 'insights' not in st.session_state:
     st.session_state.insights = {}
 if 'pattern_volatility' not in st.session_state:
@@ -94,8 +94,6 @@ if 'pattern_transitions' not in st.session_state:
     st.session_state.pattern_transitions = defaultdict(lambda: defaultdict(int))
 if 'last_pattern' not in st.session_state:
     st.session_state.last_pattern = None
-
-# Removed: win_limit_percent, loss_limit_percent, recovery_threshold, recovery_bet_scale from session state
 
 # --- PARLAY TABLE ---
 PARLAY_TABLE = {
@@ -146,7 +144,7 @@ def reset_session_auto():
     st.session_state.consecutive_losses = 0
     st.session_state.loss_log = []
     st.session_state.last_was_tie = False
-    st.session_state.recovery_mode = False  # Already disabled
+    st.session_state.recovery_mode = False
     st.session_state.insights = {}
     st.session_state.pattern_volatility = 0.0
     st.session_state.pattern_success = defaultdict(int)
@@ -202,7 +200,7 @@ def predict_next(sequence, pattern_volatility, weights, prediction_accuracy, con
     # Include ties in the sequence for analysis
     cleaned_sequence = [x for x in sequence if x in ['P', 'B']]
     if len(cleaned_sequence) < 3:
-        return 'B', 45.86, {}
+        return 'B', 45.86, {}, last_pattern or 'other'
 
     window_size = 50
     recent_sequence = cleaned_sequence[-window_size:]
@@ -447,7 +445,6 @@ def place_result(result, manual_selection=None):
     selection = None
     win = False
 
-    # Recovery mode is already disabled
     st.session_state.recovery_mode = False
 
     # Store state
@@ -557,8 +554,6 @@ def place_result(result, manual_selection=None):
             st.session_state.total_bankroll += session_profit
             st.warning(f"Loss: ${-session_profit:.2f}")
 
-        # Win/loss limit checks are already removed
-
         if st.session_state.total_bankroll < st.session_state.initial_total_bankroll * 0.8:
             new_session_bankroll = max(st.session_state.total_bankroll / 10, 10.0)
             st.session_state.session_bankroll = new_session_bankroll
@@ -606,11 +601,12 @@ def place_result(result, manual_selection=None):
     temp_sequence = st.session_state.sequence.copy()
     temp_last_pattern = st.session_state.last_pattern
     for _ in range(min(20, len(temp_sequence))):
-        pred, conf, insights, temp_last_pattern = predict_next(temp_sequence, st.session_state.pattern_volatility, st.session_state.optimized_weights,
-                                                              st.session_state.prediction_accuracy, st.session_state.consecutive_losses,
-                                                              st.session_state.pattern_accuracy, st.session_state.pattern_transitions, temp_last_pattern)
-        if pred:
-            prob_history.append(conf)
+        if len(temp_sequence) >= 3:  # Ensure enough data for prediction
+            pred, conf, insights, temp_last_pattern = predict_next(temp_sequence, st.session_state.pattern_volatility, st.session_state.optimized_weights,
+                                                                  st.session_state.prediction_accuracy, st.session_state.consecutive_losses,
+                                                                  st.session_state.pattern_accuracy, st.session_state.pattern_transitions, temp_last_pattern)
+            if pred:
+                prob_history.append(conf)
         if temp_sequence:
             temp_sequence.pop()  # Simulate past predictions
     prob_variance = np.std(prob_history) if prob_history else 0
@@ -639,7 +635,7 @@ def place_result(result, manual_selection=None):
         conf = max(conf, 50.0)
         st.session_state.advice = f"Manual Bet: {pred} (User override)"
 
-    # Bet sizing (recovery mode scaling already removed)
+    # Bet sizing
     bet_scaling = 1.0
     if st.session_state.consecutive_losses >= 2:
         bet_scaling *= 0.8
@@ -703,7 +699,7 @@ def place_result(result, manual_selection=None):
                     st.session_state.parlay_step_changes += 1
                 bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base'] * bet_scaling
 
-        # Bankroll-aware filtering (unchanged)
+        # Bankroll-aware filtering
         safe_bankroll = st.session_state.initial_bankroll * 0.2
         max_bet_percent = 0.05
         if (bet_amount > st.session_state.bankroll or
@@ -767,7 +763,6 @@ with st.form("setup_form"):
         index={'T3': 0, 'Flatbet': 1, 'Parlay16': 2}.get(st.session_state.strategy, 0),
         help="T3: Adjusts bet size based on wins/losses. Flatbet: Fixed bet size. Parlay16: 16-step progression."
     )
-    # Removed: recovery_threshold, recovery_bet_scale, win_limit_percent, loss_limit_percent
     target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0 if st.session_state.target_mode == "Profit %" else 1, horizontal=True)
     target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
     start_clicked = st.form_submit_button("Start Session")
