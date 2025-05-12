@@ -89,7 +89,7 @@ def initialize_session_state():
         'pattern_volatility': 0.0,
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
-        'safety_net_percentage': 10.0  # Reduced from 15.0
+        'safety_net_percentage': 10.0
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -124,7 +124,7 @@ def reset_session():
         'pattern_volatility': 0.0,
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
-        'safety_net_percentage': 10.0  # Reduced from 15.0
+        'safety_net_percentage': 10.0
     })
 
 # --- Prediction Logic ---
@@ -356,8 +356,8 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
 
     safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
     if (bet_amount > st.session_state.bankroll or
-        st.session_state.bankroll - bet_amount < safe_bankroll or
-        bet_amount > st.session_state.bankroll * 0.05):
+        st.session_state.bankroll - bet_amount < safe_bankroll * 0.5 or  # Relaxed safety net check
+        bet_amount > st.session_state.bankroll * 0.10):  # Relaxed to 10%
         if st.session_state.strategy == 'Parlay16':
             old_step = st.session_state.parlay_step
             st.session_state.parlay_step = 1
