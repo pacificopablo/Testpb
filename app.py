@@ -89,7 +89,8 @@ def initialize_session_state():
         'pattern_volatility': 0.0,
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
-        'safety_net_percentage': 10.0
+        'safety_net_percentage': 10.0,
+        'pause_betting': False  # New flag to pause betting after Tie
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -124,7 +125,8 @@ def reset_session():
         'pattern_volatility': 0.0,
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
-        'safety_net_percentage': 10.0
+        'safety_net_percentage': 10.0,
+        'pause_betting': False  # Reset pause flag
     })
 
 # --- Prediction Logic ---
@@ -332,6 +334,8 @@ def update_t3_level():
 
 def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optional[str]]:
     """Calculate the next bet amount based on strategy and conditions."""
+    if st.session_state.pause_betting:
+        return None, "No bet: Betting paused after Tie."
     if st.session_state.consecutive_losses >= 3 and conf < 45.0:
         return None, f"No bet: Paused after {st.session_state.consecutive_losses} losses"
     if st.session_state.pattern_volatility > 0.6:
@@ -398,11 +402,12 @@ def place_result(result: str):
         "pattern_volatility": st.session_state.pattern_volatility,
         "pattern_success": st.session_state.pattern_success.copy(),
         "pattern_attempts": st.session_state.pattern_attempts.copy(),
-        "safety_net_percentage": st.session_state.safety_net_percentage
+        "safety_net_percentage": st.session_state.safety_net_percentage,
+        "pause_betting": st.session_state.pause_betting
     }
 
     if result == 'T':
-        # Reset bet selection (prediction-related) parameters only
+        # Reset bet selection parameters and pause betting
         st.session_state.consecutive_losses = 0
         st.session_state.prediction_accuracy = {'P': 0, 'B': 0, 'total': 0}
         st.session_state.pattern_volatility = 0.0
@@ -410,8 +415,9 @@ def place_result(result: str):
         st.session_state.pattern_attempts = defaultdict(int)
         st.session_state.insights = {}
         st.session_state.loss_log = []
-        st.session_state.advice = "Tie occurred: Bet selection parameters reset."
+        st.session_state.advice = "Tie occurred: Betting paused until next non-Tie result."
         st.session_state.pending_bet = None
+        st.session_state.pause_betting = True
     else:
         # Process non-Tie results (P or B)
         if st.session_state.pending_bet:
@@ -468,6 +474,8 @@ def place_result(result: str):
                         st.session_state.pattern_attempts[pattern] += 1
             st.session_state.prediction_accuracy['total'] += 1
             st.session_state.pending_bet = None
+        # Resume betting after a non-Tie result
+        st.session_state.pause_betting = False
 
     st.session_state.sequence.append(result)
     if len(st.session_state.sequence) > SEQUENCE_LIMIT:
@@ -492,8 +500,8 @@ def place_result(result: str):
         st.session_state.target_hit = True
         return
 
-    # Calculate new bet for non-Tie results
-    if result != 'T':
+    # Calculate new bet only if not paused
+    if not st.session_state.pause_betting:
         pred, conf, insights = predict_next()
         bet_amount, advice = calculate_bet_amount(pred, conf)
         st.session_state.pending_bet = (bet_amount, pred) if bet_amount else None
@@ -562,7 +570,8 @@ def render_setup_form():
                     'pattern_volatility': 0.0,
                     'pattern_success': defaultdict(int),
                     'pattern_attempts': defaultdict(int),
-                    'safety_net_percentage': safety_net_percentage
+                    'safety_net_percentage': safety_net_percentage,
+                    'pause_betting': False
                 })
                 st.success(f"Session started with {betting_strategy} strategy!")
 
@@ -629,6 +638,7 @@ def render_result_input():
                         st.session_state.pending_bet = None
                         st.session_state.advice = "No bet pending."
                         st.session_state.last_was_tie = False
+                        st.session_state.pause_betting = False
                         st.success("Undone last result.")
                         st.rerun()
                 except Exception as e:
@@ -707,7 +717,7 @@ def render_accuracy():
     total = st.session_state.prediction_accuracy['total']
     if total > 0:
         p_accuracy = (st.session_state.prediction_accuracy['P'] / total) * 100
-        b_accuracy = (st.session_state.prediction_accuracy['B'] / total)ifel 100
+        b_accuracy = (st.session_state.prediction_accuracy['B'] / total) * 100
         st.markdown(f"**Player Bets**: {st.session_state.prediction_accuracy['P']}/{total} ({p_accuracy:.1f}%)")
         st.markdown(f"**Banker Bets**: {st.session_state.prediction_accuracy['B']}/{total} ({b_accuracy:.1f}%)")
 
