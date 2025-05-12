@@ -89,7 +89,7 @@ def initialize_session_state():
         'pattern_volatility': 0.0,
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
-        'safety_net_percentage': 15.0  # Reduced from 20.0
+        'safety_net_percentage': 10.0  # Reduced from 15.0
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -124,7 +124,7 @@ def reset_session():
         'pattern_volatility': 0.0,
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
-        'safety_net_percentage': 15.0  # Reduced from 20.0
+        'safety_net_percentage': 10.0  # Reduced from 15.0
     })
 
 # --- Prediction Logic ---
@@ -289,8 +289,8 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         insights['Pattern Transition'] = f"10% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
 
     recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
-    threshold = 38.0 + (st.session_state.consecutive_losses * 0.3) - (recent_accuracy * 1.0)
-    threshold = min(max(threshold, 38.0), 48.0)
+    threshold = 30.0 + (st.session_state.consecutive_losses * 0.3) - (recent_accuracy * 1.0)
+    threshold = min(max(threshold, 30.0), 40.0)
     insights['Threshold'] = f"{threshold:.1f}%"
 
     if st.session_state.pattern_volatility > 0.5:
@@ -334,9 +334,9 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
     """Calculate the next bet amount based on strategy and conditions."""
     if st.session_state.consecutive_losses >= 3 and conf < 45.0:
         return None, f"No bet: Paused after {st.session_state.consecutive_losses} losses"
-    if st.session_state.pattern_volatility > 0.6:  # Increased from 0.5
+    if st.session_state.pattern_volatility > 0.6:
         return None, f"No bet: High pattern volatility"
-    if pred is None or conf < 38.0:  # Aligned with new base threshold
+    if pred is None or conf < 30.0:
         return None, f"No bet: Confidence too low"
 
     if st.session_state.strategy == 'Flatbet':
