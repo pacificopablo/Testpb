@@ -1,3 +1,4 @@
+```python
 # Version: 2025-05-14-fix-v6
 import streamlit as st
 from collections import defaultdict
@@ -284,7 +285,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         recent_attempts = defaultdict(int)
         for h in recent_bets:
             if h['Bet_Placed'] and h['Bet'] in ['P', 'B']:
-                for pattern in h.get('Previous_State', {}).get('insights', {}):
+                for pattern in h.get('Previous_State', {}). cartographer.get('insights', {}):
                     recent_attempts[pattern] += 1
                     if h['Win']:
                         recent_success[pattern] += 1
@@ -404,7 +405,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
             if total > 0:
                 p_prob = fourgram_transitions[fourgram]['P'] / total
                 b_prob = fourgram_transitions[fourgram]['B'] / total
-                prob_p += weights['fourgram'] * (prior_p + p_prob) / (1 + total)
+                prob_p += weights['fourgram'] * (prior_P + p_prob) / (1 + total)
                 prob_b += weights['fourgram'] * (prior_b + b_prob) / (1 + total)
                 total_weight += weights['fourgram']
                 reliability = min(total / 2, 1.0)
@@ -668,7 +669,7 @@ def place_result(result: str):
             "pending_bet": st.session_state.pending_bet,
             "wins": st.session_state.wins,
             "losses": st.session_state.losses,
-            "prediction_accuracy": st.session_state.prediction_accuracy.copy(),
+            " prediction_accuracy": st.session_state.prediction_accuracy.copy(),
             "consecutive_losses": st.session_state.consecutive_losses,
             "t3_level_changes": st.session_state.t3_level_changes,
             "parlay_step_changes": st.session_state.parlay_step_changes,
@@ -687,9 +688,11 @@ def place_result(result: str):
             bet_placed = True
             if win:
                 st.session_state.bankroll += bet_amount * (0.95 if selection == 'B' else 1.0)
+                st.session_state.wins += 1
                 st.session_state.consecutive_wins += 1
                 st.session_state.consecutive_losses = 0
                 st.session_state.last_win_confidence = predict_next()[1]
+                logging.debug(f"Win recorded: Total wins={st.session_state.wins}, Consecutive wins={st.session_state.consecutive_wins}")
                 if st.session_state.consecutive_wins >= 3:
                     st.session_state.base_bet *= 1.05
                     st.session_state.base_bet = round(st.session_state.base_bet, 2)
@@ -714,7 +717,6 @@ def place_result(result: str):
                     else:
                         st.session_state.z1003_loss_count = 0
                         st.session_state.z1003_continue = False
-                st.session_state.wins += 1
                 st.session_state.prediction_accuracy[selection] += 1
                 for pattern in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
                     if pattern in st.session_state.insights:
@@ -722,8 +724,10 @@ def place_result(result: str):
                         st.session_state.pattern_attempts[pattern] += 1
             else:
                 st.session_state.bankroll -= bet_amount
+                st.session_state.losses += 1
                 st.session_state.consecutive_wins = 0
                 st.session_state.consecutive_losses += 1
+                logging.debug(f"Loss recorded: Total losses={st.session_state.losses}, Consecutive losses={st.session_state.consecutive_losses}")
                 _, conf, _ = predict_next()
                 st.session_state.loss_log.append({
                     'sequence': st.session_state.sequence[-10:],
@@ -774,6 +778,12 @@ def place_result(result: str):
 
         if st.session_state.strategy == 'T3':
             update_t3_level()
+
+        # Validate win/loss counts
+        if st.session_state.wins < 0 or st.session_state.losses < 0:
+            logging.error(f"Invalid win/loss counts: wins={st.session_state.wins}, losses={st.session_state.losses}")
+            st.session_state.wins = max(0, st.session_state.wins)
+            st.session_state.losses = max(0, st.session_state.losses)
 
         logging.debug("place_result completed")
     except Exception as e:
@@ -969,6 +979,11 @@ def render_result_input():
                             if last['Bet_Placed'] and not last['Win'] and st.session_state.loss_log:
                                 if st.session_state.loss_log[-1]['result'] == last['Result']:
                                     st.session_state.loss_log.pop()
+                            if last['Bet_Placed']:
+                                if last['Win']:
+                                    logging.debug(f"Undo win: Reducing wins from {st.session_state.wins} to {st.session_state.wins - 1}")
+                                else:
+                                    logging.debug(f"Undo loss: Reducing losses from {st.session_state.losses} to {st.session_state.losses - 1}")
                             if st.session_state.pending_bet:
                                 amount, pred = st.session_state.pending_bet
                                 conf = predict_next()[1]
@@ -1131,7 +1146,7 @@ def render_insights():
         logging.debug("render_insights completed")
     except Exception as e:
         logging.error(f"render_insights error: {str(e)}\n{traceback.format_exc()}")
-        st.error("Error rendering insights. Try resetting the session.")
+        st.error("Error rendering insights. Try= resetting the session.")
 
 def render_status():
     """Render session status information."""
@@ -1317,3 +1332,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
