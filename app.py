@@ -1,4 +1,3 @@
-```python
 # Version: 2025-05-14-fix-v6
 import streamlit as st
 from collections import defaultdict
@@ -285,7 +284,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         recent_attempts = defaultdict(int)
         for h in recent_bets:
             if h['Bet_Placed'] and h['Bet'] in ['P', 'B']:
-                for pattern in h.get('Previous_State', {}). cartographer.get('insights', {}):
+                for pattern in h.get('Previous_State', {}).get('insights', {}):
                     recent_attempts[pattern] += 1
                     if h['Win']:
                         recent_success[pattern] += 1
@@ -405,7 +404,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
             if total > 0:
                 p_prob = fourgram_transitions[fourgram]['P'] / total
                 b_prob = fourgram_transitions[fourgram]['B'] / total
-                prob_p += weights['fourgram'] * (prior_P + p_prob) / (1 + total)
+                prob_p += weights['fourgram'] * (prior_p + p_prob) / (1 + total)
                 prob_b += weights['fourgram'] * (prior_b + b_prob) / (1 + total)
                 total_weight += weights['fourgram']
                 reliability = min(total / 2, 1.0)
@@ -669,7 +668,7 @@ def place_result(result: str):
             "pending_bet": st.session_state.pending_bet,
             "wins": st.session_state.wins,
             "losses": st.session_state.losses,
-            " prediction_accuracy": st.session_state.prediction_accuracy.copy(),
+            "prediction_accuracy": st.session_state.prediction_accuracy.copy(),
             "consecutive_losses": st.session_state.consecutive_losses,
             "t3_level_changes": st.session_state.t3_level_changes,
             "parlay_step_changes": st.session_state.parlay_step_changes,
@@ -1146,7 +1145,7 @@ def render_insights():
         logging.debug("render_insights completed")
     except Exception as e:
         logging.error(f"render_insights error: {str(e)}\n{traceback.format_exc()}")
-        st.error("Error rendering insights. Try= resetting the session.")
+        st.error("Error rendering insights. Try resetting the session.")
 
 def render_status():
     """Render session status information."""
@@ -1332,4 +1331,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
