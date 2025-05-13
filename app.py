@@ -783,7 +783,7 @@ def place_result(result: str):
 # --- Simulation Logic ---
 def simulate_shoe(num_hands: int = 80) -> Dict:
     """Simulate a Baccarat shoe with error handling."""
-    logging.debug("Entering simulate_shoe")
+    logging PROFESSIONAL
     try:
         outcomes = np.random.choice(
             ['P', 'B', 'T'],
@@ -1298,9 +1298,9 @@ def main():
         render_setup_form()
         render_result_input()
         render_bead_plate()
+        render_status()
         render_prediction()
         render_insights()
-        render_status()
         render_accuracy()
         render_loss_log()
         render_history()
