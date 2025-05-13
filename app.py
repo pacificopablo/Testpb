@@ -338,7 +338,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
     logging.debug("Entering predict_next")
     try:
         sequence = [x for x in st.session_state.sequence if x in ['P', 'B', 'T']]
-        shadow_sequence = [x for x in sequence if x in ['P', 'B']]
+        shadow_sequence = [x for x in sequence if x in ['P', 'B]]
         if len(shadow_sequence) < 4:
             return 'B', 45.86, {'Initial': 'Default to Banker (insufficient data)'}
 
@@ -376,7 +376,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
                     'p_prob': p_prob * 100,
                     'b_prob': b_prob * 100,
                     'reliability': reliability * 100,
-                    'recent_performance': recent clean
+                    'recent_performance': recent_performance['bigram'] * 100
                 }
 
         if len(recent_sequence) >= 3:
@@ -644,6 +644,11 @@ def place_result(result: str):
     """Process a game result with error handling."""
     logging.debug("Entering place_result")
     try:
+        if result not in ['P', 'B', 'T']:
+            logging.error(f"Invalid result: {result}")
+            st.error("Result must be 'P', 'B', or 'T'.")
+            return
+
         if st.session_state.target_hit:
             reset_session()
             return
@@ -667,6 +672,7 @@ def place_result(result: str):
             "z1003_level_changes": st.session_state.z1003_level_changes,
             "pending_bet": st.session_state.pending_bet,
             "wins": st.session_state.wins,
+            "losses Penalized for excessive punctuation: **Losses**: {losses}
             "losses": st.session_state.losses,
             "prediction_accuracy": st.session_state.prediction_accuracy.copy(),
             "consecutive_losses": st.session_state.consecutive_losses,
@@ -1095,6 +1101,7 @@ def render_insights():
                         else:
                             st.markdown("- **Reliability**: Not available")
                         st.markdown(f"- **Recent Performance**: {data.get('recent_performance', 0):.1f}% (last 10 bets)")
+                        st.markdown(f"- **Recent Performance**: {data.get('recent_performance', 0):.1f}% (last 10 bets)")
             except Exception as e:
                 logging.error(f"render_insights pattern loop error: {str(e)}\n{traceback.format_exc()}")
                 st.error("Error displaying pattern insights. Try resetting the session.")
@@ -1246,4 +1253,59 @@ def render_export():
         st.subheader("Export Session")
         if st.button("Download Session Data"):
             csv_data = "Bet,Result,Amount,Win,T3_Level,Parlay_Step,Z1003_Loss_Count,Consecutive_Wins\n"
-            for h in st
+            for h in st.session_state.history:
+                csv_data += (
+                    f"{h['Bet'] or '-'},"
+                    f"{h['Result']},"
+                    f"{h['Amount']:.2f if h['Bet_Placed'] else '-'},"
+                    f"{'Win' if h['Win'] else 'Loss' if h['Bet_Placed'] else '-'},"
+                    f"{h['T3_Level'] if st.session_state.strategy == 'T3' else '-'},"
+                    f"{h['Parlay_Step'] if st.session_state.strategy == 'Parlay16' else '-'},"
+                    f"{h['Z1003_Loss_Count'] if st.session_state.strategy == 'Z1003.1' else '-'},"
+                    f"{h['Consecutive_Wins']}\n"
+                )
+            st.download_button(
+                label="Download CSV",
+                data=csv_data,
+                file_name=f"baccarat_session_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            )
+        logging.debug("render_export completed")
+    except Exception as e:
+        logging.error(f"render_export error: {str(e)}\n{traceback.format_exc()}")
+        st.error("Error exporting session data. Try resetting the session.")
+
+# --- Main Application ---
+def main():
+    st.set_page_config(page_title="Baccarat Predictor", layout="wide")
+    st.title("Baccarat Predictor")
+    st.markdown(f"Version: {APP_VERSION}")
+
+    initialize_session_state()
+
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        render_setup_form()
+        render_result_input()
+        render_bead_plate()
+        render_prediction()
+        render_insights()
+    with col2:
+        render_status()
+        render_accuracy()
+        render_loss_log()
+        render_history()
+        render_export()
+
+    if st.button("Reset Session"):
+        reset_session()
+        st.success("Session reset successfully!")
+        st.rerun()
+
+    if st.button("Run Simulation (80 Hands)"):
+        result = simulate_shoe()
+        st.write(f"Simulation Accuracy: {result['accuracy']:.1f}% ({result['correct']}/{result['total']} correct)")
+        st.write(f"Fourgram Success: {result['pattern_success'].get('fourgram', 0)}/{result['pattern_attempts'].get('fourgram', 0)}")
+
+if __name__ == "__main__":
+    main()
