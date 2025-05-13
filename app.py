@@ -34,7 +34,7 @@ def track_user_session() -> int:
         if os.path.exists(SESSION_FILE):
             with open(SESSION_FILE, 'r', encoding='utf-8') as f:
                 for line in f:
-                    try:
+ баг                    try:
                         session_id, timestamp = line.strip().split(',')
                         last_seen = datetime.fromisoformat(timestamp)
                         if current_time - last_seen <= timedelta(seconds=30):
@@ -59,7 +59,7 @@ def track_user_session() -> int:
 
 # --- Session State Management ---
 def initialize_session_state():
-    """Initialize session state with default values."""
+    """Initialize session state with default values, including new variables for win streak improvements."""
     defaults = {
         'bankroll': 0.0,
         'base_bet': 0.0,
@@ -96,7 +96,10 @@ def initialize_session_state():
         'pattern_volatility': 0.0,
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
-        'safety_net_percentage': 10.0
+        'safety_net_percentage': 10.0,
+        'last_win_confidence': 0.0,  # New: Track confidence of last win
+        'recent_pattern_accuracy': defaultdict(float),  # New: Track recent pattern success
+        'consecutive_wins': 0,  # New: Track consecutive wins for bet scaling
     }
     defaults['pattern_success']['fourgram'] = 0
     defaults['pattern_attempts']['fourgram'] = 0
@@ -139,7 +142,10 @@ def reset_session():
         'pattern_volatility': 0.0,
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
-        'safety_net_percentage': 10.0
+        'safety_net_percentage': 10.0,
+        'last_win_confidence': 0.0,  # New
+        'recent_pattern_accuracy': defaultdict(float),  # New
+        'consecutive_wins': 0,  # New
     })
 
 # --- Prediction Logic ---
@@ -205,20 +211,34 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
             streak_count, chop_count, double_count, volatility, shoe_bias)
 
 def calculate_weights(streak_count: int, chop_count: int, double_count: int, shoe_bias: float) -> Dict[str, float]:
-    """Calculate adaptive weights, emphasizing four-grams when reliable."""
+    """Calculate adaptive weights with short-term pattern bias for better win streaks."""
     total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
     success_ratios = {
-        'bigram': st.session_state.pattern_success.get('bigram', 0) / total_bets
-                  if st.session_state.pattern_attempts.get('bigram', 0) > 0 else 0.5,
-        'trigram': st.session_state.pattern_success.get('trigram', 0) / total_bets
-                   if st.session_state.pattern_attempts.get('trigram', 0) > 0 else 0.5,
-        'fourgram': st.session_state.pattern_success.get('fourgram', 0) / total_bets
-                    if st.session_state.pattern_attempts.get('fourgram', 0) > 0 else 0.5,
+        'bigram': st.session_state.pattern_success.get('bigram', 0) / total_bets,
+        'trigram': st.session_state.pattern_success.get('trigram', 0) / total_bets,
+        'fourgram': st.session_state.pattern_success.get('fourgram', 0) / total_bets,
         'streak': 0.6 if streak_count >= 2 else 0.3,
         'chop': 0.4 if chop_count >= 2 else 0.2,
         'double': 0.4 if double_count >= 1 else 0.2
     }
-    if success_ratios['fourgram'] > 0.6:  # Boost four-gram weight if highly successful
+    # Calculate recent pattern accuracy (last 10 bets)
+    recent_bets = st.session_state.history[-10:]
+    recent_success = defaultdict(int)
+    recent_attempts = defaultdict(int)
+    for h in recent_bets:
+        if h['Bet_Placed'] and h['Bet'] in ['P', 'B']:
+            for pattern in h.get('Previous_State', {}).get('insights', {}):
+                recent_attempts[pattern] += 1
+                if h['Win']:
+                    recent_success[pattern] += 1
+    for pattern in success_ratios:
+        if recent_attempts[pattern] > 0:
+            recent_ratio = recent_success[pattern] / recent_attempts[pattern]
+            if recent_ratio > 0.7:  # Boost weight for recently successful patterns
+                success_ratios[pattern] *= 1.3
+            elif recent_ratio < 0.3:  # Reduce weight for recent failures
+                success_ratios[pattern] *= 0.8
+    if success_ratios['fourgram'] > 0.6:
         success_ratios['fourgram'] *= 1.2
     weights = {k: np.exp(v) / (1 + np.exp(v)) for k, v in success_ratios.items()}
     
@@ -235,15 +255,16 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
     if total_w == 0:
         weights = {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
         total_w = sum(weights.values())
-    return {k: max(w / total_w, 0.05) for k, w in weights.items()}
+    return {k: max(w / total_w, 0.05) for k, v in weights.items()}
 
 def predict_next() -> Tuple[Optional[str], float, Dict]:
-    """Predict the next outcome with enhanced four-grams and neutral tie handling."""
+    """Predict the next outcome with stricter thresholds and shadow sequence for Ties."""
     sequence = [x for x in st.session_state.sequence if x in ['P', 'B', 'T']]
-    if len(sequence) < 4:
+    shadow_sequence = [x for x in sequence if x in ['P', 'B']]  # Exclude Ties for patterns
+    if len(shadow_sequence) < 4:
         return 'B', 45.86, {}
 
-    recent_sequence = sequence[-WINDOW_SIZE:]
+    recent_sequence = shadow_sequence[-WINDOW_SIZE:]
     (bigram_transitions, trigram_transitions, fourgram_transitions, pattern_transitions,
      streak_count, chop_count, double_count, volatility, shoe_bias) = analyze_patterns(recent_sequence)
     st.session_state.pattern_volatility = volatility
@@ -351,8 +372,8 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         insights['Pattern Transition'] = f"10% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
 
     recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
-    threshold = 32.0 + (st.session_state.consecutive_losses * 0.5) - (recent_accuracy * 0.8)  # Stricter threshold
-    threshold = min(max(threshold, 32.0), 42.0)
+    threshold = 32.0 + (st.session_state.consecutive_losses * 2.0) - (recent_accuracy * 0.8)  # Stricter per loss
+    threshold = min(max(threshold, 32.0), 48.0)
     insights['Threshold'] = f"{threshold:.1f}%"
 
     if st.session_state.pattern_volatility > 0.5:
@@ -394,20 +415,18 @@ def update_t3_level():
         st.session_state.t3_results = []
 
 def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optional[str]]:
-    """Calculate the next bet amount, resetting level/step if risk is too high."""
+    """Calculate the next bet amount with low-confidence win pause."""
     if st.session_state.consecutive_losses >= 3 and conf < 45.0:
-        st.warning(f"Paused betting: {st.session_state.consecutive_losses} consecutive losses, confidence {conf:.1f}% < 45%")
         return None, f"No bet: Paused after {st.session_state.consecutive_losses} losses"
     if st.session_state.pattern_volatility > 0.6:
-        st.warning(f"Paused betting: High pattern volatility {st.session_state.pattern_volatility:.2f}")
         return None, f"No bet: High pattern volatility"
     if pred is None or conf < 32.0:
-        st.warning(f"Paused betting: Confidence {conf:.1f}% < 32% or no prediction")
         return None, f"No bet: Confidence too low"
+    if st.session_state.last_win_confidence < 40.0 and st.session_state.consecutive_wins > 0:
+        return None, f"No bet: Low-confidence win ({st.session_state.last_win_confidence:.1f}%)"
 
     if st.session_state.strategy == 'Z1003.1':
         if st.session_state.z1003_loss_count >= 3 and not st.session_state.z1003_continue:
-            st.warning("Paused betting: Z1003.1 stopped after three losses")
             return None, "No bet: Stopped after three losses (Z1003.1 rule)"
         bet_amount = st.session_state.base_bet + (st.session_state.z1003_loss_count * 0.10)
     elif st.session_state.strategy == 'Flatbet':
@@ -421,16 +440,20 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
 
     safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
     if bet_amount > st.session_state.bankroll:
-        st.warning(f"Bet amount ${bet_amount:.2f} exceeds bankroll ${st.session_state.bankroll:.2f}")
-        return None, "No bet: Bet amount exceeds bankroll"
+        st.session_state.t3_level = 1
+        st.session_state.parlay_step = 1
+        st.session_state.z1003_loss_count = 0
+        return None, "No bet: Bet exceeds bankroll, levels reset"
     if st.session_state.bankroll - bet_amount < safe_bankroll * 0.5:
-        st.warning(f"Bet would reduce bankroll below safety net: ${st.session_state.bankroll:.2f} - ${bet_amount:.2f} < ${safe_bankroll * 0.5:.2f}")
-        return None, "No bet: Below safety net threshold"
+        st.session_state.t3_level = 1
+        st.session_state.parlay_step = 1
+        st.session_state.z1003_loss_count = 0
+        return None, "No bet: Below safety net, levels reset"
 
     return bet_amount, f"Next Bet: ${bet_amount:.2f} on {pred}"
 
 def place_result(result: str):
-    """Process a game result and update session state."""
+    """Process a game result with improved Z1003.1 and bet scaling for win streaks."""
     if st.session_state.target_hit:
         reset_session()
         return
@@ -462,7 +485,9 @@ def place_result(result: str):
         "pattern_volatility": st.session_state.pattern_volatility,
         "pattern_success": st.session_state.pattern_success.copy(),
         "pattern_attempts": st.session_state.pattern_attempts.copy(),
-        "safety_net_percentage": st.session_state.safety_net_percentage
+        "safety_net_percentage": st.session_state.safety_net_percentage,
+        "consecutive_wins": st.session_state.consecutive_wins,  # New
+        "last_win_confidence": st.session_state.last_win_confidence,  # New
     }
 
     if st.session_state.pending_bet and result != 'T':
@@ -471,6 +496,13 @@ def place_result(result: str):
         bet_placed = True
         if win:
             st.session_state.bankroll += bet_amount * (0.95 if selection == 'B' else 1.0)
+            st.session_state.consecutive_wins += 1
+            st.session_state.consecutive_losses = 0
+            st.session_state.last_win_confidence = predict_next()[1]
+            # Scale base bet after 3 consecutive wins
+            if st.session_state.consecutive_wins >= 3:
+                st.session_state.base_bet *= 1.05
+                st.session_state.base_bet = round(st.session_state.base_bet, 2)
             if st.session_state.strategy == 'T3':
                 st.session_state.t3_results.append('W')
             elif st.session_state.strategy == 'Parlay16':
@@ -486,34 +518,22 @@ def place_result(result: str):
                 else:
                     st.session_state.parlay_using_base = False
             elif st.session_state.strategy == 'Z1003.1':
-                st.session_state.z1003_loss_count = 0
-                st.session_state.z1003_continue = False
+                # Skip reset if confidence > 50% and low volatility
+                _, conf, _ = predict_next()
+                if conf > 50.0 and st.session_state.pattern_volatility < 0.4:
+                    st.session_state.z1003_continue = True
+                else:
+                    st.session_state.z1003_loss_count = 0
+                    st.session_state.z1003_continue = False
             st.session_state.wins += 1
             st.session_state.prediction_accuracy[selection] += 1
-            st.session_state.consecutive_losses = 0
             for pattern in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
                 if pattern in st.session_state.insights:
                     st.session_state.pattern_success[pattern] += 1
                     st.session_state.pattern_attempts[pattern] += 1
         else:
             st.session_state.bankroll -= bet_amount
-            if st.session_state.strategy == 'T3':
-                st.session_state.t3_results.append('L')
-            elif st.session_state.strategy == 'Parlay16':
-                st.session_state.parlay_wins = 0
-                old_step = st.session_state.parlay_step
-                st.session_state.parlay_step = min(st.session_state.parlay_step + 1, 16)
-                st.session_state.parlay_using_base = True
-                if old_step != st.session_state.parlay_step:
-                    st.session_state.parlay_step_changes += 1
-                st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, old_step)
-            elif st.session_state.strategy == 'Z1003.1':
-                st.session_state.z1003_loss_count += 1
-                if st.session_state.z1003_loss_count == 2 and st.session_state.history and st.session_state.history[-1]['Win']:
-                    st.session_state.z1003_continue = True
-                elif st.session_state.z1003_loss_count >= 3:
-                    st.session_state.z1003_continue = False
-            st.session_state.losses += 1
+            st.session_state.consecutive_wins = 0
             st.session_state.consecutive_losses += 1
             _, conf, _ = predict_next()
             st.session_state.loss_log.append({
@@ -545,7 +565,8 @@ def place_result(result: str):
         "Z1003_Loss_Count": st.session_state.z1003_loss_count,
         "Z1003_Bet_Factor": None,
         "Previous_State": previous_state,
-        "Bet_Placed": bet_placed
+        "Bet_Placed": bet_placed,
+        "Consecutive_Wins": st.session_state.consecutive_wins,  # New
     })
     if len(st.session_state.history) > HISTORY_LIMIT:
         st.session_state.history = st.session_state.history[-HISTORY_LIMIT:]
@@ -556,7 +577,9 @@ def place_result(result: str):
 
     pred, conf, insights = predict_next()
     if st.session_state.strategy == 'Z1003.1' and st.session_state.z1003_loss_count >= 3 and not st.session_state.z1003_continue:
-        bet_amount, advice = None, "No bet: Stopped after three losses (Z1003.1 rule)"
+        bet_amount, advice = None, "
+
+No bet: Stopped after three losses (Z1003.1 rule)"
     else:
         bet_amount, advice = calculate_bet_amount(pred, conf)
     st.session_state.pending_bet = (bet_amount, pred) if bet_amount else None
@@ -681,7 +704,10 @@ def render_setup_form():
                     'pattern_volatility': 0.0,
                     'pattern_success': defaultdict(int),
                     'pattern_attempts': defaultdict(int),
-                    'safety_net_percentage': safety_net_percentage
+                    'safety_net_percentage': safety_net_percentage,
+                    'last_win_confidence': 0.0,  # New
+                    'recent_pattern_accuracy': defaultdict(float),  # New
+                    'consecutive_wins': 0,  # New
                 })
                 st.session_state.pattern_success['fourgram'] = 0
                 st.session_state.pattern_attempts['fourgram'] = 0
@@ -804,7 +830,7 @@ def render_insights():
         st.warning(f"High Pattern Volatility: {st.session_state.pattern_volatility:.2f} (Betting paused)")
 
 def render_status():
-    """Render session status information."""
+    """Render session status information, including consecutive wins."""
     st.subheader("Status")
     st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
     st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
@@ -818,6 +844,7 @@ def render_status():
         strategy_status += f" | Loss Count: {st.session_state.z1003_loss_count} | Level Changes: {st.session_state.z1003_level_changes} | Continue: {st.session_state.z1003_continue}"
     st.markdown(strategy_status)
     st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
+    st.markdown(f"**Consecutive Wins**: {st.session_state.consecutive_wins}")  # New
     st.markdown(f"**Online Users**: {track_user_session()}")
 
     if st.session_state.initial_base_bet > 0 and st.session_state.initial_bankroll > 0:
@@ -866,7 +893,7 @@ def render_loss_log():
         ])
 
 def render_history():
-    """Render betting history table."""
+    """Render betting history table, including consecutive wins."""
     if st.session_state.history:
         st.subheader("Bet History")
         n = st.slider("Show last N bets", 5, 50, 10)
@@ -879,6 +906,7 @@ def render_history():
                 "T3_Level": h["T3_Level"] if st.session_state.strategy == 'T3' else "-",
                 "Parlay_Step": h["Parlay_Step"] if st.session_state.strategy == 'Parlay16' else "-",
                 "Z1003_Loss_Count": h["Z1003_Loss_Count"] if st.session_state.strategy == 'Z1003.1' else "-",
+                "Consecutive_Wins": h["Consecutive_Wins"],  # New
             }
             for h in st.session_state.history[-n:]
         ])
@@ -887,9 +915,9 @@ def render_export():
     """Render session data export option."""
     st.subheader("Export Session")
     if st.button("Download Session Data"):
-        csv_data = "Bet,Result,Amount,Win,T3_Level,Parlay_Step,Z1003_Loss_Count\n"
+        csv_data = "Bet,Result,Amount,Win,T3_Level,Parlay_Step,Z1003_Loss_Count,Consecutive_Wins\n"
         for h in st.session_state.history:
-            csv_data += f"{h['Bet'] or '-'},{h['Result']},${h['Amount']:.2f},{h['Win']},{h['T3_Level']},{h['Parlay_Step']},{h['Z1003_Loss_Count']}\n"
+            csv_data += f"{h['Bet'] or '-'},{h['Result']},${h['Amount']:.2f},{h['Win']},{h['T3_Level']},{h['Parlay_Step']},{h['Z1003_Loss_Count']},{h['Consecutive_Wins']}\n"
         st.download_button("Download CSV", csv_data, "session_data.csv", "text/csv")
 
 def render_simulation():
