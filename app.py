@@ -23,67 +23,12 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v9"  # Updated version
+APP_VERSION = "2025-05-14-fix-v10"  # Updated for corrected syntax and fixes
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
 
-# --- Session State Initialization ---
-def reset_session():
-    """Initialize or reset session state."""
-    logging.debug("Resetting session state")
-    st.session_state.bankroll = 100.0
-    st.session_state.initial_bankroll = 100.0
-    st.session_state.base_bet = 1.0
-    st.session_state.initial_base_bet = 1.0
-    st.session_state.safety_net_percentage = 10.0
-    st.session_state.strategy = 'T3'
-    st.session_state.sequence = []
-    st.session_state.history = []
-    st.session_state.pending_bet = None
-    st.session_state.advice = "No bet placed yet."
-    st.session_state.wins = 0
-    st.session_state.losses = 0
-    st.session_state.consecutive_wins = 0
-    st.session_state.consecutive_losses = 0
-    st.session_state.last_win_confidence = 0.0
-    st.session_state.t3_level = 1
-    st.session_state.t3_results = []
-    st.session_state.t3_peak_level = 1
-    st.session_state.t3_level_changes = 0
-    st.session_state.parlay_step = 1
-    st.session_state.parlay_wins = 0
-    st.session_state.parlay_using_base = True
-    st.session_state.parlay_peak_step = 1
-    st.session_state.parlay_step_changes = 0
-    st.session_state.z1003_loss_count = 0
-    st.session_state.z1003_bet_factor = 0.0
-    st.session_state.z1003_continue = False
-    st.session_state.z1003_level_changes = 0
-    st.session_state.prediction_accuracy = defaultdict(int)
-    st.session_state.pattern_volatility = 0.0
-    st.session_state.pattern_success = defaultdict(int)
-    st.session_state.pattern_attempts = defaultdict(int)
-    st.session_state.insights = {}
-    st.session_state.loss_log = []
-    st.session_state.target_hit = False
-    st.session_state.last_was_tie = False
-    logging.debug("Session state reset")
-
-# --- Stub Functions (Replace with Actual Implementations) ---
-def predict_next() -> Tuple[Optional[str], float, Dict]:
-    """Stub for prediction logic."""
-    return 'P', 50.0, {'bigram': 0.5}
-
-def check_target_hit() -> bool:
-    """Stub for target hit check."""
-    return False
-
-def track_user_session() -> int:
-    """Stub for user session tracking."""
-    return 1
-
-# --- Strategy Functions ---
+# --- Modified Functions ---
 def update_t3_level():
     """Update T3 betting level based on recent results."""
     logging.debug("Entering update_t3_level")
@@ -343,47 +288,3 @@ def render_status():
     except Exception as e:
         logging.error(f"render_status error: {str(e)}\n{traceback.format_exc()}")
         st.error("Error rendering status. Try resetting the session.")
-
-# --- Main App Logic ---
-def main():
-    """Main Streamlit application."""
-    st.title("Baccarat Betting System")
-    st.markdown(f"Version: {APP_VERSION}")
-
-    # Initialize session state if not already done
-    if 'bankroll' not in st.session_state:
-        reset_session()
-
-    # Sidebar for configuration
-    with st.sidebar:
-        st.header("Settings")
-        st.session_state.bankroll = st.number_input("Bankroll", min_value=0.0, value=st.session_state.bankroll, step=10.0)
-        st.session_state.base_bet = st.number_input("Base Bet", min_value=0.0, value=st.session_state.base_bet, step=0.1)
-        st.session_state.safety_net_percentage = st.number_input("Safety Net %", min_value=0.0, max_value=100.0, value=st.session_state.safety_net_percentage, step=1.0)
-        st.session_state.strategy = st.selectbox("Strategy", STRATEGIES, index=STRATEGIES.index(st.session_state.strategy))
-        if st.button("Reset Session"):
-            reset_session()
-            st.experimental_rerun()
-
-    # Main UI
-    st.subheader("Place Result")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("Player"):
-            place_result('P')
-    with col2:
-        if st.button("Banker"):
-            place_result('B')
-    with col3:
-        if st.button("Tie"):
-            place_result('T')
-
-    # Display status
-    render_status()
-
-    # Display advice
-    st.subheader("Prediction")
-    st.markdown(st.session_state.advice)
-
-if __name__ == "__main__":
-    main()
