@@ -1,4 +1,4 @@
-# Version: 2025-05-14-fix-v6
+# Version: 2025-05-14-fix-v7
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -24,16 +24,15 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v6"
+APP_VERSION = "2025-05-14-fix-v7"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
 
 # --- Session Tracking ---
 def track_user_session() -> int:
-    """Track active user sessions with fallback for file errors."""
     logging.debug("Entering track_user_session")
-    if 'session_id' not in st.session_state:
+    if 'session_id' not in st.session_state.
         st.session_state.session_id = str(time.time())
 
     sessions = {}
@@ -72,7 +71,6 @@ def track_user_session() -> int:
 
 # --- Session State Management ---
 def initialize_session_state():
-    """Initialize session state with default values."""
     logging.debug("Entering initialize_session_state")
     defaults = {
         'bankroll': 0.0,
@@ -126,10 +124,9 @@ def initialize_session_state():
     logging.debug("initialize_session_state completed")
 
 def reset_session():
-    """Reset session state to initial values."""
     logging.debug("Entering reset_session")
     for key in list(st.session_state.keys()):
-        if key != 'session_id':  # Preserve session_id
+        if key != 'session_id':
             del st.session_state[key]
     initialize_session_state()
     st.session_state.update({
@@ -169,7 +166,6 @@ def reset_session():
 
 # --- Prediction Logic ---
 def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, int, int, float, float, Dict]:
-    """Analyze sequence patterns with streak and chop metrics."""
     logging.debug("Entering analyze_patterns")
     try:
         bigram_transitions = defaultdict(lambda: defaultdict(int))
@@ -266,7 +262,6 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
         return ({}, {}, {}, {}, 0, 0, 0, 0.0, 0.0, {})
 
 def calculate_weights(streak_count: int, chop_count: int, double_count: int, shoe_bias: float) -> Dict[str, float]:
-    """Calculate adaptive weights with error handling."""
     logging.debug("Entering calculate_weights")
     try:
         total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
@@ -334,7 +329,6 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         return {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
 
 def predict_next() -> Tuple[Optional[str], float, Dict]:
-    """Predict the next outcome with error handling."""
     logging.debug("Entering predict_next")
     try:
         sequence = [x for x in st.session_state.sequence if x in ['P', 'B', 'T']]
@@ -557,7 +551,6 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
 
 # --- Betting Logic ---
 def check_target_hit() -> bool:
-    """Check if the profit target has been reached."""
     logging.debug("Entering check_target_hit")
     try:
         if st.session_state.target_mode == "Profit %":
@@ -571,7 +564,6 @@ def check_target_hit() -> bool:
         return False
 
 def update_t3_level():
-    """Update T3 betting level based on recent results."""
     logging.debug("Entering update_t3_level")
     try:
         if len(st.session_state.t3_results) == 3:
@@ -596,7 +588,6 @@ def update_t3_level():
         st.error("Error updating T3 level. Try resetting the session.")
 
 def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optional[str]]:
-    """Calculate the next bet amount with error handling."""
     logging.debug("Entering calculate_bet_amount")
     try:
         if st.session_state.consecutive_losses >= 3 and conf < 45.0:
@@ -641,7 +632,6 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         return None, "No bet: Calculation error"
 
 def place_result(result: str):
-    """Process a game result with error handling."""
     logging.debug("Entering place_result")
     try:
         if st.session_state.target_hit:
@@ -724,6 +714,7 @@ def place_result(result: str):
                 st.session_state.bankroll -= bet_amount
                 st.session_state.consecutive_wins = 0
                 st.session_state.consecutive_losses += 1
+                st.session_state.losses += 1
                 _, conf, _ = predict_next()
                 st.session_state.loss_log.append({
                     'sequence': st.session_state.sequence[-10:],
@@ -782,7 +773,6 @@ def place_result(result: str):
 
 # --- Simulation Logic ---
 def simulate_shoe(num_hands: int = 80) -> Dict:
-    """Simulate a Baccarat shoe with error handling."""
     logging.debug("Entering simulate_shoe")
     try:
         outcomes = np.random.choice(
@@ -840,7 +830,137 @@ def simulate_shoe(num_hands: int = 80) -> Dict:
 
 # --- UI Components ---
 def render_setup_form():
-    """Render the setup form for session configuration."""
+    logging.debug("Entering render_setup_form")
+    try:
+        st.subheader("Setup")
+        with st.form("setup_form"):
+            bankroll = st.number_input("Enter Bankroll ($)", min_value=0.0, value=st.session_state.bankroll or 10.0, step=0.01, format="%.2f")
+            base_bet = st.number_input("Enter Base Bet ($)", min_value=0.01, value=st.session_state.base_bet or 0.20, step=0.01, format="%.2f")
+            betting_strategy = st.selectbox(
+                "Choose Betting Strategy", STRATEGIES,
+                index=STRATEGIES.index(st.session_state.strategy),
+                help="T3: Adjusts bet size based on wins/losses. Flatbet: Fixed bet size. Parlay16: 16-step progression. Z1003.1: Resets after first win, stops after three losses."
+            )
+            target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
+            target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
+            safety_net_percentage = st.number_input(
+                "Safety Net Percentage (%)",
+                min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
+                help="Percentage of initial bankroll to keep as a safety net after each bet."
+            )
+            start_clicked = st.form_submit_button("Start Session")
+
+            if start_clicked:
+                if bankroll <= 0:
+                    st.error("Bankroll must be positive.")
+                elif base_bet < 0.01:
+                    st.error("Base bet must be at least $0.01.")
+                elif base_bet > bankroll:
+                    st.error("Base bet cannot exceed bankroll.")
+                else:
+                    st.session_state.update({
+                        'bankroll': bankroll,
+                        'base_bet': base_bet,
+                        'initial_base_bet': base_bet,
+                        'strategystations.append(result)
+        if len(st.session_state.sequence) > SEQUENCE_LIMIT:
+            st.session_state.sequence = st.session_state.sequence[-SEQUENCE_LIMIT:]
+
+        st.session_state.history.append({
+            "Bet": selection,
+            "Result": result,
+            "Amount": bet_amount,
+            "Win": win,
+            "T3_Level": st.session_state.t3_level,
+            "Parlay_Step": st.session_state.parlay_step,
+            "Z1003_Loss_Count": st.session_state.z1003_loss_count,
+            "Previous_State": previous_state,
+            "Bet_Placed": bet_placed,
+            "Consecutive_Wins": st.session_state.consecutive_wins,
+        })
+        if len(st.session_state.history) > HISTORY_LIMIT:
+            st.session_state.history = st.session_state.history[-HISTORY_LIMIT:]
+
+        if check_target_hit():
+            st.session_state.target_hit = True
+            return
+
+        pred, conf, insights = predict_next()
+        if st.session_state.strategy == 'Z1003.1' and st.session_state.z1003_loss_count >= 3 and not st.session_state.z1003_continue:
+            bet_amount, advice = None, "No bet: Stopped after three losses (Z1003.1 rule)"
+        else:
+            bet_amount, advice = calculate_bet_amount(pred, conf)
+        st.session_state.pending_bet = (bet_amount, pred) if bet_amount else None
+        st.session_state.advice = advice
+        st.session_state.insights = insights
+
+        if st.session_state.strategy == 'T3':
+            update_t3_level()
+
+        logging.debug("place_result completed")
+    except Exception as e:
+        logging.error(f"place_result error: {str(e)}\n{traceback.format_exc()}")
+        st.error("Error processing result. Try resetting the session.")
+
+# --- Simulation Logic ---
+def simulate_shoe(num_hands: int = 80) -> Dict:
+    logging.debug("Entering simulate_shoe")
+    try:
+        outcomes = np.random.choice(
+            ['P', 'B', 'T'],
+            size=num_hands,
+            p=[0.4462, 0.4586, 0.0952]
+        )
+        sequence = []
+        correct = total = 0
+        pattern_success = defaultdict(int)
+        pattern_attempts = defaultdict(int)
+
+        for outcome in outcomes:
+            sequence.append(outcome)
+            pred, conf, insights = predict_next()
+            if pred and outcome in ['P', 'B']:
+                total += 1
+                if pred == outcome:
+                    correct += 1
+                    for pattern in insights:
+                        pattern_success[pattern] += 1
+                        pattern_attempts[pattern] += 1
+                else:
+                    for pattern in insights:
+                        pattern_attempts[pattern] += 1
+            st.session_state.sequence = sequence.copy()
+            st.session_state.prediction_accuracy['total'] += 1
+            if outcome in ['P', 'B']:
+                st.session_state.prediction_accuracy[outcome] += 1 if pred == outcome else 0
+
+        accuracy = (correct / total * 100) if total > 0 else 0
+        result = {
+            'accuracy': accuracy,
+            'correct': correct,
+            'total': total,
+            'pattern_success': dict(pattern_success),
+            'pattern_attempts': dict(pattern_attempts),
+            'sequence': sequence
+        }
+
+        try:
+            with open(SIMULATION_LOG, 'a', encoding='utf-8') as f:
+                f.write(f"{datetime.now().isoformat()}: Accuracy={accuracy:.1f}%, Correct={correct}/{total}, "
+                        f"Fourgram={result['pattern_success'].get('fourgram', 0)}/{result['pattern_attempts'].get('fourgram', 0)}\n")
+        except (PermissionError, OSError) as e:
+            logging.error(f"Simulation log write error: {str(e)}")
+            st.warning("Unable to write to simulation log. Results displayed only.")
+
+        logging.debug("simulate_shoe completed")
+        return result
+    except Exception as e:
+        logging.error(f"simulate_shoe error: {str(e)}\n{traceback.format_exc()}")
+        st.error("Error running simulation. Try resetting the session.")
+        return {'accuracy': 0, 'correct': 0, 'total': 0, 'pattern_success': {}, 'pattern_attempts': {}, 'sequence': []}
+
+# --- UI Components ---
+def render_setup_form():
     logging.debug("Entering render_setup_form")
     try:
         st.subheader("Setup")
@@ -919,7 +1039,6 @@ def render_setup_form():
         st.error("Error rendering setup form. Try resetting the session.")
 
 def render_result_input():
-    """Render the result input buttons."""
     logging.debug("Entering render_result_input")
     try:
         st.subheader("Enter Result")
@@ -994,7 +1113,6 @@ def render_result_input():
         st.error("Error rendering result input. Try resetting the session.")
 
 def render_bead_plate():
-    """Render the current sequence as a bead plate."""
     logging.debug("Entering render_bead_plate")
     try:
         st.subheader("Current Sequence (Bead Plate)")
@@ -1027,7 +1145,6 @@ def render_bead_plate():
         st.error("Error rendering bead plate. Try resetting the session.")
 
 def render_prediction():
-    """Render the current prediction and advice."""
     logging.debug("Entering render_prediction")
     try:
         if st.session_state.pending_bet:
@@ -1045,7 +1162,6 @@ def render_prediction():
         st.error("Error rendering prediction. Try resetting the session.")
 
 def render_insights():
-    """Render prediction insights with error handling."""
     logging.debug("Entering render_insights")
     try:
         st.subheader("Prediction Insights")
@@ -1084,7 +1200,10 @@ def render_insights():
                             st.markdown(f"- **Player Probability**: {data.get('p_prob', 0):.1f}%")
                             st.markdown(f"- **Banker Probability**: {data.get('b_prob', 0):.1f}%")
                         elif pattern == 'Streak':
-                            st.markdown(f"- **Streak Type**: {data.get('streak_type', 'N/A')} (Length: {data.get('streak_count', 0)})")
+                            st.markdown(f"- **Streak Type**: {data.get('streak_type', 'N/A')} (Length: {data.get(' spanning multiple lines. Here's the continuation of the script, picking up where the previous part left off:
+
+<xaiArtifact artifact_id="29424cb9-1a4b-41cc-ad9b-4963be47cafe" artifact_version_id="4d9dfe4f-39b8-4172-8031-2f1f1db45910" title="app.py" contentType="text/python">
+                        'streak_count', 0)})")
                         elif pattern == 'Chop':
                             st.markdown(f"- **Alternations**: {data.get('chop_count', 0)}")
                             st.markdown(f"- **Next Predicted**: {data.get('next_pred', 'N/A')}")
@@ -1134,7 +1253,6 @@ def render_insights():
         st.error("Error rendering insights. Try resetting the session.")
 
 def render_status():
-    """Render session status information."""
     logging.debug("Entering render_status")
     try:
         st.subheader("Status")
@@ -1165,7 +1283,6 @@ def render_status():
         st.error("Error rendering status. Try resetting the session.")
 
 def render_accuracy():
-    """Render prediction accuracy metrics and trend chart."""
     logging.debug("Entering render_accuracy")
     try:
         st.subheader("Prediction Accuracy")
@@ -1194,7 +1311,6 @@ def render_accuracy():
         st.error("Error rendering accuracy. Try resetting the session.")
 
 def render_loss_log():
-    """Render recent loss log."""
     logging.debug("Entering render_loss_log")
     try:
         if st.session_state.loss_log:
@@ -1215,7 +1331,6 @@ def render_loss_log():
         st.error("Error rendering loss log. Try resetting the session.")
 
 def render_history():
-    """Render betting history table."""
     logging.debug("Entering render_history")
     try:
         if st.session_state.history:
@@ -1240,7 +1355,6 @@ def render_history():
         st.error("Error rendering history. Try resetting the session.")
 
 def render_export():
-    """Render session data export option."""
     logging.debug("Entering render_export")
     try:
         st.subheader("Export Session")
@@ -1255,7 +1369,6 @@ def render_export():
         st.error("Error rendering export. Try resetting the session.")
 
 def render_simulation():
-    """Render simulation controls and results."""
     logging.debug("Entering render_simulation")
     try:
         st.subheader("Run Simulation")
@@ -1266,54 +1379,4 @@ def render_simulation():
                 st.write(f"**Simulation Results**")
                 st.write(f"Accuracy: {result['accuracy']:.1f}% ({result['correct']}/{result['total']} correct)")
                 st.write("Pattern Performance:")
-                for pattern in result['pattern_success']:
-                    success = result['pattern_success'][pattern]
-                    attempts = result['pattern_attempts'][pattern]
-                    st.write(f"{pattern}: {success}/{attempts} ({success/attempts*100:.1f}%)" if attempts > 0 else f"{pattern}: 0/0 (0%)")
-                st.write("Results logged to simulation_log.txt")
-            except Exception as e:
-                logging.error(f"Simulation run error: {str(e)}\n{traceback.format_exc()}")
-                st.error("Error running simulation. Try resetting the session.")
-        logging.debug("render_simulation completed")
-    except Exception as e:
-        logging.error(f"render_simulation error: {str(e)}\n{traceback.format_exc()}")
-        st.error("Error rendering simulation. Try resetting the session.")
-
-# --- Main Application ---
-def main():
-    """Main application function with comprehensive error handling."""
-    logging.debug("Entering main")
-    try:
-        st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
-        st.title("MANG BACCARAT GROUP")
-        st.markdown(f"**App Version**: {APP_VERSION}")
-        initialize_session_state()
-
-        # Session state reset button
-        if st.button("Reset Session State"):
-            reset_session()
-            st.success("Session state cleared. Please start a new session.")
-            st.rerun()
-
-        render_setup_form()
-        render_result_input()
-        render_bead_plate()
-        render_prediction()
-        render_insights()
-        render_status()
-        render_accuracy()
-        render_loss_log()
-        render_history()
-        render_export()
-        render_simulation()
-
-        logging.debug("main completed")
-    except NameError as e:
-        logging.error(f"NameError in main: {str(e)}\n{traceback.format_exc()}")
-        st.error(f"Variable error: {str(e)}. Try resetting the session state or contact support.")
-    except Exception as e:
-        logging.error(f"Unexpected error in main: {str(e)}\n{traceback.format_exc()}")
-        st.error("An unexpected error occurred. Try resetting the session or contact support.")
-
-if __name__ == "__main__":
-    main()
+                for pattern in result['pattern_success
