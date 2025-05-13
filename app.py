@@ -1,4 +1,4 @@
-# Version: 2025-05-14-fix-v6
+# Version: 2025-05-14-fix-v7
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -24,7 +24,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v6"
+APP_VERSION = "2025-05-14-fix-v7"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -460,7 +460,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
             double_prob = 0.6
             if recent_sequence[-1] == 'P':
                 prob_p += weights['double'] * double_prob
-                prob_b += weights['double'] * (1 - double_prob)
+                prob_b += weights['double'] * (1 - double Ը
             else:
                 prob_b += weights['double'] * double_prob
                 prob_p += weights['double'] * (1 - double_prob)
@@ -783,7 +783,7 @@ def place_result(result: str):
 # --- Simulation Logic ---
 def simulate_shoe(num_hands: int = 80) -> Dict:
     """Simulate a Baccarat shoe with error handling."""
-    logging PROFESSIONAL
+    logging.debug("Entering simulate_shoe")
     try:
         outcomes = np.random.choice(
             ['P', 'B', 'T'],
