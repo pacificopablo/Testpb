@@ -1,10 +1,8 @@
 import streamlit as st
-from collections import defaultdict
-from datetime import datetime, timedelta
+import numpy as np
 import os
 import time
-import numpy as np
-from typing import Tuple, Dict, Optional, List
+from datetime import datetime, timedelta
 import tempfile
 import logging
 
@@ -22,13 +20,14 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-opt-v8"
+APP_VERSION = "2025-05-14-fix-v9"
 
 # Logging Setup
 logging.basicConfig(filename='app.log', level=logging.WARNING, format='%(asctime)s %(levelname)s: %(message)s')
 
 # Session Tracking
-def track_user_session() -> int:
+def track_user_session():
+    """Track active user sessions."""
     if 'session_id' not in st.session_state:
         st.session_state.session_id = str(time.time())
     
@@ -60,6 +59,7 @@ def track_user_session() -> int:
 
 # Session State Management
 def reset_session():
+    """Initialize or reset session state."""
     defaults = {
         'bankroll': 0.0, 'base_bet': 0.0, 'initial_base_bet': 0.0, 'sequence': [], 'pending_bet': None,
         'strategy': 'T3', 't3_level': 1, 't3_results': [], 't3_level_changes': 0, 't3_peak_level': 1,
@@ -68,12 +68,11 @@ def reset_session():
         'z1003_level_changes': 0, 'advice': "", 'history': [], 'wins': 0, 'losses': 0,
         'target_mode': 'Profit %', 'target_value': 10.0, 'initial_bankroll': 0.0, 'target_hit': False,
         'prediction_accuracy': {'P': 0, 'B': 0, 'total': 0}, 'consecutive_losses': 0, 'loss_log': [],
-        'last_was_tie': False, 'insights': {}, 'pattern_volatility': 0.0, 'pattern_success': defaultdict(int),
-        'pattern_attempts': defaultdict(int), 'safety_net_percentage': 10.0, 'last_win_confidence': 0.0,
-        'consecutive_wins': 0
+        'last_was_tie': False, 'insights': {}, 'pattern_volatility': 0.0,
+        'pattern_success': {'bigram': 0, 'trigram': 0, 'fourgram': 0, 'streak': 0, 'chop': 0, 'double': 0},
+        'pattern_attempts': {'bigram': 0, 'trigram': 0, 'fourgram': 0, 'streak': 0, 'chop': 0, 'double': 0},
+        'safety_net_percentage': 10.0, 'last_win_confidence': 0.0, 'consecutive_wins': 0
     }
-    defaults['pattern_success']['fourgram'] = 0
-    defaults['pattern_attempts']['fourgram'] = 0
     for key in list(st.session_state.keys()):
         if key != 'session_id':
             del st.session_state[key]
@@ -81,92 +80,74 @@ def reset_session():
 
 # Prediction Logic
 @st.cache_data
-def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, int, int, float, float, Dict]:
+def analyze_patterns(sequence):
+    """Analyze sequence for betting patterns."""
     try:
-        bigram_transitions = defaultdict(lambda: defaultdict(int))
-        trigram_transitions = defaultdict(lambda: defaultdict(int))
-        fourgram_transitions = defaultdict(lambda: defaultdict(int))
-        pattern_transitions = defaultdict(lambda: defaultdict(int))
-        streak_count = chop_count = double_count = pattern_changes = 0
-        current_streak = None
+        bigram_transitions = {}
+        trigram_transitions = {}
+        fourgram_transitions = {}
+        streak_count = chop_count = double_count = 0
         player_count = banker_count = 0
         streak_lengths = []
-        chop_lengths = []
         filtered_sequence = [x for x in sequence if x in ['P', 'B']]
         
-        for i, (curr, next_out) in enumerate(zip(sequence[:-1], sequence[1:])):
-            if curr == 'P':
+        for i in range(len(sequence) - 1):
+            if sequence[i] == 'P':
                 player_count += 1
-            elif curr == 'B':
+            elif sequence[i] == 'B':
                 banker_count += 1
-                
             if i < len(sequence) - 2:
                 bigram = tuple(sequence[i:i+2])
+                bigram_transitions.setdefault(bigram, {}).setdefault(sequence[i+2], 0)
                 bigram_transitions[bigram][sequence[i+2]] += 1
                 if i < len(sequence) - 3:
                     trigram = tuple(sequence[i:i+3])
+                    trigram_transitions.setdefault(trigram, {}).setdefault(sequence[i+3], 0)
                     trigram_transitions[trigram][sequence[i+3]] += 1
                     if i < len(sequence) - 4:
                         fourgram = tuple(sequence[i:i+4])
+                        fourgram_transitions.setdefault(fourgram, {}).setdefault(sequence[i+4], 0)
                         fourgram_transitions[fourgram][sequence[i+4]] += 1
         
-        current_streak_length = current_chop_length = 0
+        current_streak_length = 0
         for i in range(1, len(filtered_sequence)):
             if filtered_sequence[i] == filtered_sequence[i-1]:
-                current_streak = filtered_sequence[i]
                 current_streak_length += 1
                 if i > 1 and filtered_sequence[i-1] == filtered_sequence[i-2]:
                     double_count += 1
-                if current_chop_length > 1:
-                    chop_lengths.append(current_chop_length)
-                    current_chop_length = 0
             else:
                 if current_streak_length > 1:
                     streak_lengths.append(current_streak_length)
                     streak_count += 1
-                current_streak = None
                 current_streak_length = 0
-                if i > 1 and filtered_sequence[i] != filtered_sequence[i-2]:
-                    current_chop_length += 1
-                    chop_count += 1
-                else:
-                    if current_chop_length > 1:
-                        chop_lengths.append(current_chop_length)
-                    current_chop_length = 0
         
         if current_streak_length > 1:
             streak_lengths.append(current_streak_length)
             streak_count += 1
-        if current_chop_length > 1:
-            chop_lengths.append(current_chop_length)
         
-        volatility = len(streak_lengths + chop_lengths) / max(len(filtered_sequence) - 2, 1)
+        volatility = len(streak_lengths) / max(len(filtered_sequence) - 2, 1)
         total_outcomes = max(player_count + banker_count, 1)
         shoe_bias = player_count / total_outcomes if player_count > banker_count else -banker_count / total_outcomes
         
         return (
-            bigram_transitions, trigram_transitions, fourgram_transitions, pattern_transitions,
+            bigram_transitions, trigram_transitions, fourgram_transitions, {},
             streak_count, chop_count, double_count, volatility, shoe_bias,
-            {
-                'avg_streak_length': np.mean(streak_lengths) if streak_lengths else 0,
-                'avg_chop_length': np.mean(chop_lengths) if chop_lengths else 0,
-                'streak_frequency': len(streak_lengths) / max(len(filtered_sequence), 1),
-                'chop_frequency': len(chop_lengths) / max(len(filtered_sequence), 1)
-            }
+            {'avg_streak_length': np.mean(streak_lengths) if streak_lengths else 0}
         )
     except Exception as e:
         logging.error(f"analyze_patterns error: {str(e)}")
-        st.error("Error analyzing patterns.")
+        st.error("Error in analyze_patterns. Reset session if issue persists.")
         return ({}, {}, {}, {}, 0, 0, 0, 0.0, 0.0, {})
 
 @st.cache_data
-def calculate_weights(streak_count: int, chop_count: int, double_count: int, shoe_bias: float) -> Dict[str, float]:
+def calculate_weights(streak_count, chop_count, double_count, shoe_bias):
+    """Calculate weights for prediction patterns."""
     try:
-        total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
+        total_bets = max(st.session_state.pattern_attempts['fourgram'], 1)
         success_ratios = {
-            'bigram': st.session_state.pattern_success.get('bigram', 0) / total_bets,
-            'trigram': st.session_state.pattern_success.get('trigram', 0) / total_bets,
-            'fourgram': st.session_state.pattern_success.get('fourgram', 0) / total_bets,
+            'bigram': st.session_state.pattern_success['bigram'] / total_bets,
+            'trigram': st.session_state.pattern_success['trigram'] / total_bets,
+            'fourgram': st.session_state.pattern_success['fourgram'] / total_bets,
             'streak': 0.6 if streak_count >= 2 else 0.3,
             'chop': 0.4 if chop_count >= 2 else 0.2,
             'double': 0.4 if double_count >= 1 else 0.2
@@ -182,12 +163,13 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         }
         
         return normalized_weights
-    except Exception colazione as e:
+    except Exception as e:
         logging.error(f"calculate_weights error: {str(e)}")
-        st.error("Error calculating weights.")
+        st.error("Error in calculate_weights. Reset session if issue persists.")
         return {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
 
-def predict_next() -> Tuple[Optional[str], float, Dict]:
+def predict_next():
+    """Predict next outcome based on sequence patterns."""
     try:
         sequence = [x for x in st.session_state.sequence if x in ['P', 'B', 'T']]
         shadow_sequence = [x for x in sequence if x in ['P', 'B']]
@@ -205,10 +187,10 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         
         if len(recent_sequence) >= 2:
             bigram = tuple(recent_sequence[-2:])
-            total = sum(patterns_data[0][bigram].values())
+            total = sum(patterns_data[0].get(bigram, {}).values())
             if total > 0:
-                p_prob = patterns_data[0][bigram]['P'] / total
-                b_prob = patterns_data[0][bigram]['B'] / total
+                p_prob = patterns_data[0][bigram].get('P', 0) / total
+                b_prob = patterns_data[0][bigram].get('B', 0) / total
                 prob_p += weights['bigram'] * (prior_p + p_prob)
                 prob_b += weights['bigram'] * (prior_b + b_prob)
                 total_weight += weights['bigram']
@@ -216,10 +198,10 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         
         if len(recent_sequence) >= 3:
             trigram = tuple(recent_sequence[-3:])
-            total = sum(patterns_data[1][trigram].values())
+            total = sum(patterns_data[1].get(trigram, {}).values())
             if total > 0:
-                p_prob = patterns_data[1][trigram]['P'] / total
-                b_prob = patterns_data[1][trigram]['B'] / total
+                p_prob = patterns_data[1][trigram].get('P', 0) / total
+                b_prob = patterns_data[1][trigram].get('B', 0) / total
                 prob_p += weights['trigram'] * (prior_p + p_prob)
                 prob_b += weights['trigram'] * (prior_b + b_prob)
                 total_weight += weights['trigram']
@@ -227,10 +209,10 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         
         if len(recent_sequence) >= 4:
             fourgram = tuple(recent_sequence[-4:])
-            total = sum(patterns_data[2][fourgram].values())
+            total = sum(patterns_data[2].get(fourgram, {}).values())
             if total > 0:
-                p_prob = patterns_data[2][fourgram]['P'] / total
-                b_prob = patterns_data[2][fourgram]['B'] / total
+                p_prob = patterns_data[2][fourgram].get('P', 0) / total
+                b_prob = patterns_data[2][fourgram].get('B', 0) / total
                 prob_p += weights['fourgram'] * (prior_p + p_prob)
                 prob_b += weights['fourgram'] * (prior_b + b_prob)
                 total_weight += weights['fourgram']
@@ -250,11 +232,12 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         return prediction, confidence, insights
     except Exception as e:
         logging.error(f"predict_next error: {str(e)}")
-        st.error("Error predicting outcome.")
+        st.error("Error in predict_next. Reset session if issue persists.")
         return None, 0.0, {}
 
 # Betting Logic
-def check_target_hit() -> bool:
+def check_target_hit():
+    """Check if profit target is met."""
     try:
         if st.session_state.target_mode == "Profit %":
             target_profit = st.session_state.initial_bankroll * (st.session_state.target_value / 100)
@@ -262,10 +245,11 @@ def check_target_hit() -> bool:
         return (st.session_state.bankroll - st.session_state.initial_bankroll) / st.session_state.initial_base_bet >= st.session_state.target_value
     except Exception as e:
         logging.error(f"check_target_hit error: {str(e)}")
-        st.error("Error checking target.")
+        st.error("Error in check_target_hit. Reset session if issue persists.")
         return False
 
 def update_t3_level():
+    """Update T3 betting level based on recent results."""
     if len(st.session_state.t3_results) == 3:
         wins = st.session_state.t3_results.count('W')
         old_level = st.session_state.t3_level
@@ -275,7 +259,8 @@ def update_t3_level():
         st.session_state.t3_peak_level = max(st.session_state.t3_peak_level, st.session_state.t3_level)
         st.session_state.t3_results = []
 
-def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], str]:
+def calculate_bet_amount(pred, conf):
+    """Calculate bet amount based on strategy and conditions."""
     try:
         if st.session_state.consecutive_losses >= 3 and conf < 45.0 or st.session_state.pattern_volatility > 0.6 or pred is None:
             return None, "No bet: Risk too high"
@@ -299,10 +284,11 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], str]:
         return bet_amount, f"Next Bet: ${bet_amount:.2f} on {pred}"
     except Exception as e:
         logging.error(f"calculate_bet_amount error: {str(e)}")
-        st.error("Error calculating bet.")
+        st.error("Error in calculate_bet_amount. Reset session if issue persists.")
         return None, "No bet: Calculation error"
 
-def place_result(result: str):
+def place_result(result):
+    """Process game result and update state."""
     try:
         if st.session_state.target_hit:
             reset_session()
@@ -401,10 +387,11 @@ def place_result(result: str):
             update_t3_level()
     except Exception as e:
         logging.error(f"place_result error: {str(e)}")
-        st.error("Error processing result.")
+        st.error("Error in place_result. Reset session if issue persists.")
 
 # Simulation Logic
-def simulate_shoe(num_hands: int = 80) -> Dict:
+def simulate_shoe(num_hands=80):
+    """Simulate a shoe of baccarat hands."""
     try:
         outcomes = np.random.choice(['P', 'B', 'T'], size=num_hands, p=[0.4462, 0.4586, 0.0952])
         sequence = []
@@ -434,11 +421,12 @@ def simulate_shoe(num_hands: int = 80) -> Dict:
         return result
     except Exception as e:
         logging.error(f"simulate_shoe error: {str(e)}")
-        st.error("Error running simulation.")
+        st.error("Error in simulate_shoe. Reset session if issue persists.")
         return {'accuracy': 0, 'correct': 0, 'total': 0, 'sequence': []}
 
 # UI Components
 def render_setup_form():
+    """Render form to configure session parameters."""
     st.subheader("Setup")
     with st.form("setup_form"):
         bankroll = st.number_input("Bankroll ($)", min_value=0.0, value=st.session_state.bankroll or 10.0, step=0.01, format="%.2f")
@@ -461,6 +449,7 @@ def render_setup_form():
                 st.success(f"Session started with {strategy}!")
 
 def render_result_input():
+    """Render buttons for entering game results."""
     st.subheader("Enter Result")
     st.markdown("""
     <style>
@@ -506,9 +495,16 @@ def render_result_input():
                 st.warning("No results to undo.")
 
 def render_bead_plate():
+    """Display sequence as a bead plate."""
     st.subheader("Sequence (Bead Plate)")
     sequence = st.session_state.sequence[-90:]
-    grid = [sequence[i*6:(i+1)*6] + [''] * (6 - len(sequence[i*6:(i+1)*6])) for i in range(15)]
+    grid = [[] for _ in range(15)]
+    for i, result in enumerate(sequence):
+        grid[i // 6].append(result)
+    for col in grid:
+        while len(col) < 6:
+            col.append('')
+    
     html = "<div style='display: flex; gap: 5px; overflow-x: auto;'>"
     for col in grid:
         html += "<div style='display: flex; flex-direction: column; gap: 5px;'>"
@@ -520,6 +516,7 @@ def render_bead_plate():
     st.markdown(html, unsafe_allow_html=True)
 
 def render_prediction():
+    """Show current prediction and bet."""
     if st.session_state.pending_bet:
         amount, side = st.session_state.pending_bet
         if amount:
@@ -530,33 +527,30 @@ def render_prediction():
         st.info(st.session_state.advice)
 
 def render_insights():
+    """Display prediction insights and trends."""
     st.subheader("Prediction Insights")
     if not st.session_state.insights:
         st.info("No insights yet.")
         return
     
     extra_metrics = analyze_patterns(st.session_state.sequence[-WINDOW_SIZE:])[-1]
-    pattern_insights = {k: v for k, v in st.session_state.insights.items() if k in ['Bigram', 'Trigram', 'Fourgram']}
-    meta_insights = {k: v for k, v in st.session_state.insights.items() if k in ['Threshold', 'No Bet', 'Dominant Pattern']}
+    insights = st.session_state.insights
     
-    if pattern_insights:
-        st.markdown("**Patterns**:")
-        for pattern, data in sorted(pattern_insights.items(), key=lambda x: x[1].get('weight', 0), reverse=True):
-            with st.expander(f"{pattern} ({data.get('weight', 0):.1f}%)"):
-                st.markdown(f"- Player: {data.get('p_prob', 0):.1f}% | Banker: {data.get('b_prob', 0):.1f}%")
+    st.markdown("**Insights**:")
+    for key, data in sorted(insights.items(), key=lambda x: x[1].get('weight', 0), reverse=True):
+        if key in ['Bigram', 'Trigram', 'Fourgram']:
+            st.markdown(f"- {key} ({data.get('weight', 0):.1f}%): Player {data.get('p_prob', 0):.1f}%, Banker {data.get('b_prob', 0):.1f}%")
+        elif key == 'Dominant Pattern':
+            st.markdown(f"- Dominant Pattern: {data.get('pattern', 'N/A')} ({data.get('weight', 0):.1f}%)")
+        elif key == 'Threshold':
+            st.markdown(f"- Threshold: {data.get('value', 'N/A')}")
+        elif key == 'No Bet':
+            st.info(f"- No Bet: {data.get('reason', 'N/A')}")
     
-    if meta_insights:
-        st.markdown("**Factors**:")
-        if 'Dominant Pattern' in meta_insights:
-            st.markdown(f"- Dominant: {meta_insights['Dominant Pattern'].get('pattern', 'N/A')} ({meta_insights['Dominant Pattern'].get('weight', 0):.1f}%)")
-        if 'Threshold' in meta_insights:
-            st.markdown(f"- Threshold: {meta_insights['Threshold'].get('value', 'N/A')}")
-        if 'No Bet' in meta_insights:
-            st.info(f"- No Bet: {meta_insights['No Bet'].get('reason', 'N/A')}")
-    
-    st.markdown(f"**Trends**: Streak Length: {extra_metrics.get('avg_streak_length', 0):.1f}, Chop Length: {extra_metrics.get('avg_chop_length', 0):.1f}")
+    st.markdown(f"**Trends**: Streak Length: {extra_metrics.get('avg_streak_length', 0):.1f}")
 
 def render_status():
+    """Show current session status."""
     st.subheader("Status")
     st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f} | **Base Bet**: ${st.session_state.base_bet:.2f}")
     st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
@@ -566,6 +560,7 @@ def render_status():
         st.markdown(f"**Profit**: {profit / st.session_state.initial_base_bet:.2f} units (${profit:.2f})")
 
 def render_accuracy():
+    """Show prediction accuracy metrics."""
     st.subheader("Accuracy")
     total = st.session_state.prediction_accuracy['total']
     if total > 0:
@@ -575,6 +570,7 @@ def render_accuracy():
         st.markdown(f"Banker: {st.session_state.prediction_accuracy['B']}/{total} ({b_accuracy:.1f}%)")
 
 def render_history():
+    """Display recent betting history."""
     if st.session_state.history:
         st.subheader("History")
         n = st.slider("Show last N bets", 5, 50, 10)
@@ -586,6 +582,7 @@ def render_history():
         ])
 
 def render_simulation():
+    """Run and display simulation results."""
     st.subheader("Simulation")
     num_hands = st.number_input("Hands to Simulate", min_value=10, max_value=200, value=80, step=10)
     if st.button("Run Simulation"):
