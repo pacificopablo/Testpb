@@ -973,7 +973,10 @@ def render_insights():
                     st.markdown(f"- **Next Predicted**: {data['next_pred']}")
                 elif pattern == 'Double':
                     st.markdown(f"- **Double Type**: {data['double_type']}")
-                st.markdown(f"- **Reliability**: {data['reliability']:.1f}% (based on sample size)")
+                if 'reliability' in data:
+                    st.markdown(f"- **Reliability**: {data['reliability']:.1f}% (based on sample size)")
+                else:
+                    st.markdown("- **Reliability**: Not available")
                 st.markdown(f"- **Recent Performance**: {data['recent_performance']:.1f}% (last 10 bets)")
 
     if meta_insights:
