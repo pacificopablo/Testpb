@@ -286,15 +286,15 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         weights = {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
         total_w = sum(weights.values())
 
-    weights = {k: max(w / total_w, 0.05) for k, v in weights.items()}
+    normalized_weights = {k: max(w / total_w, 0.05) for k, w in weights.items()}
     
-    dominant_pattern = max(weights, key=weights.get)
+    dominant_pattern = max(normalized_weights, key=normalized_weights.get)
     st.session_state.insights['Dominant Pattern'] = {
         'pattern': dominant_pattern,
-        'weight': weights[dominant_pattern] * 100
+        'weight': normalized_weights[dominant_pattern] * 100
     }
     
-    return weights
+    return normalized_weights
 
 def predict_next() -> Tuple[Optional[str], float, Dict]:
     """Predict the next outcome with enhanced insights and pattern prioritization."""
