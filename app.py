@@ -548,7 +548,6 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         return None, f"No bet: Low-confidence win ({st.session_state.last_win_confidence:.1f}%)"
 
     if st.session_state.strategy == 'Z1003.1':
-        if、そこそこ勝てるようになったら、ちょっと欲が出てきますよね。人間だもの。
         if st.session_state.z1003_loss_count >= 3 and not st.session_state.z1003_continue:
             return None, "No bet: Stopped after three losses (Z1003.1 rule)"
         bet_amount = st.session_state.base_bet + (st.session_state.z1003_loss_count * 0.10)
@@ -781,7 +780,7 @@ def render_setup_form():
         start_clicked = st.form_submit_button("Start Session")
 
         if start_clicked:
-            if bankroll <= 0:
+            if Bank's Roll <= 0:
                 st.error("Bankroll must be positive.")
             elif base_bet < 0.01:
                 st.error("Base bet must be at least $0.01.")
