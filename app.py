@@ -1,4 +1,4 @@
-# Version: 2025-05-14-fix-v6
+# Version: 2025-05-14-fix-v6-modified
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -24,7 +24,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v6"
+APP_VERSION = "2025-05-14-fix-v6-modified"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -574,18 +574,14 @@ def update_t3_level():
     """Update T3 betting level based on recent results."""
     logging.debug("Entering update_t3_level")
     try:
-        if len(st.session_state.t3_results) == 3:
+        if len(st.session_state.t3_results) >= 2:  # Modified: Update with 2+ outcomes
             wins = st.session_state.t3_results.count('W')
             losses = st.session_state.t3_results.count('L')
             old_level = st.session_state.t3_level
-            if wins == 3:
-                st.session_state.t3_level = max(1, st.session_state.t3_level - 2)
-            elif wins == 2 and losses == 1:
+            if wins >= 2:
                 st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
-            elif losses == 2 and wins == 1:
+            elif losses >= 2:
                 st.session_state.t3_level = st.session_state.t3_level + 1
-            elif losses == 3:
-                st.session_state.t3_level = st.session_state.t3_level + 2
             if old_level != st.session_state.t3_level:
                 st.session_state.t3_level_changes += 1
             st.session_state.t3_peak_level = max(st.session_state.t3_peak_level, st.session_state.t3_level)
@@ -599,11 +595,11 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
     """Calculate the next bet amount with error handling."""
     logging.debug("Entering calculate_bet_amount")
     try:
-        if st.session_state.consecutive_losses >= 3 and conf < 45.0:
+        if st.session_state.consecutive_losses >= 3 and conf < 50.0:  # Modified: 50.0
             return None, f"No bet: Paused after {st.session_state.consecutive_losses} losses"
-        if st.session_state.pattern_volatility > 0.6:
+        if st.session_state.pattern_volatility > 0.5:  # Modified: 0.5
             return None, f"No bet: High pattern volatility"
-        if pred is None or conf < 32.0:
+        if pred is None or conf < 40.0:  # Modified: 40.0
             return None, f"No bet: Confidence too low"
         if st.session_state.last_win_confidence < 40.0 and st.session_state.consecutive_wins > 0:
             return None, f"No bet: Low-confidence win ({st.session_state.last_win_confidence:.1f}%)"
@@ -616,6 +612,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
             bet_amount = st.session_state.base_bet
         elif st.session_state.strategy == 'T3':
             bet_amount = st.session_state.base_bet * st.session_state.t3_level
+            logging.debug(f"T3 bet: base_bet={st.session_state.base_bet}, t3_level={st.session_state.t3_level}, bet_amount={bet_amount}")
         else:
             key = 'base' if st.session_state.parlay_using_base else 'parlay'
             bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
@@ -692,9 +689,10 @@ def place_result(result: str):
                 st.session_state.consecutive_losses = 0
                 st.session_state.last_win_confidence = predict_next()[1]
                 logging.debug(f"Win recorded: Total wins={st.session_state.wins}, Consecutive wins={st.session_state.consecutive_wins}")
-                if st.session_state.consecutive_wins >= 3:
-                    st.session_state.base_bet *= 1.05
-                    st.session_state.base_bet = round(st.session_state.base_bet, 2)
+                # Modified: Disabled base_bet increase
+                # if st.session_state.consecutive_wins >= 3:
+                #     st.session_state.base_bet *= 1.05
+                #     st.session_state.base_bet = round(st.session_state.base_bet, 2)
                 if st.session_state.strategy == 'T3':
                     st.session_state.t3_results.append('W')
                 elif st.session_state.strategy == 'Parlay16':
@@ -1159,6 +1157,7 @@ def render_status():
         strategy_status = f"**Betting Strategy**: {st.session_state.strategy}"
         if st.session_state.strategy == 'T3':
             strategy_status += f" | Level: {st.session_state.t3_level} | Peak Level: {st.session_state.t3_peak_level} | Level Changes: {st.session_state.t3_level_changes}"
+            st.markdown(f"**T3 Results**: {', '.join(st.session_state.t3_results) or 'None'}")  # Modified: Added t3_results
         elif st.session_state.strategy == 'Parlay16':
             strategy_status += f" | Steps: {st.session_state.parlay_step}/16 | Peak Steps: {st.session_state.parlay_peak_step} | Step Changes: {st.session_state.parlay_step_changes} | Consecutive Wins: {st.session_state.parlay_wins}"
         elif st.session_state.strategy == 'Z1003.1':
