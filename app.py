@@ -1,3 +1,4 @@
+# Version: 2025-05-13-fix-v4
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -249,60 +250,65 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
 
 def calculate_weights(streak_count: int, chop_count: int, double_count: int, shoe_bias: float) -> Dict[str, float]:
     """Calculate adaptive weights with emphasis on recent performance and reliability."""
-    total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
-    success_ratios = {
-        'bigram': st.session_state.pattern_success.get('bigram', 0) / total_bets,
-        'trigram': st.session_state.pattern_success.get('trigram', 0) / total_bets,
-        'fourgram': st.session_state.pattern_success.get('fourgram', 0) / total_bets,
-        'streak': 0.6 if streak_count >= 2 else 0.3,
-        'chop': 0.4 if chop_count >= 2 else 0.2,
-        'double': 0.4 if double_count >= 1 else 0.2
-    }
+    try:
+        total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
+        success_ratios = {
+            'bigram': st.session_state.pattern_success.get('bigram', 0) / total_bets,
+            'trigram': st.session_state.pattern_success.get('trigram', 0) / total_bets,
+            'fourgram': st.session_state.pattern_success.get('fourgram', 0) / total_bets,
+            'streak': 0.6 if streak_count >= 2 else 0.3,
+            'chop': 0.4 if chop_count >= 2 else 0.2,
+            'double': 0.4 if double_count >= 1 else 0.2
+        }
 
-    recent_bets = st.session_state.history[-10:]
-    recent_success = defaultdict(int)
-    recent_attempts = defaultdict(int)
-    for h in recent_bets:
-        if h['Bet_Placed'] and h['Bet'] in ['P', 'B']:
-            for pattern in h.get('Previous_State', {}).get('insights', {}):
-                recent_attempts[pattern] += 1
-                if h['Win']:
-                    recent_success[pattern] += 1
-    for pattern in success_ratios:
-        if recent_attempts[pattern] > 0:
-            recent_ratio = recent_success[pattern] / recent_attempts[pattern]
-            if recent_ratio > 0.7:
-                success_ratios[pattern] *= 1.5
-            elif recent_ratio < 0.3:
-                success_ratios[pattern] *= 0.6
+        recent_bets = st.session_state.history[-10:]
+        recent_success = defaultdict(int)
+        recent_attempts = defaultdict(int)
+        for h in recent_bets:
+            if h['Bet_Placed'] and h['Bet'] in ['P', 'B']:
+                for pattern in h.get('Previous_State', {}).get('insights', {}):
+                    recent_attempts[pattern] += 1
+                    if h['Win']:
+                        recent_success[pattern] += 1
+        for pattern in success_ratios:
+            if recent_attempts[pattern] > 0:
+                recent_ratio = recent_success[pattern] / recent_attempts[pattern]
+                if recent_ratio > 0.7:
+                    success_ratios[pattern] *= 1.5
+                elif recent_ratio < 0.3:
+                    success_ratios[pattern] *= 0.6
 
-    if success_ratios['fourgram'] > 0.6:
-        success_ratios['fourgram'] *= 1.3
+        if success_ratios['fourgram'] > 0.6:
+            success_ratios['fourgram'] *= 1.3
 
-    weights = {k: np.exp(v) / (1 + np.exp(v)) for k, v in success_ratios.items()}
-    if shoe_bias > 0.1:
-        weights['bigram'] *= 1.1
-        weights['trigram'] *= 1.1
-        weights['fourgram'] *= 1.15
-    elif shoe_bias < -0.1:
-        weights['bigram'] *= 0.9
-        weights['trigram'] *= 0.9
-        weights['fourgram'] *= 0.85
+        weights = {k: np.exp(v) / (1 + np.exp(v)) for k, v in success_ratios.items()}
+        if shoe_bias > 0.1:
+            weights['bigram'] *= 1.1
+            weights['trigram'] *= 1.1
+            weights['fourgram'] *= 1.15
+        elif shoe_bias < -0.1:
+            weights['bigram'] *= 0.9
+            weights['trigram'] *= 0.9
+            weights['fourgram'] *= 0.85
 
-    total_w = sum(weights.values())
-    if total_w == 0:
-        weights = {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
-        total_w = sum(weights.values())
+        total_weight = sum(weights.values())
+        if total_weight == 0:
+            weights = {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
+            total_weight = sum(weights.values())
 
-    normalized_weights = {k: max(w / total_w, 0.05) for k, v in weights.items()}
-    
-    dominant_pattern = max(normalized_weights, key=normalized_weights.get)
-    st.session_state.insights['Dominant Pattern'] = {
-        'pattern': dominant_pattern,
-        'weight': normalized_weights[dominant_pattern] * 100
-    }
-    
-    return normalized_weights
+        normalized_weights = {k: max(weight_val / total_weight, 0.05) for k, weight_val in weights.items()}
+        
+        dominant_pattern = max(normalized_weights, key=normalized_weights.get)
+        st.session_state.insights['Dominant Pattern'] = {
+            'pattern': dominant_pattern,
+            'weight': normalized_weights[dominant_pattern] * 100
+        }
+        
+        return normalized_weights
+    except NameError as e:
+        logging.error(f"NameError in calculate_weights: {str(e)}")
+        st.error(f"Variable error in weight calculation: {str(e)}. Try resetting the session.")
+        return {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
 
 def predict_next() -> Tuple[Optional[str], float, Dict]:
     """Predict the next outcome with enhanced insights and pattern prioritization."""
@@ -473,14 +479,14 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         b_prob = pattern_transitions[current_pattern]['B'] / total
         prob_p = 0.9 * prob_p + 0.1 * p_prob * 100
         prob_b = 0.9 * prob_b + 0.1 * b_prob * 100
-        reliability = min(total / 5, 1.0)  # Add reliability for consistency
+        reliability = min(total / 5, 1.0)
         insights['Pattern Transition'] = {
             'weight': 10,
             'p_prob': p_prob * 100,
             'b_prob': b_prob * 100,
             'current_pattern': current_pattern,
             'reliability': reliability * 100,
-            'recent_performance': 0.0  # Default for Pattern Transition
+            'recent_performance': 0.0
         }
 
     recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
@@ -1181,6 +1187,9 @@ def main():
         render_export()
         st.write("DEBUG: Starting render_simulation")
         render_simulation()
+    except NameError as e:
+        logging.error(f"NameError in main: {str(e)}")
+        st.error(f"Variable error: {str(e)}. Try resetting the session state.")
     except Exception as e:
         logging.error(f"Main function error: {str(e)}")
         st.error(f"An error occurred: {str(e)}. Try resetting the session state.")
