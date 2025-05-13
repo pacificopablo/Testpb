@@ -1,4 +1,4 @@
-# Version: 2025-05-13-fix-v5
+# Version: 2025-05-14-fix-v6
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -24,7 +24,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-13-fix-v5"
+APP_VERSION = "2025-05-14-fix-v6"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -1311,4 +1311,9 @@ def main():
     except NameError as e:
         logging.error(f"NameError in main: {str(e)}\n{traceback.format_exc()}")
         st.error(f"Variable error: {str(e)}. Try resetting the session state or contact support.")
-    except Exception as e
+    except Exception as e:
+        logging.error(f"Unexpected error in main: {str(e)}\n{traceback.format_exc()}")
+        st.error("An unexpected error occurred. Try resetting the session or contact support.")
+
+if __name__ == "__main__":
+    main()
