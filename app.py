@@ -1,4 +1,4 @@
-# Version: 2025-05-14-fix-v8
+# Version: 2025-05-14-fix-v6
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -24,7 +24,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v8"
+APP_VERSION = "2025-05-14-fix-v6"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -338,7 +338,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
     logging.debug("Entering predict_next")
     try:
         sequence = [x for x in st.session_state.sequence if x in ['P', 'B', 'T']]
-        shadow_sequence = [x for x in sequence if x in ['P', 'B]]
+        shadow_sequence = [x for x in sequence if x in ['P', 'B']]
         if len(shadow_sequence) < 4:
             return 'B', 45.86, {'Initial': 'Default to Banker (insufficient data)'}
 
@@ -542,7 +542,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
             confidence = max(prob_p, prob_b)
             insights['No Bet'] = {'reason': f'Confidence below threshold ({confidence:.1f}% < {threshold:.1f}%)'}
 
-        dominant_pattern = max(insights, key=lambda x: insights[x].get('weight', 0) if x not in ['Threshold', 'Volatility', 'Shoe Bias', 'No Bet'] else 0, default=None)
+        dominant_pattern = max(insights, key=lambda k: insights[k].get('weight', 0) if k not in ['Threshold', 'Volatility', 'Shoe Bias', 'No Bet'] else 0, default=None)
         if dominant_pattern and prediction:
             reliability = pattern_reliability.get(dominant_pattern, 0)
             recommendation = f"Favor {prediction} due to strong {dominant_pattern.lower()} pattern (Reliability: {reliability*100:.1f}%)"
@@ -644,11 +644,6 @@ def place_result(result: str):
     """Process a game result with error handling."""
     logging.debug("Entering place_result")
     try:
-        if result not in ['P', 'B', 'T']:
-            logging.error(f"Invalid result: {result}")
-            st.error("Result must be 'P', 'B', or 'T'.")
-            return
-
         if st.session_state.target_hit:
             reset_session()
             return
@@ -672,7 +667,6 @@ def place_result(result: str):
             "z1003_level_changes": st.session_state.z1003_level_changes,
             "pending_bet": st.session_state.pending_bet,
             "wins": st.session_state.wins,
-            "losses Penalized for excessive punctuation: **Losses**: {losses}
             "losses": st.session_state.losses,
             "prediction_accuracy": st.session_state.prediction_accuracy.copy(),
             "consecutive_losses": st.session_state.consecutive_losses,
@@ -693,9 +687,11 @@ def place_result(result: str):
             bet_placed = True
             if win:
                 st.session_state.bankroll += bet_amount * (0.95 if selection == 'B' else 1.0)
+                st.session_state.wins += 1
                 st.session_state.consecutive_wins += 1
                 st.session_state.consecutive_losses = 0
                 st.session_state.last_win_confidence = predict_next()[1]
+                logging.debug(f"Win recorded: Total wins={st.session_state.wins}, Consecutive wins={st.session_state.consecutive_wins}")
                 if st.session_state.consecutive_wins >= 3:
                     st.session_state.base_bet *= 1.05
                     st.session_state.base_bet = round(st.session_state.base_bet, 2)
@@ -720,7 +716,6 @@ def place_result(result: str):
                     else:
                         st.session_state.z1003_loss_count = 0
                         st.session_state.z1003_continue = False
-                st.session_state.wins += 1
                 st.session_state.prediction_accuracy[selection] += 1
                 for pattern in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
                     if pattern in st.session_state.insights:
@@ -728,8 +723,10 @@ def place_result(result: str):
                         st.session_state.pattern_attempts[pattern] += 1
             else:
                 st.session_state.bankroll -= bet_amount
+                st.session_state.losses += 1
                 st.session_state.consecutive_wins = 0
                 st.session_state.consecutive_losses += 1
+                logging.debug(f"Loss recorded: Total losses={st.session_state.losses}, Consecutive losses={st.session_state.consecutive_losses}")
                 _, conf, _ = predict_next()
                 st.session_state.loss_log.append({
                     'sequence': st.session_state.sequence[-10:],
@@ -780,6 +777,12 @@ def place_result(result: str):
 
         if st.session_state.strategy == 'T3':
             update_t3_level()
+
+        # Validate win/loss counts
+        if st.session_state.wins < 0 or st.session_state.losses < 0:
+            logging.error(f"Invalid win/loss counts: wins={st.session_state.wins}, losses={st.session_state.losses}")
+            st.session_state.wins = max(0, st.session_state.wins)
+            st.session_state.losses = max(0, st.session_state.losses)
 
         logging.debug("place_result completed")
     except Exception as e:
@@ -975,6 +978,11 @@ def render_result_input():
                             if last['Bet_Placed'] and not last['Win'] and st.session_state.loss_log:
                                 if st.session_state.loss_log[-1]['result'] == last['Result']:
                                     st.session_state.loss_log.pop()
+                            if last['Bet_Placed']:
+                                if last['Win']:
+                                    logging.debug(f"Undo win: Reducing wins from {st.session_state.wins} to {st.session_state.wins - 1}")
+                                else:
+                                    logging.debug(f"Undo loss: Reducing losses from {st.session_state.losses} to {st.session_state.losses - 1}")
                             if st.session_state.pending_bet:
                                 amount, pred = st.session_state.pending_bet
                                 conf = predict_next()[1]
@@ -1100,7 +1108,6 @@ def render_insights():
                             st.markdown(f"- **Reliability**: {data['reliability']:.1f}% (based on sample size)")
                         else:
                             st.markdown("- **Reliability**: Not available")
-                        st.markdown(f"- **Recent Performance**: {data.get('recent_performance', 0):.1f}% (last 10 bets)")
                         st.markdown(f"- **Recent Performance**: {data.get('recent_performance', 0):.1f}% (last 10 bets)")
             except Exception as e:
                 logging.error(f"render_insights pattern loop error: {str(e)}\n{traceback.format_exc()}")
@@ -1254,58 +1261,73 @@ def render_export():
         if st.button("Download Session Data"):
             csv_data = "Bet,Result,Amount,Win,T3_Level,Parlay_Step,Z1003_Loss_Count,Consecutive_Wins\n"
             for h in st.session_state.history:
-                csv_data += (
-                    f"{h['Bet'] or '-'},"
-                    f"{h['Result']},"
-                    f"{h['Amount']:.2f if h['Bet_Placed'] else '-'},"
-                    f"{'Win' if h['Win'] else 'Loss' if h['Bet_Placed'] else '-'},"
-                    f"{h['T3_Level'] if st.session_state.strategy == 'T3' else '-'},"
-                    f"{h['Parlay_Step'] if st.session_state.strategy == 'Parlay16' else '-'},"
-                    f"{h['Z1003_Loss_Count'] if st.session_state.strategy == 'Z1003.1' else '-'},"
-                    f"{h['Consecutive_Wins']}\n"
-                )
-            st.download_button(
-                label="Download CSV",
-                data=csv_data,
-                file_name=f"baccarat_session_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv"
-            )
+                csv_data += f"{h['Bet'] or '-'},{h['Result']},${h['Amount']:.2f},{h['Win']},{h['T3_Level']},{h['Parlay_Step']},{h['Z1003_Loss_Count']},{h['Consecutive_Wins']}\n"
+            st.download_button("Download CSV", csv_data, "session_data.csv", "text/csv")
         logging.debug("render_export completed")
     except Exception as e:
         logging.error(f"render_export error: {str(e)}\n{traceback.format_exc()}")
-        st.error("Error exporting session data. Try resetting the session.")
+        st.error("Error rendering export. Try resetting the session.")
+
+def render_simulation():
+    """Render simulation controls and results."""
+    logging.debug("Entering render_simulation")
+    try:
+        st.subheader("Run Simulation")
+        num_hands = st.number_input("Number of Hands to Simulate", min_value=10, max_value=200, value=80, step=10)
+        if st.button("Run Simulation"):
+            try:
+                result = simulate_shoe(num_hands)
+                st.write(f"**Simulation Results**")
+                st.write(f"Accuracy: {result['accuracy']:.1f}% ({result['correct']}/{result['total']} correct)")
+                st.write("Pattern Performance:")
+                for pattern in result['pattern_success']:
+                    success = result['pattern_success'][pattern]
+                    attempts = result['pattern_attempts'][pattern]
+                    st.write(f"{pattern}: {success}/{attempts} ({success/attempts*100:.1f}%)" if attempts > 0 else f"{pattern}: 0/0 (0%)")
+                st.write("Results logged to simulation_log.txt")
+            except Exception as e:
+                logging.error(f"Simulation run error: {str(e)}\n{traceback.format_exc()}")
+                st.error("Error running simulation. Try resetting the session.")
+        logging.debug("render_simulation completed")
+    except Exception as e:
+        logging.error(f"render_simulation error: {str(e)}\n{traceback.format_exc()}")
+        st.error("Error rendering simulation. Try resetting the session.")
 
 # --- Main Application ---
 def main():
-    st.set_page_config(page_title="Baccarat Predictor", layout="wide")
-    st.title("Baccarat Predictor")
-    st.markdown(f"Version: {APP_VERSION}")
+    """Main application function with comprehensive error handling."""
+    logging.debug("Entering main")
+    try:
+        st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
+        st.title("MANG BACCARAT GROUP")
+        st.markdown(f"**App Version**: {APP_VERSION}")
+        initialize_session_state()
 
-    initialize_session_state()
+        # Session state reset button
+        if st.button("Reset Session State"):
+            reset_session()
+            st.success("Session state cleared. Please start a new session.")
+            st.rerun()
 
-    col1, col2 = st.columns([2, 1])
-    with col1:
         render_setup_form()
         render_result_input()
         render_bead_plate()
         render_prediction()
         render_insights()
-    with col2:
         render_status()
         render_accuracy()
         render_loss_log()
         render_history()
         render_export()
+        render_simulation()
 
-    if st.button("Reset Session"):
-        reset_session()
-        st.success("Session reset successfully!")
-        st.rerun()
-
-    if st.button("Run Simulation (80 Hands)"):
-        result = simulate_shoe()
-        st.write(f"Simulation Accuracy: {result['accuracy']:.1f}% ({result['correct']}/{result['total']} correct)")
-        st.write(f"Fourgram Success: {result['pattern_success'].get('fourgram', 0)}/{result['pattern_attempts'].get('fourgram', 0)}")
+        logging.debug("main completed")
+    except NameError as e:
+        logging.error(f"NameError in main: {str(e)}\n{traceback.format_exc()}")
+        st.error(f"Variable error: {str(e)}. Try resetting the session state or contact support.")
+    except Exception as e:
+        logging.error(f"Unexpected error in main: {str(e)}\n{traceback.format_exc()}")
+        st.error("An unexpected error occurred. Try resetting the session or contact support.")
 
 if __name__ == "__main__":
     main()
