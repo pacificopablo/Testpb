@@ -1,4 +1,4 @@
-# Version: 2025-05-14-fix-v7
+# Version: 2025-05-14-fix-v6
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -24,7 +24,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v7"
+APP_VERSION = "2025-05-14-fix-v6"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -460,7 +460,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
             double_prob = 0.6
             if recent_sequence[-1] == 'P':
                 prob_p += weights['double'] * double_prob
-                prob_b += weights['double'] * (1 - double Ը
+                prob_b += weights['double'] * (1 - double_prob)
             else:
                 prob_b += weights['double'] * double_prob
                 prob_p += weights['double'] * (1 - double_prob)
@@ -1298,9 +1298,9 @@ def main():
         render_setup_form()
         render_result_input()
         render_bead_plate()
-        render_status()
         render_prediction()
         render_insights()
+        render_status()
         render_accuracy()
         render_loss_log()
         render_history()
