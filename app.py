@@ -780,7 +780,7 @@ def render_setup_form():
         start_clicked = st.form_submit_button("Start Session")
 
         if start_clicked:
-            if Bank's Roll <= 0:
+            if bankroll <= 0:
                 st.error("Bankroll must be positive.")
             elif base_bet < 0.01:
                 st.error("Base bet must be at least $0.01.")
@@ -852,7 +852,7 @@ def render_result_input():
     div.stButton > button[kind="tie_btn"]:hover { background: linear-gradient(to bottom, #4caf50, #28a745); }
     div.stButton > button[kind="undo_btn"] { background: linear-gradient(to bottom, #6c757d, #545b62); border-color: #545b62; color: white; }
     div.stButton > button[kind="undo_btn"]:hover { background: linear-gradient(to bottom, #8e959c, #6c757d); }
-    @media (max-width: 600px) { div.stButton > button { width: 80%; max-width: 150px; height: 40px; font-size: 12px; }relax: none; } }
+    @media (max-width: 600px) { div.stButton > button { width: 80%; max-width: 150px; height: 40px; font-size: 12px; } }
     </style>
     """, unsafe_allow_html=True)
 
