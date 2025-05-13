@@ -5,10 +5,12 @@ import os
 import time
 import numpy as np
 from typing import Tuple, Dict, Optional, List
+import tempfile
+import logging
 
 # --- Constants ---
-SESSION_FILE = "online_users.txt"
-SIMULATION_LOG = "simulation_log.txt"
+SESSION_FILE = os.path.join(tempfile.gettempdir(), "online_users.txt")
+SIMULATION_LOG = os.path.join(tempfile.gettempdir(), "simulation_log.txt")
 PARLAY_TABLE = {
     i: {'base': b, 'parlay': p} for i, (b, p) in enumerate([
         (1, 2), (1, 2), (1, 2), (2, 4), (3, 6), (4, 8), (6, 12), (8, 16),
@@ -21,9 +23,12 @@ HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
 
+# --- Logging Setup ---
+logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
+
 # --- Session Tracking ---
 def track_user_session() -> int:
-    """Track active user sessions using a file-based approach."""
+    """Track active user sessions using a file-based approach with fallback."""
     if 'session_id' not in st.session_state:
         st.session_state.session_id = str(time.time())
 
@@ -40,10 +45,12 @@ def track_user_session() -> int:
                         if current_time - last_seen <= timedelta(seconds=30):
                             sessions[session_id] = last_seen
                     except ValueError:
+                        logging.warning(f"Invalid session file line: {line}")
                         continue
-    except PermissionError:
-        st.error("Unable to access session file. Online user count unavailable.")
-        return 0
+    except (PermissionError, OSError) as e:
+        logging.error(f"Session file read error: {str(e)}")
+        st.warning("Session tracking unavailable. Using fallback.")
+        return 1  # Fallback to single user
 
     sessions[st.session_state.session_id] = current_time
 
@@ -51,15 +58,16 @@ def track_user_session() -> int:
         with open(SESSION_FILE, 'w', encoding='utf-8') as f:
             for session_id, last_seen in sessions.items():
                 f.write(f"{session_id},{last_seen.isoformat()}\n")
-    except PermissionError:
-        st.error("Unable to write to session file. Online user count may be inaccurate.")
-        return 0
+    except (PermissionError, OSError) as e:
+        logging.error(f"Session file write error: {str(e)}")
+        st.warning("Session tracking may be inaccurate.")
+        return len(sessions)
 
     return len(sessions)
 
 # --- Session State Management ---
 def initialize_session_state():
-    """Initialize session state with default values, including new variables for win streak improvements."""
+    """Initialize session state with default values."""
     defaults = {
         'bankroll': 0.0,
         'base_bet': 0.0,
@@ -286,7 +294,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         weights = {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
         total_w = sum(weights.values())
 
-    normalized_weights = {k: max(w / total_w, 0.05) for k, w in weights.items()}
+    normalized_weights = {k: max(w / total_w, 0.05) for k, v in weights.items()}
     
     dominant_pattern = max(normalized_weights, key=normalized_weights.get)
     st.session_state.insights['Dominant Pattern'] = {
@@ -465,11 +473,14 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         b_prob = pattern_transitions[current_pattern]['B'] / total
         prob_p = 0.9 * prob_p + 0.1 * p_prob * 100
         prob_b = 0.9 * prob_b + 0.1 * b_prob * 100
+        reliability = min(total / 5, 1.0)  # Add reliability for consistency
         insights['Pattern Transition'] = {
             'weight': 10,
             'p_prob': p_prob * 100,
             'b_prob': b_prob * 100,
-            'current_pattern': current_pattern
+            'current_pattern': current_pattern,
+            'reliability': reliability * 100,
+            'recent_performance': 0.0  # Default for Pattern Transition
         }
 
     recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
@@ -753,8 +764,9 @@ def simulate_shoe(num_hands: int = 80) -> Dict:
         with open(SIMULATION_LOG, 'a', encoding='utf-8') as f:
             f.write(f"{datetime.now().isoformat()}: Accuracy={accuracy:.1f}%, Correct={correct}/{total}, "
                     f"Fourgram={result['pattern_success'].get('fourgram', 0)}/{result['pattern_attempts'].get('fourgram', 0)}\n")
-    except PermissionError:
-        st.error("Unable to write to simulation log.")
+    except (PermissionError, OSError) as e:
+        logging.error(f"Simulation log write error: {str(e)}")
+        st.warning("Unable to write to simulation log. Results displayed only.")
 
     return result
 
@@ -947,62 +959,75 @@ def render_insights():
         st.info("No insights available yet. Enter more results to analyze patterns.")
         return
 
-    _, _, _, _, _, _, _, _, _, extra_metrics = analyze_patterns(st.session_state.sequence[-WINDOW_SIZE:])
+    try:
+        _, _, _, _, _, _, _, _, _, extra_metrics = analyze_patterns(st.session_state.sequence[-WINDOW_SIZE:])
+    except Exception as e:
+        logging.error(f"analyze_patterns error: {str(e)}")
+        st.error("Error analyzing patterns. Try resetting the session.")
+        return
 
-    pattern_insights = {k: v for k, v in st.session_state.insights.items() 
-                       if k in ['Bigram', 'Trigram', 'Fourgram', 'Streak', 'Chop', 'Double', 'Pattern Transition']}
-    meta_insights = {k: v for k, v in st.session_state.insights.items() 
-                    if k in ['Threshold', 'Volatility', 'Shoe Bias', 'No Bet', 'Recommendation', 'Dominant Pattern']}
+    pattern_insights = {
+        k: v for k, v in st.session_state.insights.items()
+        if k in ['Bigram', 'Trigram', 'Fourgram', 'Streak', 'Chop', 'Double', 'Pattern Transition']
+    }
+    meta_insights = {
+        k: v for k, v in st.session_state.insights.items()
+        if k in ['Threshold', 'Volatility', 'Shoe Bias', 'No Bet', 'Recommendation', 'Dominant Pattern']
+    }
 
     if pattern_insights:
         st.markdown("**Pattern Contributions** (sorted by influence):")
-        sorted_patterns = sorted(
-            pattern_insights.items(),
-            key=lambda x: x[1].get('weight', 0),
-            reverse=True
-        )
-        for pattern, data in sorted_patterns:
-            with st.expander(f"{pattern} ({data['weight']:.1f}% weight)", expanded=(pattern == sorted_patterns[0][0])):
-                if pattern in ['Bigram', 'Trigram', 'Fourgram', 'Pattern Transition']:
-                    st.markdown(f"- **Player Probability**: {data['p_prob']:.1f}%")
-                    st.markdown(f"- **Banker Probability**: {data['b_prob']:.1f}%")
-                elif pattern == 'Streak':
-                    st.markdown(f"- **Streak Type**: {data['streak_type']} (Length: {data['streak_count']})")
-                elif pattern == 'Chop':
-                    st.markdown(f"- **Alternations**: {data['chop_count']}")
-                    st.markdown(f"- **Next Predicted**: {data['next_pred']}")
-                elif pattern == 'Double':
-                    st.markdown(f"- **Double Type**: {data['double_type']}")
-                if 'reliability' in data:
-                    st.markdown(f"- **Reliability**: {data['reliability']:.1f}% (based on sample size)")
-                else:
-                    st.markdown("- **Reliability**: Not available")
-                st.markdown(f"- **Recent Performance**: {data['recent_performance']:.1f}% (last 10 bets)")
+        try:
+            sorted_patterns = sorted(
+                pattern_insights.items(),
+                key=lambda x: x[1].get('weight', 0),
+                reverse=True
+            )
+            for pattern, data in sorted_patterns:
+                with st.expander(f"{pattern} ({data.get('weight', 0):.1f}% weight)", expanded=(pattern == sorted_patterns[0][0])):
+                    if pattern in ['Bigram', 'Trigram', 'Fourgram', 'Pattern Transition']:
+                        st.markdown(f"- **Player Probability**: {data.get('p_prob', 0):.1f}%")
+                        st.markdown(f"- **Banker Probability**: {data.get('b_prob', 0):.1f}%")
+                    elif pattern == 'Streak':
+                        st.markdown(f"- **Streak Type**: {data.get('streak_type', 'N/A')} (Length: {data.get('streak_count', 0)})")
+                    elif pattern == 'Chop':
+                        st.markdown(f"- **Alternations**: {data.get('chop_count', 0)}")
+                        st.markdown(f"- **Next Predicted**: {data.get('next_pred', 'N/A')}")
+                    elif pattern == 'Double':
+                        st.markdown(f"- **Double Type**: {data.get('double_type', 'N/A')}")
+                    if 'reliability' in data:
+                        st.markdown(f"- **Reliability**: {data['reliability']:.1f}% (based on sample size)")
+                    else:
+                        st.markdown("- **Reliability**: Not available")
+                    st.markdown(f"- **Recent Performance**: {data.get('recent_performance', 0):.1f}% (last 10 bets)")
+        except Exception as e:
+            logging.error(f"render_insights pattern loop error: {str(e)}")
+            st.error("Error displaying pattern insights. Try resetting the session.")
 
     if meta_insights:
         st.markdown("**Additional Factors**:")
         if 'Recommendation' in meta_insights:
-            st.success(f"**Recommendation**: {meta_insights['Recommendation']['text']}")
+            st.success(f"**Recommendation**: {meta_insights['Recommendation'].get('text', 'N/A')}")
         if 'Dominant Pattern' in meta_insights:
-            st.markdown(f"- **Dominant Pattern**: {meta_insights['Dominant Pattern']['pattern']} ({meta_insights['Dominant Pattern']['weight']:.1f}% weight)")
+            st.markdown(f"- **Dominant Pattern**: {meta_insights['Dominant Pattern'].get('pattern', 'N/A')} ({meta_insights['Dominant Pattern'].get('weight', 0):.1f}% weight)")
         if 'Shoe Bias' in meta_insights:
-            st.markdown(f"- **Shoe Bias**: {meta_insights['Shoe Bias']['bias']} ({meta_insights['Shoe Bias']['adjustment']})")
+            st.markdown(f"- **Shoe Bias**: {meta_insights['Shoe Bias'].get('bias', 'N/A')} ({meta_insights['Shoe Bias'].get('adjustment', 'N/A')})")
         if 'Volatility' in meta_insights:
-            st.warning(f"- **Volatility**: {meta_insights['Volatility']['level']} ({meta_insights['Volatility']['value']:.2f}, {meta_insights['Volatility']['adjustment']})")
+            st.warning(f"- **Volatility**: {meta_insights['Volatility'].get('level', 'N/A')} ({meta_insights['Volatility'].get('value', 0):.2f}, {meta_insights['Volatility'].get('adjustment', 'N/A')})")
         if 'Threshold' in meta_insights:
-            st.markdown(f"- **Betting Threshold**: {meta_insights['Threshold']['adjusted']}")
+            st.markdown(f"- **Betting Threshold**: {meta_insights['Threshold'].get('adjusted', 'N/A')}")
         if 'No Bet' in meta_insights:
-            st.info(f"- **No Bet Reason**: {meta_insights['No Bet']['reason']}")
+            st.info(f"- **No Bet Reason**: {meta_insights['No Bet'].get('reason', 'N/A')}")
 
     st.markdown("**Pattern Trends**:")
-    st.markdown(f"- **Average Streak Length**: {extra_metrics['avg_streak_length']:.1f} hands")
-    st.markdown(f"- **Average Chop Length**: {extra_metrics['avg_chop_length']:.1f} hands")
-    st.markdown(f"- **Streak Frequency**: {extra_metrics['streak_frequency']*100:.1f}% of hands")
-    st.markdown(f"- **Chop Frequency**: {extra_metrics['chop_frequency']*100:.1f}% of hands")
+    st.markdown(f"- **Average Streak Length**: {extra_metrics.get('avg_streak_length', 0):.1f} hands")
+    st.markdown(f"- **Average Chop Length**: {extra_metrics.get('avg_chop_length', 0):.1f} hands")
+    st.markdown(f"- **Streak Frequency**: {extra_metrics.get('streak_frequency', 0)*100:.1f}% of hands")
+    st.markdown(f"- **Chop Frequency**: {extra_metrics.get('chop_frequency', 0)*100:.1f}% of hands")
 
     if pattern_insights:
         st.markdown("**Pattern Influence Chart**:")
-        weights = {k: v['weight'] for k, v in pattern_insights.items()}
+        weights = {k: v.get('weight', 0) for k, v in pattern_insights.items()}
         st.bar_chart(weights, use_container_width=True)
 
     total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
@@ -1105,15 +1130,19 @@ def render_simulation():
     st.subheader("Run Simulation")
     num_hands = st.number_input("Number of Hands to Simulate", min_value=10, max_value=200, value=80, step=10)
     if st.button("Run Simulation"):
-        result = simulate_shoe(num_hands)
-        st.write(f"**Simulation Results**")
-        st.write(f"Accuracy: {result['accuracy']:.1f}% ({result['correct']}/{result['total']} correct)")
-        st.write("Pattern Performance:")
-        for pattern in result['pattern_success']:
-            success = result['pattern_success'][pattern]
-            attempts = result['pattern_attempts'][pattern]
-            st.write(f"{pattern}: {success}/{attempts} ({success/attempts*100:.1f}%)" if attempts > 0 else f"{pattern}: 0/0 (0%)")
-        st.write("Results logged to simulation_log.txt")
+        try:
+            result = simulate_shoe(num_hands)
+            st.write(f"**Simulation Results**")
+            st.write(f"Accuracy: {result['accuracy']:.1f}% ({result['correct']}/{result['total']} correct)")
+            st.write("Pattern Performance:")
+            for pattern in result['pattern_success']:
+                success = result['pattern_success'][pattern]
+                attempts = result['pattern_attempts'][pattern]
+                st.write(f"{pattern}: {success}/{attempts} ({success/attempts*100:.1f}%)" if attempts > 0 else f"{pattern}: 0/0 (0%)")
+            st.write("Results logged to simulation_log.txt")
+        except Exception as e:
+            logging.error(f"Simulation error: {str(e)}")
+            st.error("Error running simulation. Try resetting the session.")
 
 # --- Main Application ---
 def main():
@@ -1122,17 +1151,39 @@ def main():
     st.title("MANG BACCARAT GROUP")
     initialize_session_state()
 
-    render_setup_form()
-    render_result_input()
-    render_bead_plate()
-    render_prediction()
-    render_insights()
-    render_status()
-    render_accuracy()
-    render_loss_log()
-    render_history()
-    render_export()
-    render_simulation()
+    # Session state reset button
+    if st.button("Reset Session State"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.success("Session state cleared. Please start a new session.")
+        st.rerun()
+
+    try:
+        st.write("DEBUG: Starting render_setup_form")
+        render_setup_form()
+        st.write("DEBUG: Starting render_result_input")
+        render_result_input()
+        st.write("DEBUG: Starting render_bead_plate")
+        render_bead_plate()
+        st.write("DEBUG: Starting render_prediction")
+        render_prediction()
+        st.write("DEBUG: Starting render_insights")
+        render_insights()
+        st.write("DEBUG: Starting render_status")
+        render_status()
+        st.write("DEBUG: Starting render_accuracy")
+        render_accuracy()
+        st.write("DEBUG: Starting render_loss_log")
+        render_loss_log()
+        st.write("DEBUG: Starting render_history")
+        render_history()
+        st.write("DEBUG: Starting render_export")
+        render_export()
+        st.write("DEBUG: Starting render_simulation")
+        render_simulation()
+    except Exception as e:
+        logging.error(f"Main function error: {str(e)}")
+        st.error(f"An error occurred: {str(e)}. Try resetting the session state.")
 
 if __name__ == "__main__":
     main()
