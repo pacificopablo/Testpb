@@ -23,7 +23,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-additional-factors-pred-v9"  # Updated for new prediction section
+APP_VERSION = "2025-05-14-additional-factors-pred-v10"  # Updated for color-coded prediction
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -1037,7 +1037,7 @@ def render_bead_plate():
         st.error("Error rendering bead plate. Try resetting the session.")
 
 def render_additional_factors_prediction():
-    """Render prediction based solely on Additional Factors."""
+    """Render prediction based solely on Additional Factors with color-coded Predicted Side."""
     logging.debug("Entering render_additional_factors_prediction")
     try:
         st.subheader("Prediction (Based on Additional Factors)")
@@ -1055,7 +1055,12 @@ def render_additional_factors_prediction():
             st.info(f"**No Bet Recommended**: {no_bet_reason}")
         elif pred:
             side = "Player" if pred == 'P' else "Banker"
-            st.markdown(f"**Predicted Side**: {side}  ")
+            color = "blue" if pred == 'P' else "red"
+            # Use inline CSS to make the Predicted Side larger, bold, and color-coded
+            st.markdown(
+                f"<span style='font-size: 24px; font-weight: 700; color: {color};'>Predicted Side: {side}</span>",
+                unsafe_allow_html=True
+            )
             st.markdown(f"**Confidence**: {conf:.1f}%  ")
             st.markdown(f"**Explanation**: {recommendation}, Dominant Pattern ({dominant_pattern}), Shoe Bias ({shoe_bias})")
         else:
@@ -1283,7 +1288,7 @@ def main():
         render_setup_form()
         render_result_input()
         render_bead_plate()
-        render_additional_factors_prediction()  # Replaced render_prediction with new function
+        render_additional_factors_prediction()
         render_insights()
         render_status()
         render_accuracy()
