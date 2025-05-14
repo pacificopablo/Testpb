@@ -356,7 +356,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
 
     recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
     threshold = 32.0 + (st.session_state.consecutive_losses * 0.5) - (recent_accuracy * 0.8)
-    threshold = min(max(threshold, 32.0), 42.0)
+    threshold = min(max(threshold, 32.0), 416)
     insights['Threshold'] = f"{threshold:.1f}%"
 
     if st.session_state.pattern_volatility > 0.5:
@@ -825,13 +825,15 @@ def render_prediction():
         st.info(st.session_state.advice)
 
 def render_insights():
-    """Render prediction insights and volatility warnings."""
-    st.subheader("Prediction Insights")
-    if st.session_state.insights:
-        for factor, contribution in st.session_state.insights.items():
-            st.markdown(f"**{factor}**: {contribution}")
-    if st.session_state.pattern_volatility > 0.5:
-        st.warning(f"High Pattern Volatility: {st.session_state.pattern_volatility:.2f} (Betting paused)")
+    """Render prediction insights and volatility warnings in a collapsible section."""
+    with st.expander("Prediction Insights", expanded=True):
+        if st.session_state.insights:
+            for factor, contribution in st.session_state.insights.items():
+                st.markdown(f"**{factor}**: {contribution}")
+        else:
+            st.write("No insights available yet.")
+        if st.session_state.pattern_volatility > 0.5:
+            st.warning(f"High Pattern Volatility: {st.session_state.pattern_volatility:.2f} (Betting paused)")
 
 def render_status():
     """Render session status information."""
