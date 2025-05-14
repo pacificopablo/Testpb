@@ -1,4 +1,4 @@
-# Version: 2025-05-14-fix-v10
+# Version: 2025-05-14-fix-v11
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -19,7 +19,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v10"
+APP_VERSION = "2025-05-14-fix-v11"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -1142,6 +1142,81 @@ def render_insights():
         logging.error(f"render_insights error: {str(e)}\n{traceback.format_exc()}")
         st.error("Error rendering insights. Try resetting the session.")
 
+def render_status():
+    """Render the session status section."""
+    logging.debug("Entering render_status")
+    try:
+        st.subheader("Session Status")
+        st.markdown("""
+        <style>
+        .status-box {
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .status-label {
+            font-weight: bold;
+            color: #343a40;
+        }
+        .status-value {
+            color: #007bff;
+        }
+        .status-negative {
+            color: #dc3545;
+        }
+        .status-neutral {
+            color: #6c757d;
+        }
+        @media (max-width: 600px) {
+            .status-box {
+                padding: 10px;
+            }
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        profit_loss = st.session_state.bankroll - st.session_state.initial_bankroll
+        profit_loss_pct = (profit_loss / st.session_state.initial_bankroll * 100) if st.session_state.initial_bankroll > 0 else 0.0
+        total_bets = st.session_state.wins + st.session_state.losses
+        win_rate = (st.session_state.wins / total_bets * 100) if total_bets > 0 else 0.0
+
+        if st.session_state.target_mode == "Profit %":
+            target_profit = st.session_state.initial_bankroll * (st.session_state.target_value / 100)
+            progress = (profit_loss / target_profit * 100) if target_profit > 0 else 0.0
+            target_text = f"{st.session_state.target_value}% Profit (${target_profit:.2f})"
+        else:
+            target_units = st.session_state.target_value
+            units_earned = profit_loss / st.session_state.initial_base_bet if st.session_state.initial_base_bet > 0 else 0.0
+            progress = (units_earned / target_units * 100) if target_units > 0 else 0.0
+            target_text = f"{target_units} Units"
+
+        status_html = "<div class='status-box'>"
+        status_html += f"<p><span class='status-label'>Bankroll:</span> <span class='status-value'>${st.session_state.bankroll:.2f}</span></p>"
+        status_html += f"<p><span class='status-label'>Profit/Loss:</span> <span class={'status-value' if profit_loss >= 0 else 'status-negative'}>${profit_loss:.2f} ({profit_loss_pct:.1f}%)</span></p>"
+        status_html += f"<p><span class='status-label'>Wins/Losses:</span> <span class='status-value'>{st.session_state.wins}/{st.session_state.losses}</span> (Win Rate: {win_rate:.1f}%)</p>"
+        status_html += f"<p><span class='status-label'>Strategy:</span> <span class='status-value'>{st.session_state.strategy}</span></p>"
+
+        if st.session_state.strategy == 'T3':
+            status_html += f"<p><span class='status-label'>T3 Level:</span> <span class='status-value'>{st.session_state.t3_level}</span> (Peak: {st.session_state.t3_peak_level}, Changes: {st.session_state.t3_level_changes})</p>"
+        elif st.session_state.strategy == 'Parlay16':
+            status_html += f"<p><span class='status-label'>Parlay Step:</span> <span class='status-value'>{st.session_state.parlay_step}</span> (Peak: {st.session_state.parlay_peak_step}, Wins: {st.session_state.parlay_wins})</p>"
+        elif st.session_state.strategy == 'Z1003.1':
+            status_html += f"<p><span class='status-label'>Z1003 Loss Count:</span> <span class='status-value'>{st.session_state.z1003_loss_count}</span> (Bet Factor: {st.session_state.z1003_bet_factor:.2f})</p>"
+
+        status_html += f"<p><span class='status-label'>Target:</span> <span class='status-value'>{target_text}</span> (Progress: {progress:.1f}%)</p>"
+        status_html += f"<p><span class='status-label'>Safety Net:</span> <span class='status-value'>{'Enabled' if st.session_state.safety_net_enabled else 'Disabled'}</span> ({st.session_state.safety_net_percentage}%)</p>"
+        status_html += f"<p><span class='status-label'>Consecutive Wins/Losses:</span> <span class='status-value'>{st.session_state.consecutive_wins}/{st.session_state.consecutive_losses}</span></p>"
+        status_html += f"<p><span class='status-label'>Pattern Volatility:</span> <span class='status-value'>{st.session_state.pattern_volatility:.2f}</span></p>"
+        status_html += "</div>"
+
+        st.markdown(status_html, unsafe_allow_html=True)
+        logging.debug("render_status completed")
+    except Exception as e:
+        logging.error(f"render_status error: {str(e)}\n{traceback.format_exc()}")
+        st.error("Error rendering status section. Try resetting the session.")
+
 # --- Main Application ---
 def main():
     """Main application logic."""
@@ -1189,6 +1264,7 @@ def main():
 
             col1, col2 = st.columns([2, 1])
             with col1:
+                render_status()
                 render_result_input()
                 render_prediction()
                 render_bead_plate()
