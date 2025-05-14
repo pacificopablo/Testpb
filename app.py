@@ -1,4 +1,3 @@
-# Version: 2025-05-14-fix-v6-modified
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -111,7 +110,7 @@ def initialize_session_state():
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
         'safety_net_percentage': 10.0,
-        'safety_net_enabled': True,  # New: Default to enabled
+        'safety_net_enabled': True,
         'last_win_confidence': 0.0,
         'recent_pattern_accuracy': defaultdict(float),
         'consecutive_wins': 0,
@@ -130,7 +129,7 @@ def reset_session():
     """Reset session state to initial values."""
     logging.debug("Entering reset_session")
     for key in list(st.session_state.keys()):
-        if key != 'session_id':  # Preserve session_id
+        if key != 'session_id':
             del st.session_state[key]
     initialize_session_state()
     st.session_state.update({
@@ -163,7 +162,7 @@ def reset_session():
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
         'safety_net_percentage': 10.0,
-        'safety_net_enabled': True,  # New: Default to enabled
+        'safety_net_enabled': True,
         'last_win_confidence': 0.0,
         'consecutive_wins': 0,
     })
@@ -576,7 +575,7 @@ def update_t3_level():
     """Update T3 betting level based on recent results."""
     logging.debug("Entering update_t3_level")
     try:
-        if len(st.session_state.t3_results) >= 2:  # Modified: Update with 2+ outcomes
+        if len(st.session_state.t3_results) >= 2:
             wins = st.session_state.t3_results.count('W')
             losses = st.session_state.t3_results.count('L')
             old_level = st.session_state.t3_level
@@ -597,11 +596,11 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
     """Calculate the next bet amount with error handling."""
     logging.debug("Entering calculate_bet_amount")
     try:
-        if st.session_state.consecutive_losses >= 3 and conf < 50.0:  # Modified: 50.0
+        if st.session_state.consecutive_losses >= 3 and conf < 50.0:
             return None, f"No bet: Paused after {st.session_state.consecutive_losses} losses"
-        if st.session_state.pattern_volatility > 0.5:  # Modified: 0.5
+        if st.session_state.pattern_volatility > 0.5:
             return None, f"No bet: High pattern volatility"
-        if pred is None or conf < 40.0:  # Modified: 40.0
+        if pred is None or conf < 40.0:
             return None, f"No bet: Confidence too low"
         if st.session_state.last_win_confidence < 40.0 and st.session_state.consecutive_wins > 0:
             return None, f"No bet: Low-confidence win ({st.session_state.last_win_confidence:.1f}%)"
@@ -625,7 +624,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
             st.session_state.parlay_step = 1
             st.session_state.z1003_loss_count = 0
             return None, "No bet: Bet exceeds bankroll, levels reset"
-        if st.session_state.safety_net_enabled:  # New: Check if safety net is enabled
+        if st.session_state.safety_net_enabled:
             safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
             if st.session_state.bankroll - bet_amount < safe_bankroll * 0.5:
                 st.session_state.t3_level = 1
@@ -676,7 +675,7 @@ def place_result(result: str):
             "pattern_success": st.session_state.pattern_success.copy(),
             "pattern_attempts": st.session_state.pattern_attempts.copy(),
             "safety_net_percentage": st.session_state.safety_net_percentage,
-            "safety_net_enabled": st.session_state.safety_net_enabled,  # New: Include in previous state
+            "safety_net_enabled": st.session_state.safety_net_enabled,
             "consecutive_wins": st.session_state.consecutive_wins,
             "last_win_confidence": st.session_state.last_win_confidence,
             "insights": st.session_state.insights.copy(),
@@ -776,7 +775,6 @@ def place_result(result: str):
         if st.session_state.strategy == 'T3':
             update_t3_level()
 
-        # Validate win/loss counts
         if st.session_state.wins < 0 or st.session_state.losses < 0:
             logging.error(f"Invalid win/loss counts: wins={st.session_state.wins}, losses={st.session_state.losses}")
             st.session_state.wins = max(0, st.session_state.wins)
@@ -865,7 +863,7 @@ def render_setup_form():
             safety_net_percentage = st.number_input(
                 "Safety Net Percentage (%)",
                 min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
-                disabled=not safety_net_enabled,  # Disable percentage input if safety net is off
+                disabled=not safety_net_enabled,
                 help="Percentage of initial bankroll to keep as a safety net after each bet."
             )
             start_clicked = st.form_submit_button("Start Session")
@@ -915,7 +913,7 @@ def render_setup_form():
                         'pattern_success': defaultdict(int),
                         'pattern_attempts': defaultdict(int),
                         'safety_net_percentage': safety_net_percentage,
-                        'safety_net_enabled': safety_net_enabled,  # New: Store toggle state
+                        'safety_net_enabled': safety_net_enabled,
                         'last_win_confidence': 0.0,
                         'recent_pattern_accuracy': defaultdict(float),
                         'consecutive_wins': 0,
@@ -1305,7 +1303,6 @@ def main():
         st.markdown(f"**App Version**: {APP_VERSION}")
         initialize_session_state()
 
-        # Session state reset button
         if st.button("Reset Session State"):
             reset_session()
             st.success("Session state cleared. Please start a new session.")
