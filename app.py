@@ -615,7 +615,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         if st.session_state.last_win_confidence < 40.0 and st.session_state.consecutive_wins > 0:
             return None, f"No bet: Low-confidence win ({st.session_state.last_win_confidence:.1f}%)"
 
-        if st.session_state(strategy == 'Z1003.1':
+        if st.session_state['strategy'] == 'Z1003.1':
             if st.session_state.z1003_loss_count >= 3 and not st.session_state.z1003_continue:
                 return None, "No bet: Stopped after three losses (Z1003.1 rule)"
             bet_amount = st.session_state.base_bet + (st.session_state.z1003_loss_count * 0.10)
@@ -733,34 +733,36 @@ def place_result(result: str):
                 if st.session_state.strategy == 'T3':
                     st.session_state.t3_results.append('L')
                     logging.debug(f"T3: Added 'L' to t3_results, now {st.session_state.t3_results}")
+                elif st.session_state.strategy == 'Z1003.1':
+                    st.session_state.z1003_loss_count += 1
+                    old_factor = st.session_state.z1003_bet_factor
+                    if st.session_state.z1003_loss_count >= 3:
+                        st.session_state.z1003_bet_factor = 1.0
+                        st.session_state.z1003_continue = False
+                    else:
+                        st.session_state.z1003_bet_factor = min(st.session_state.z1003_bet_factor + 0.1, 2.0)
+                    if old_factor != st.session_state.z1003_bet_factor:
+                        st.session_state.z1003_level_changes += 1
+                        logging.debug(f"Z1003.1: Bet factor changed from {old_factor} to {st.session_state.z1003_bet_factor}, total changes={st.session_state.z1003_level_changes}")
 
             # Parlay16 Logic
-            if st.session_state.strategy == 'Parlay16' and bet_placed
-
-:
+            if st.session_state.strategy == 'Parlay16' and bet_placed:
                 old_step = st.session_state.parlay_step
                 old_wins = st.session_state.parlay_wins
-
                 if win:
                     st.session_state.parlay_wins += 1
                     logging.debug(f"Parlay16: Win recorded, parlay_wins={st.session_state.parlay_wins}")
-
                     if st.session_state.parlay_wins >= 2:
-                        # Reset after two consecutive wins
                         st.session_state.parlay_step = 1
                         st.session_state.parlay_wins = 0
                         logging.debug(f"Parlay16: 2 consecutive wins, reset step to {st.session_state.parlay_step}, wins to 0")
                     else:
-                        # Advance step after a single win
                         st.session_state.parlay_step = min(st.session_state.parlay_step + 1, len(PARLAY_TABLE))
                         logging.debug(f"Parlay16: Single win, step increased to {st.session_state.parlay_step}")
                 else:
-                    # On loss, advance step and reset wins
                     st.session_state.parlay_step = min(st.session_state.parlay_step + 1, len(PARLAY_TABLE))
                     st.session_state.parlay_wins = 0
                     logging.debug(f"Parlay16: Loss, step increased to {st.session_state.parlay_step}, wins reset to 0")
-
-                # Track step changes and peak step
                 if old_step != st.session_state.parlay_step:
                     st.session_state.parlay_step_changes += 1
                     logging.debug(f"Parlay16: Step changed from {old_step} to {st.session_state.parlay_step}, total changes={st.session_state.parlay_step_changes}")
@@ -967,7 +969,7 @@ def render_result_input():
             display: flex; align-items: center; justify-content: center;
         }
         div.stButton > button:hover { transform: scale(1.08); box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3); }
-        div.stButton > button:active { transform: scale [class=stButton] { width: 80%; max-width: 150px; height: 40px; font-size: 12px; }
+        div.stButton > button:active { transform: scale(0.95); }
         div.stButton > button[kind="player_btn"] { background: linear-gradient(to bottom, #007bff, #0056b3); border-color: #0056b3; color: white; }
         div.stButton > button[kind="player_btn"]:hover { background: linear-gradient(to bottom, #339cff, #007bff); }
         div.stButton > button[kind="banker_btn"] { background: linear-gradient(to bottom, #dc3545, #a71d2a); border-color: #a71d2a; color: white; }
@@ -1060,7 +1062,7 @@ def render_bead_plate():
                 col_html += f"<div style='{style}'></div>"
             col_html += "</div>"
             bead_plate_html += col_html
-        bead_plate_html ALSO += "</div>"
+        bead_plate_html += "</div>"
         st.markdown(bead_plate_html, unsafe_allow_html=True)
         logging.debug("render_bead_plate completed")
     except Exception as e:
@@ -1090,7 +1092,6 @@ def render_insights():
     logging.debug("Entering render_insights")
     try:
         st.subheader("Prediction Insights")
-        
         if not st.session_state.insights:
             st.info("No insights available yet. Enter more results to analyze patterns.")
             return
@@ -1168,7 +1169,7 @@ def render_insights():
 
         total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
         fourgram_success = st.session_state.pattern_success.get('fourgram', 0) / total_bets * 100
-        st.markdown(f"**Historical Fourgram Success**: {fourgram_success:.1f}% (zijn over {total_bets} bets)")
+        st.markdown(f"**Historical Fourgram Success**: {fourgram_success:.1f}% (over {total_bets} bets)")
         logging.debug("render_insights completed")
     except Exception as e:
         logging.error(f"render_insights error: {str(e)}\n{traceback.format_exc()}")
