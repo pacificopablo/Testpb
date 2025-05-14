@@ -1,4 +1,4 @@
-# Version: 2025-05-14-fix-v8
+# Version: 2025-05-14-fix-v9
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -19,7 +19,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v8"
+APP_VERSION = "2025-05-14-fix-v9"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -60,7 +60,7 @@ def track_user_session() -> int:
     except (PermissionError, OSError) as e:
         logging.error(f"Session file write error: {str(e)}")
         st.warning("Session tracking may be inaccurate.")
-        return len(ssessions)
+        return len(sessions)
 
     logging.debug(f"track_user_session: {len(sessions)} active sessions")
     return len(sessions)
@@ -146,7 +146,7 @@ def reset_session():
         'advice': "Session reset.",
         'history': [],
         'wins': 0,
-        'losses':0,
+        'losses': 0,
         'target_hit': False,
         'consecutive_losses': 0,
         'loss_log': [],
@@ -866,7 +866,7 @@ def render_setup_form():
             )
             target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
             target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
-            safety_net_enabled = st.toggle("Enable Safety Net", value st.session_state.safety_net_enabled, help="Toggle to enable or disable the safety net protection.")
+            safety_net_enabled = st.toggle("Enable Safety Net", value=st.session_state.safety_net_enabled, help="Toggle to enable or disable the safety net protection.")
             safety_net_percentage = st.number_input(
                 "Safety Net Percentage (%)",
                 min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
