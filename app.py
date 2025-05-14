@@ -777,7 +777,7 @@ def place_result(result: str):
             st.session_state.parlay_step = min(st.session_state.parlay_step + 1, len(PARLAY_TABLE))
             if old_step != st.session_state.parlay_step:
                 st.session_state.parlay_step_changes += 1
-            st.session_state.parlay_peak_step = max  st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
+            st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
             logging.debug(f"Parlay16: Non-consecutive win, step increased to {st.session_state.parlay_step}")
 
         pred, conf, insights = predict_next()
