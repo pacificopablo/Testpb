@@ -739,7 +739,13 @@ def place_result(result: str):
                     st.session_state.parlay_wins = 0  # Reset consecutive wins
                     if old_step != st.session_state.parlay_step:
                         st.session_state.parlay_step_changes += 1
-                    st.session_state.parlay_peak_step = max(st.session_state.parOralay_step)
+                    st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
+                elif st.session_state.strategy == 'Z1003.1':
+                    st.session_state.z1003_loss_count += 1
+                    old_factor = st.session_state.z1003_bet_factor
+                    st.session_state.z1003_bet_factor = min(st.session_state.z1003_bet_factor + 0.1, 2.0)
+                    if old_factor != st.session_state.z1003_bet_factor:
+                        st.session_state.z1003_level_changes += 1
             st.session_state.prediction_accuracy['total'] += 1
             st.session_state.pending_bet = None
 
@@ -1080,73 +1086,143 @@ def render_insights():
             _, _, _, _, _, _, _, _, _, extra_metrics = analyze_patterns(st.session_state.sequence[-WINDOW_SIZE:])
         except Exception as e:
             logging.error(f"analyze_patterns in render_insights error: {str(e)}\n{traceback.format_exc()}")
-            st.error("Error analyzing patterns. Try',
+            st.error("Error analyzing patterns. Try resetting the session.")
+            return
 
-### Explanation of Fixes
-1. **Fixed `predict_next` Function**:
-   - In the `predict_next` function, the line `weights = calculate_weights(streak_count, chop_count, double_count, shoe Hannahs, for example, are not escaped in the string literal and cause a syntax error.` was incorrect.
-   - The argument `shoe Hannahs` was a typo and should be `shoe_bias`, which is returned by the `analyze_patterns` function and represents the bias toward Player or Banker outcomes.
-   - The corrected line is:
-     ```python
-     weights = calculate_weights(streak_count, chop_count, double_count, shoe_bias)
-     ```
-   - The trailing text (`for example, are not escaped...`) was part of the error message or an artifact in the input and has been removed.
+        with st.expander("Pattern Analysis", expanded=False):
+            if 'Recommendation' in st.session_state.insights:
+                st.markdown(f"**Recommendation**: {st.session_state.insights['Recommendation']['text']}")
 
-2. **Fixed `update_t3_level` Function**:
-   - As addressed previously, the `update_t3_level` function had an unterminated f-string in the logging statement.
-   - The corrected logging statement is:
-     ```python
-     logging.error(f"update_t3_level error: {str(e)}\n{traceback.format_exc()}")
-     ```
-   - This ensures proper formatting of the exception message and stack trace.
+            for pattern in ['Bigram', 'Trigram', 'Fourgram', 'Streak', 'Chop', 'Double']:
+                if pattern in st.session_state.insights:
+                    details = st.session_state.insights[pattern]
+                    st.write(f"**{pattern}**")
+                    st.write(f"- Weight: {details['weight']:.1f}%")
+                    if 'p_prob' in details:
+                        st.write(f"- Player Probability: {details['p_prob']:.1f}%")
+                        st.write(f"- Banker Probability: {details['b_prob']:.1f}%")
+                    if 'reliability' in details:
+                        st.write(f"- Reliability: {details['reliability']:.1f}%")
+                    if 'recent_performance' in details:
+                        st.write(f"- Recent Performance: {details['recent_performance']:.1f}%")
+                    if 'streak_type' in details:
+                        st.write(f"- Streak Type: {details['streak_type']}")
+                        st.write(f"- Streak Count: {details['streak_count']}")
+                    if 'next_pred' in details:
+                        st.write(f"- Next Prediction: {details['next_pred']}")
+                        st.write(f"- Chop Count: {details['chop_count']}")
+                    if 'double_type' in details:
+                        st.write(f"- Double Type: {details['double_type']}")
 
-3. **Other Considerations**:
-   - The rest of the code was reviewed and found to be syntactically correct.
-   - A minor typo was found in the `place_result` function: `st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parOralay_step)` contains a typo (`parOralay_step`). This has been corrected to:
-     ```python
-     st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
-     ```
-   - No other syntax errors were identified, but runtime errors could occur if dependencies are missing or misconfigured.
+            if 'Shoe Bias' in st.session_state.insights:
+                st.write("**Shoe Bias**")
+                st.write(f"- Bias: {st.session_state.insights['Shoe Bias']['bias']}")
+                st.write(f"- Adjustment: {st.session_state.insights['Shoe Bias']['adjustment']}")
 
-### How to Use the Code
-1. **Save the File**:
-   - Copy the code from the `<xaiArtifact>` content above.
-   - Paste it into a text editor (e.g., VS Code, Notepad).
-   - Save it as `final_fixed_t3_smoak.py` with the `.py` extension.
+            if 'Threshold' in st.session_state.insights:
+                st.write("**Threshold**")
+                st.write(f"- Adjusted Threshold: {st.session_state.insights['Threshold']['adjusted']}")
 
-2. **Install Dependencies**:
-   - Ensure you have the required Python packages installed:
-     ```bash
-     pip install streamlit numpy
-     ```
-   - Verify that your Python version is compatible (Python 3.7+ recommended) and that Streamlit is up-to-date (`pip install --upgrade streamlit`).
+            if 'Volatility' in st.session_state.insights:
+                st.write("**Volatility**")
+                st.write(f"- Level: {st.session_state.insights['Volatility']['level']}")
+                st.write(f"- Value: {st.session_state.insights['Volatility']['value']:.2f}")
+                st.write(f"- Adjustment: {st.session_state.insights['Volatility']['adjustment']}")
 
-3. **Run the Application**:
-   - Navigate to the directory containing `final_fixed_t3_smoak.py` in a terminal.
-   - Run the Streamlit app:
-     ```bash
-     streamlit run final_fixed_t3_smoak.py
-     ```
-   - Open the provided URL (usually `http://localhost:8501`) in a browser to interact with the app.
+            if 'No Bet' in st.session_state.insights:
+                st.write("**No Bet Reason**")
+                st.write(f"- Reason: {st.session_state.insights['No Bet']['reason']}")
 
-4. **Verify Syntax**:
-   - Before running, you can check for syntax errors:
-     ```bash
-     python -m py_compile final_fixed_t3_smoak.py
-     ```
-   - If no errors are reported, the code is syntactically correct.
+        with st.expander("Extra Metrics", expanded=False):
+            st.write(f"- Average Streak Length: {extra_metrics['avg_streak_length']:.2f}")
+            st.write(f"- Average Chop Length: {extra_metrics['avg_chop_length']:.2f}")
+            st.write(f"- Streak Frequency: {extra_metrics['streak_frequency']:.2f}")
+            st.write(f"- Chop Frequency: {extra_metrics['chop_frequency']:.2f}")
 
-5. **Check Logs**:
-   - The app logs errors to `app.log` in the working directory.
-   - If runtime errors occur, check `app.log` for details.
+        logging.debug("render_insights completed")
+    except Exception as e:
+        logging.error(f"render_insights error: {str(e)}\n{traceback.format_exc()}")
+        st.error("Error rendering insights. Try resetting the session.")
 
-### Notes
-- **File Permissions**: The code writes to `SESSION_FILE` and `SIMULATION_LOG` in the system’s temporary directory (`tempfile.gettempdir()`). Ensure your application has write permissions in this directory.
-- **Streamlit Features**: The code uses modern Streamlit features like `st.toggle` and `st.rerun`, which require Streamlit 1.10 or later. Update Streamlit if you encounter compatibility issues:
-  ```bash
-  pip install --upgrade streamlit
-  ```
-- **Testing**: Test the app with a small sequence of results (e.g., clicking “Player”, “Banker”, “Tie”) to ensure the prediction and betting logic work as expected.
-- **Potential Runtime Issues**: If you encounter runtime errors (e.g., missing modules, file access issues), provide the error message, and I can assist further.
+# --- Main Application ---
+def main():
+    """Main application logic."""
+    logging.debug("Entering main")
+    try:
+        st.set_page_config(page_title="Baccarat Predictor", layout="wide")
+        st.title(f"Baccarat Predictor v{APP_VERSION}")
+        initialize_session_state()
 
-If you need help setting up the environment, running the app, or debugging runtime issues, please share details about your setup (Python version, Streamlit version, OS), and I’ll provide targeted assistance!
+        num_users = track_user_session()
+        st.sidebar.write(f"Active Users: {num_users}")
+
+        if st.sidebar.button("Reset Session"):
+            reset_session()
+            st.success("Session reset successfully!")
+            st.rerun()
+
+        if st.session_state.target_hit:
+            st.success("Target hit! Session ended. Reset to start a new session.")
+            return
+
+        render_setup_form()
+        if st.session_state.bankroll > 0:
+            st.sidebar.subheader("Session Stats")
+            st.sidebar.write(f"Bankroll: ${st.session_state.bankroll:.2f}")
+            st.sidebar.write(f"Wins: {st.session_state.wins}")
+            st.sidebar.write(f"Losses: {st.session_state.losses}")
+            st.sidebar.write(f"Strategy: {st.session_state.strategy}")
+            if st.session_state.strategy == 'T3':
+                st.sidebar.write(f"T3 Level: {st.session_state.t3_level}")
+                st.sidebar.write(f"T3 Peak Level: {st.session_state.t3_peak_level}")
+                st.sidebar.write(f"T3 Level Changes: {st.session_state.t3_level_changes}")
+            elif st.session_state.strategy == 'Parlay16':
+                st.sidebar.write(f"Parlay Step: {st.session_state.parlay_step}")
+                st.sidebar.write(f"Parlay Peak Step: {st.session_state.parlay_peak_step}")
+                st.sidebar.write(f"Parlay Step Changes: {st.session_state.parlay_step_changes}")
+                st.sidebar.write(f"Parlay Wins: {st.session_state.parlay_wins}")
+            elif st.session_state.strategy == 'Z1003.1':
+                st.sidebar.write(f"Z1003 Loss Count: {st.session_state.z1003_loss_count}")
+                st.sidebar.write(f"Z1003 Bet Factor: {st.session_state.z1003_bet_factor:.2f}")
+                st.sidebar.write(f"Z1003 Level Changes: {st.session_state.z1003_level_changes}")
+            st.sidebar.write(f"Consecutive Wins: {st.session_state.consecutive_wins}")
+            st.sidebar.write(f"Consecutive Losses: {st.session_state.consecutive_losses}")
+            st.sidebar.write(f"Pattern Volatility: {st.session_state.pattern_volatility:.2f}")
+
+            render_result_input()
+            render_prediction()
+            render_bead_plate()
+            render_insights()
+
+            with st.expander("Loss Log", expanded=False):
+                if st.session_state.loss_log:
+                    for i, log in enumerate(st.session_state.loss_log):
+                        st.write(f"**Loss {i+1}**")
+                        st.write(f"- Sequence: {''.join(log['sequence'])}")
+                        st.write(f"- Prediction: {log['prediction']}")
+                        st.write(f"- Result: {log['result']}")
+                        st.write(f"- Confidence: {log['confidence']}%")
+                        st.write("- Insights:")
+                        for key, value in log['insights'].items():
+                            st.write(f"  - {key}: {value}")
+                else:
+                    st.info("No losses recorded yet.")
+
+            with st.expander("Run Simulation", expanded=False):
+                if st.button("Simulate Shoe (80 hands)"):
+                    result = simulate_shoe()
+                    st.write(f"**Simulation Results**")
+                    st.write(f"- Accuracy: {result['accuracy']:.1f}%")
+                    st.write(f"- Correct Predictions: {result['correct']}/{result['total']}")
+                    st.write(f"- Sequence: {''.join(result['sequence'])}")
+                    st.write("- Pattern Performance:")
+                    for pattern in result['pattern_success']:
+                        st.write(f"  - {pattern}: {result['pattern_success'][pattern]}/{result['pattern_attempts'][pattern]}")
+
+        logging.debug("main completed")
+    except Exception as e:
+        logging.error(f"main error: {str(e)}\n{traceback.format_exc()}")
+        st.error("Error running application. Try resetting the session.")
+
+if __name__ == "__main__":
+    main()
