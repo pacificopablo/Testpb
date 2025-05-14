@@ -62,7 +62,7 @@ def initialize_session_state():
     """Initialize session state with default values."""
     defaults = {
         'bankroll': 0.0,
-        'base_bet': 0.10,  # Updated default to reflect minimum
+        'base_bet': 0.10,
         'initial_base_bet': 0.10,
         'sequence': [],
         'pending_bet': None,
@@ -448,7 +448,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
                 bet_amount = st.session_state.base_bet
             return None, "No bet: Risk too high for current bankroll. Level/step reset to 1."
 
-    return bet_amount, f"Next Bet: ${bet_amount:.0f} on {pred}"
+    return bet_amount, f"Next Bet: ${bet_amount:.2f} on {pred}"
 
 def place_result(result: str):
     """Process a game result and update session state."""
@@ -772,7 +772,7 @@ def render_result_input():
                         if st.session_state.pending_bet:
                             amount, pred = st.session_state.pending_bet
                             conf = predict_next()[1]
-                            st.session_state.advice = f"Next Bet: ${amount:.0f} on {pred}"
+                            st.session_state.advice = f"Next Bet: ${amount:.2f} on {pred}"
                         else:
                             st.session_state.advice = "No bet pending."
                         st.session_state.last_was_tie = False
@@ -820,7 +820,7 @@ def render_prediction():
     if st.session_state.pending_bet:
         amount, side = st.session_state.pending_bet
         color = 'blue' if side == 'P' else 'red'
-        st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.0f}</h4>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.2f}</h4>", unsafe_allow_html=True)
     elif not st.session_state.target_hit:
         st.info(st.session_state.advice)
 
@@ -905,7 +905,7 @@ def render_history():
             {
                 "Bet": h["Bet"] if h["Bet"] else "-",
                 "Result": h["Result"],
-                "Amount": f"${h['Amount']:.0f}" if h["Bet_Placed"] else "-",
+                "Amount": f"${h['Amount']:.2f}" if h["Bet_Placed"] else "-",
                 "Outcome": "Win" if h["Win"] else "Loss" if h["Bet_Placed"] else "-",
                 "T3_Level": h["T3_Level"] if st.session_state.strategy == 'T3' else "-",
                 "Parlay_Step": h["Parlay_Step"] if st.session_state.strategy == 'Parlay16' else "-",
@@ -920,7 +920,7 @@ def render_export():
     if st.button("Download Session Data"):
         csv_data = "Bet,Result,Amount,Win,T3_Level,Parlay_Step,Z1003_Loss_Count\n"
         for h in st.session_state.history:
-            csv_data += f"{h['Bet'] or '-'},{h['Result']},${h['Amount']:.0f},{h['Win']},{h['T3_Level']},{h['Parlay_Step']},{h['Z1003_Loss_Count']}\n"
+            csv_data += f"{h['Bet'] or '-'},{h['Result']},${h['Amount']:.2f},{h['Win']},{h['T3_Level']},{h['Parlay_Step']},{h['Z1003_Loss_Count']}\n"
         st.download_button("Download CSV", csv_data, "session_data.csv", "text/csv")
 
 def render_simulation():
