@@ -23,7 +23,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-additional-factors-pred-v10"
+APP_VERSION = "2025-05-14-additional-factors-pred-v11"  # Updated for title removal
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -170,7 +170,7 @@ def reset_session():
 
 # --- Prediction Logic ---
 def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, int, int, float, float, Dict]:
-    """Analyze sequence patterns to support prediction."""
+    """Analyze sequence patterns to support Additional Factors."""
     logging.debug("Entering analyze_patterns")
     try:
         bigram_transitions = defaultdict(lambda: defaultdict(int))
@@ -267,7 +267,7 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
         return ({}, {}, {}, {}, 0, 0, 0, 0.0, 0.0, {})
 
 def calculate_weights(streak_count: int, chop_count: int, double_count: int, shoe_bias: float) -> Dict[str, float]:
-    """Calculate pattern weights for prediction."""
+    """Calculate pattern weights to support Additional Factors."""
     logging.debug("Entering calculate_weights")
     try:
         total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
@@ -334,7 +334,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         return {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
 
 def predict_next() -> Tuple[Optional[str], float, Dict]:
-    """Predict next outcome based on pattern analysis."""
+    """Predict next outcome based solely on Additional Factors."""
     logging.debug("Entering predict_next")
     try:
         sequence = [x for x in st.session_state.sequence if x in ['P', 'B', 'T']]
@@ -784,7 +784,7 @@ def place_result(result: str):
 
 # --- Simulation Logic ---
 def simulate_shoe(num_hands: int = 80) -> Dict:
-    """Simulate a Baccarat shoe for testing predictions."""
+    """Simulate a Baccarat shoe for testing Additional Factors predictions."""
     logging.debug("Entering simulate_shoe")
     try:
         outcomes = np.random.choice(
@@ -912,7 +912,6 @@ def render_setup_form():
                         'safety_net_percentage': safety_net_percentage,
                         'safety_net_enabled': safety_net_enabled,
                         'last_win_confidence': 0.0,
-                        'recent_pattern_accuracy': defaultdict(float),
                         'consecutive_wins': 0,
                     })
                     st.session_state.pattern_success['fourgram'] = 0
@@ -1037,7 +1036,7 @@ def render_bead_plate():
         st.error("Error rendering bead plate. Try resetting the session.")
 
 def render_additional_factors_prediction():
-    """Render prediction with color-coded Predicted Side and Bet Amount."""
+    """Render prediction based solely on Additional Factors with color-coded Predicted Side."""
     logging.debug("Entering render_additional_factors_prediction")
     try:
         if not st.session_state.insights:
@@ -1045,7 +1044,6 @@ def render_additional_factors_prediction():
             return
 
         pred, conf, insights = predict_next()
-        bet_amount, _ = calculate_bet_amount(pred, conf)  # Fetch bet amount
         recommendation = insights.get('Recommendation', {}).get('text', 'No bet recommended')
         dominant_pattern = insights.get('Dominant Pattern', {}).get('pattern', 'N/A')
         shoe_bias = insights.get('Shoe Bias', {}).get('bias', 'Neutral')
@@ -1056,24 +1054,22 @@ def render_additional_factors_prediction():
         elif pred:
             side = "Player" if pred == 'P' else "Banker"
             color = "blue" if pred == 'P' else "red"
-            # Display Predicted Side and Bet Amount in larger, bold, color-coded font
-            bet_text = f"${bet_amount:.2f}" if bet_amount is not None else "No Bet"
+            # Use inline CSS to make the Predicted Side larger, bold, and color-coded
             st.markdown(
-                f"<span style='font-size: 24px; font-weight: 700; color: {color};'>"
-                f"Predicted Side: {side} | Bet Amount: {bet_text}</span>",
+                f"<span style='font-size: 24px; font-weight: 700; color: {color};'>Predicted Side: {side}</span>",
                 unsafe_allow_html=True
             )
             st.markdown(f"**Confidence**: {conf:.1f}%  ")
             st.markdown(f"**Explanation**: {recommendation}, Dominant Pattern ({dominant_pattern}), Shoe Bias ({shoe_bias})")
         else:
-            st.info("**No Bet Recommended**: Insufficient confidence based on pattern analysis.")
+            st.info("**No Bet Recommended**: Insufficient confidence based on Additional Factors.")
         logging.debug("render_additional_factors_prediction completed")
     except Exception as e:
         logging.error(f"render_additional_factors_prediction error: {str(e)}\n{traceback.format_exc()}")
         st.error("Error rendering prediction. Try resetting the session.")
 
 def render_insights():
-    """Render prediction insights, focusing on monetary strategy."""
+    """Render prediction insights, focusing on Additional Factors and monetary strategy."""
     logging.debug("Entering render_insights")
     try:
         st.subheader("Prediction Insights")
@@ -1094,7 +1090,7 @@ def render_insights():
             if k in ['Threshold', 'Volatility', 'Shoe Bias', 'No Bet', 'Recommendation', 'Dominant Pattern', 'Safety Net Warning']
         }
 
-        st.markdown("**Note**: Predictions are based on pattern analysis (Recommendation, Dominant Pattern, Shoe Bias, Volatility, Threshold, No Bet Reason).")
+        st.markdown("**Note**: Predictions are based solely on Additional Factors (Recommendation, Dominant Pattern, Shoe Bias, Volatility, Threshold, No Bet Reason).")
 
         st.markdown("**Betting Strategy (Money Management)**")
         safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
@@ -1119,7 +1115,7 @@ def render_insights():
             st.markdown(f"- **Parlay16 Rule**: Win → increase bet, 2 wins or loss → reset to base")
 
         if meta_insights:
-            st.markdown("**Pattern Analysis**")
+            st.markdown("**Additional Factors (Prediction Drivers)**")
             if 'Recommendation' in meta_insights:
                 st.success(f"**Recommendation**: {meta_insights['Recommendation'].get('text', 'N/A')}")
             if 'Dominant Pattern' in meta_insights:
@@ -1274,7 +1270,7 @@ def render_simulation():
 
 # --- Main Application ---
 def main():
-    """Main application with pattern-based predictions and monetary focus."""
+    """Main application with Additional Factors predictions and monetary focus."""
     logging.debug("Entering main")
     try:
         st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
@@ -1309,4 +1305,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
