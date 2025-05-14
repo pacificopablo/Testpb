@@ -1,6 +1,8 @@
 import streamlit as st
 import random
 from collections import defaultdict
+import pandas as pd
+import plotly.express as px
 
 st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
 st.title("MANG BACCARAT GROUP")
@@ -11,7 +13,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.base_bet = 0.0
     st.session_state.sequence = []
     st.session_state.pending_bet = None
-    st.session_state.strategy = 'T3'  # Betting strategy (T3 or Flatbet)
+    st.session_state.strategy = 'T3'
     st.session_state.t3_level = 1
     st.session_state.t3_results = []
     st.session_state.advice = ""
@@ -31,7 +33,7 @@ if 'bankroll' not in st.session_state:
 if st.button("Reset Session"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    st.experimental_rerun()
+    st.rerun()
 
 # --- SETUP FORM ---
 st.subheader("Setup")
@@ -79,31 +81,22 @@ if start_clicked:
 
 # --- FUNCTIONS ---
 def predict_next():
-    sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]  # Non-Tie outcomes
+    sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]
     if len(sequence) < 2:
-        return 'B', 45.86  # Default to Banker with theoretical probability
-
-    # Get the last bigram (last 2 non-Tie outcomes)
+        return 'B', 45.86
     bigram = sequence[-2:]
-
-    # Count transitions from this bigram in the sequence
     transitions = defaultdict(int)
     for i in range(len(sequence) - 2):
         if sequence[i:i+2] == bigram:
             next_outcome = sequence[i+2]
             transitions[next_outcome] += 1
-
-    # Calculate transition probabilities
     total_transitions = sum(transitions.values())
     if total_transitions > 0:
         prob_p = (transitions['P'] / total_transitions) * 100
         prob_b = (transitions['B'] / total_transitions) * 100
     else:
-        # Use theoretical Baccarat probabilities (ignoring Ties)
-        prob_p = 44.62  # Player probability
-        prob_b = 45.86  # Banker probability
-
-    # Predict the outcome with higher probability
+        prob_p = 44.62
+        prob_b = 45.86
     if prob_p > prob_b:
         return 'P', prob_p
     return 'B', prob_b
@@ -138,9 +131,7 @@ def place_result(result):
     if st.session_state.target_hit:
         reset_session_auto()
         return
-
     st.session_state.last_was_tie = (result == 'T')
-
     bet_amount = 0
     if st.session_state.pending_bet and result != 'T':
         bet_amount, selection = st.session_state.pending_bet
@@ -169,7 +160,6 @@ def place_result(result):
             if len(st.session_state.loss_log) > 50:
                 st.session_state.loss_log = st.session_state.loss_log[-50:]
         st.session_state.prediction_accuracy['total'] += 1
-
         st.session_state.history.append({
             "Bet": selection,
             "Result": result,
@@ -180,52 +170,112 @@ def place_result(result):
         })
         if len(st.session_state.history) > 1000:
             st.session_state.history = st.session_state.history[-1000:]
-
         st.session_state.pending_bet = None
-
     if not st.session_state.pending_bet and result != 'T':
         st.session_state.consecutive_losses = 0
-
     st.session_state.sequence.append(result)
     if len(st.session_state.sequence) > 100:
         st.session_state.sequence = st.session_state.sequence[-100:]
-
     if check_target_hit():
         st.session_state.target_hit = True
         return
-
-    # Check confidence and bankroll before placing a bet
     pred, conf = predict_next()
     if conf < 50.5:
         st.session_state.pending_bet = None
         st.session_state.advice = f"No bet (Confidence: {conf:.1f}% < 50.5%)"
     else:
-        bet_amount = st.session_state.base_bet * st.session_state.t3_level
+        bet_amount = st.session_state.base_bet * st.session_state.t3_level if st.session_state.strategy == 'T3' else st.session_state.base_bet
         if bet_amount > st.session_state.bankroll:
             st.session_state.pending_bet = None
             st.session_state.advice = "No bet: Insufficient bankroll."
         else:
             st.session_state.pending_bet = (bet_amount, pred)
             st.session_state.advice = f"Next Bet: ${bet_amount:.0f} on {pred} ({conf:.1f}%)"
-
-    # T3 Level Adjustment (after 3 bets)
-    if len(st.session_state.t3_results) == 3:
+    if len(st.session_state.t3_results) == 3 and st.session_state.strategy == 'T3':
         wins = st.session_state.t3_results.count('W')
         losses = st.session_state.t3_results.count('L')
         if wins == 3:
-            st.session_state.t3_level = max(1, st.session_state.t3_level - 2)  # Move -2 levels
+            st.session_state.t3_level = max(1, st.session_state.t3_level - 2)
         elif wins == 2 and losses == 1:
-            st.session_state.t3_level = max(1, st.session_state.t3_level - 1)  # Move -1 level
+            st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
         elif losses == 2 and wins == 1:
-            st.session_state.t3_level = st.session_state.t3_level + 1  # Move +1 level
+            st.session_state.t3_level = st.session_state.t3_level + 1
         elif losses == 3:
-            st.session_state.t3_level = st.session_state.t3_level + 2  # Move +2 levels
-        st.session_state.t3_results = []  # Reset for next sequence
+            st.session_state.t3_level = st.session_state.t3_level + 2
+        st.session_state.t3_results = []
+
+def get_prediction_insights():
+    insights = {}
+    total_bets = st.session_state.prediction_accuracy['total']
+    p_accuracy = (st.session_state.prediction_accuracy['P'] / total_bets * 100) if total_bets > 0 else 0
+    b_accuracy = (st.session_state.prediction_accuracy['B'] / total_bets * 100) if total_bets > 0 else 0
+    win_ratio = (st.session_state.wins / total_bets * 100) if total_bets > 0 else 0
+    insights['basic_stats'] = {
+        'total_bets': total_bets,
+        'player_accuracy': p_accuracy,
+        'banker_accuracy': b_accuracy,
+        'win_ratio': win_ratio
+    }
+    max_win_streak = 0
+    max_loss_streak = 0
+    current_win_streak = 0
+    current_loss_streak = 0
+    for h in st.session_state.history:
+        if h['Win']:
+            current_win_streak += 1
+            current_loss_streak = 0
+            max_win_streak = max(max_win_streak, current_win_streak)
+        else:
+            current_loss_streak += 1
+            current_win_streak = 0
+            max_loss_streak = max(max_loss_streak, current_loss_streak)
+    insights['streaks'] = {
+        'max_win_streak': max_win_streak,
+        'max_loss_streak': max_loss_streak,
+        'consecutive_losses': st.session_state.consecutive_losses
+    }
+    sequence = [x for x in st.session_state.sequence if x in ['P', 'B', 'T']]
+    p_count = sequence.count('P')
+    b_count = sequence.count('B')
+    t_count = sequence.count('T')
+    total_outcomes = len(sequence)
+    insights['outcome_freq'] = {
+        'player': (p_count / total_outcomes * 100) if total_outcomes > 0 else 0,
+        'banker': (b_count / total_outcomes * 100) if total_outcomes > 0 else 0,
+        'tie': (t_count / total_outcomes * 100) if total_outcomes > 0 else 0
+    }
+    confidence_history = [
+        float(log['confidence']) for log in st.session_state.loss_log
+    ] + [
+        float(st.session_state.advice.split('(')[-1].split('%')[0]) 
+        if '(' in st.session_state.advice else 0
+        for _ in range(1 if st.session_state.pending_bet else 0)
+    ]
+    insights['confidence'] = {
+        'avg_confidence': sum(confidence_history) / len(confidence_history) if confidence_history else 0,
+        'high_confidence_losses': len([c for c in confidence_history if c >= 60 and c in [float(log['confidence']) for log in st.session_state.loss_log]])
+    }
+    sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]
+    bigram_transitions = defaultdict(lambda: defaultdict(int))
+    for i in range(len(sequence) - 2):
+        bigram = tuple(sequence[i:i+2])
+        next_outcome = sequence[i+2]
+        bigram_transitions[bigram][next_outcome] += 1
+    insights['bigrams'] = bigram_transitions
+    advice = []
+    if insights['confidence']['avg_confidence'] < 50.5 and total_bets > 10:
+        advice.append("Low average prediction confidence detected. Consider pausing bets or switching to Flatbet strategy.")
+    if insights['streaks']['consecutive_losses'] >= 3:
+        advice.append(f"Warning: {insights['streaks']['consecutive_losses']} consecutive losses. Consider reducing bet size or pausing.")
+    if insights['outcome_freq']['tie'] > 20:
+        advice.append("High frequency of Ties observed. Be cautious with predictions as Ties disrupt pattern analysis.")
+    if insights['confidence']['high_confidence_losses'] > 3:
+        advice.append("Multiple high-confidence predictions resulted in losses. Re-evaluate betting on high-confidence predictions.")
+    insights['advice'] = advice
+    return insights
 
 # --- RESULT INPUT WITH NATIVE STREAMLIT BUTTONS ---
 st.subheader("Enter Result")
-
-# Custom CSS for smaller button styling
 st.markdown("""
 <style>
 div.stButton > button {
@@ -293,9 +343,7 @@ div.stButton > button[kind="undo_btn"]:hover {
 </style>
 """, unsafe_allow_html=True)
 
-# Create a 4-column layout for buttons
 col1, col2, col3, col4 = st.columns(4)
-
 with col1:
     if st.button("Player", key="player_btn"):
         place_result("P")
@@ -329,7 +377,6 @@ with col4:
 # --- DISPLAY SEQUENCE AS BEAD PLATE ---
 st.subheader("Current Sequence (Bead Plate)")
 sequence = st.session_state.sequence[-100:] if 'sequence' in st.session_state else []
-
 grid = []
 current_col = []
 for result in sequence:
@@ -340,12 +387,9 @@ for result in sequence:
         current_col = [result]
 if current_col:
     grid.append(current_col)
-
 if grid and len(grid[-1]) < 6:
     grid[-1] += [''] * (6 - len(grid[-1]))
-
 num_columns = len(grid)
-
 bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 120px; overflow-x: auto;'>"
 for col in grid[:num_columns]:
     col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
@@ -361,7 +405,6 @@ for col in grid[:num_columns]:
     col_html += "</div>"
     bead_plate_html += col_html
 bead_plate_html += "</div>"
-
 st.markdown(bead_plate_html, unsafe_allow_html=True)
 
 # --- PREDICTION DISPLAY ---
@@ -397,6 +440,69 @@ if total > 0:
     b_accuracy = (st.session_state.prediction_accuracy['B'] / total) * 100
     st.markdown(f"**Player Bets**: {st.session_state.prediction_accuracy['P']}/{total} ({p_accuracy:.1f}%)")
     st.markdown(f"**Banker Bets**: {st.session_state.prediction_accuracy['B']}/{total} ({b_accuracy:.1f}%)")
+
+# --- PREDICTION INSIGHTS ---
+st.subheader("Prediction Insights")
+if st.session_state.history or st.session_state.sequence:
+    insights = get_prediction_insights()
+    st.markdown("**Basic Statistics**")
+    st.write(f"Total Bets: {insights['basic_stats']['total_bets']}")
+    st.write(f"Player Prediction Accuracy: {insights['basic_stats']['player_accuracy']:.1f}%")
+    st.write(f"Banker Prediction Accuracy: {insights['basic_stats']['banker_accuracy']:.1f}%")
+    st.write(f"Win Ratio: {insights['basic_stats']['win_ratio']:.1f}%")
+    st.markdown("**Streak Analysis**")
+    st.write(f"Longest Win Streak: {insights['streaks']['max_win_streak']}")
+    st.write(f"Longest Loss Streak: {insights['streaks']['max_loss_streak']}")
+    st.write(f"Current Consecutive Losses: {insights['streaks']['consecutive_losses']}")
+    st.markdown("**Outcome Frequency**")
+    st.write(f"Player Outcomes: {insights['outcome_freq']['player']:.1f}%")
+    st.write(f"Banker Outcomes: {insights['outcome_freq']['banker']:.1f}%")
+    st.write(f"Tie Outcomes: {insights['outcome_freq']['tie']:.1f}%")
+    st.markdown("**Confidence Trends**")
+    st.write(f"Average Prediction Confidence: {insights['confidence']['avg_confidence']:.1f}%")
+    st.write(f"High-Confidence Losses (≥60%): {insights['confidence']['high_confidence_losses']}")
+    st.markdown("**Bigram Transition Patterns**")
+    bigram_data = []
+    for bigram, transitions in insights['bigrams'].items():
+        total = sum(transitions.values())
+        if total > 0:
+            bigram_data.append({
+                'Bigram': f"{bigram[0]}{bigram[1]}",
+                'To Player': f"{(transitions['P'] / total * 100):.1f}%",
+                'To Banker': f"{(transitions['B'] / total * 100):.1f}%",
+                'Occurrences': total
+            })
+    if bigram_data:
+        st.dataframe(bigram_data)
+    st.markdown("**Recommendations**")
+    if insights['advice']:
+        for advice in insights['advice']:
+            st.warning(advice)
+    else:
+        st.info("No specific recommendations at this time. Continue with current strategy.")
+    if insights['outcome_freq']['player'] + insights['outcome_freq']['banker'] + insights['outcome_freq']['tie'] > 0:
+        fig = px.pie(
+            values=[insights['outcome_freq']['player'], insights['outcome_freq']['banker'], insights['outcome_freq']['tie']],
+            names=['Player', 'Banker', 'Tie'],
+            title='Outcome Distribution'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    if len(st.session_state.history) > 0:
+        confidence_data = [
+            {'Bet': i+1, 'Confidence': float(h['confidence'])}
+            for i, h in enumerate(st.session_state.loss_log[-10:])
+        ]
+        if confidence_data:
+            fig = px.line(
+                pd.DataFrame(confidence_data),
+                x='Bet',
+                y='Confidence',
+                title='Recent Prediction Confidence Trend',
+                markers=True
+            )
+            st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("No data available for insights yet. Place some bets to generate insights.")
 
 # --- LOSS LOG ---
 if st.session_state.loss_log:
