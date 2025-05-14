@@ -23,7 +23,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v6-modified"
+APP_VERSION = "2025-05-14-fix-v6-final"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -572,10 +572,10 @@ def check_target_hit() -> bool:
         return False
 
 def update_t3_level():
-    """Update T3 betting level based on recent results, matching orig.py logic."""
+    """Update T3 betting level based on recent results, using detailed logic."""
     logging.debug("Entering update_t3_level")
     try:
-        if len(st.session_state.t3_results) == 3:  # Check exactly 3 outcomes, as in orig.py
+        if len(st.session_state.t3_results) == 3:  # Check exactly 3 outcomes
             wins = st.session_state.t3_results.count('W')
             losses = st.session_state.t3_results.count('L')
             old_level = st.session_state.t3_level
@@ -612,7 +612,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         if st.session_state.strategy == 'Z1003.1':
             if st.session_state.z1003_loss_count >= 3 and not st.session_state.z1003_continue:
                 return None, "No bet: Stopped after three losses (Z1003.1 rule)"
-            bet_amount = st.session_state.base_bet + (st.session_state.z1003_loss_count * 0.10)
+            bet_amount = st.session_state.base_bet * st.session_state.z1003_bet_factor
         elif st.session_state.strategy == 'Flatbet':
             bet_amount = st.session_state.base_bet
         elif st.session_state.strategy == 'T3':
@@ -627,6 +627,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
             st.session_state.t3_level = 1
             st.session_state.parlay_step = 1
             st.session_state.z1003_loss_count = 0
+            st.session_state.z1003_bet_factor = 1.0
             return None, "No bet: Bet exceeds bankroll, levels reset"
         if st.session_state.safety_net_enabled:
             safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
@@ -634,6 +635,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
                 st.session_state.t3_level = 1
                 st.session_state.parlay_step = 1
                 st.session_state.z1003_loss_count = 0
+                st.session_state.z1003_bet_factor = 1.0
                 return None, "No bet: Below safety net, levels reset"
 
         logging.debug("calculate_bet_amount completed")
@@ -710,12 +712,14 @@ def place_result(result: str):
                         st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, old_step)
                     else:
                         st.session_state.parlay_using_base = False
+                        st.session_state.parlay_step += 1
                 elif st.session_state.strategy == 'Z1003.1':
                     _, conf, _ = predict_next()
                     if conf > 50.0 and st.session_state.pattern_volatility < 0.4:
                         st.session_state.z1003_continue = True
                     else:
                         st.session_state.z1003_loss_count = 0
+                        st.session_state.z1003_bet_factor = 1.0
                         st.session_state.z1003_continue = False
                 st.session_state.prediction_accuracy[selection] += 1
                 for pattern in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
@@ -733,6 +737,10 @@ def place_result(result: str):
                 elif st.session_state.strategy == 'Parlay16':
                     st.session_state.parlay_wins = 0
                     st.session_state.parlay_using_base = True
+                    old_step = st.session_state.parlay_step
+                    st.session_state.parlay_step = 1
+                    if old_step != st.session_state.parlay_step:
+                        st.session_state.parlay_step_changes += 1
                 elif st.session_state.strategy == 'Z1003.1':
                     st.session_state.z1003_loss_count += 1
                     st.session_state.z1003_bet_factor = 1.0 + (st.session_state.z1003_loss_count * 0.1)
@@ -775,6 +783,8 @@ def place_result(result: str):
 
         if check_target_hit():
             st.session_state.target_hit = True
+            st.session_state.advice = "Target hit! Session reset."
+            reset_session()
             return
 
         pred, conf, insights = predict_next()
@@ -935,6 +945,7 @@ def render_setup_form():
                     st.session_state.pattern_success['fourgram'] = 0
                     st.session_state.pattern_attempts['fourgram'] = 0
                     st.success(f"Session started with {betting_strategy} strategy!")
+                    st.rerun()
         logging.debug("render_setup_form completed")
     except Exception as e:
         logging.error(f"render_setup_form error: {str(e)}\n{traceback.format_exc()}")
@@ -970,12 +981,15 @@ def render_result_input():
         with col1:
             if st.button("Player", key="player_btn"):
                 place_result("P")
+                st.rerun()
         with col2:
             if st.button("Banker", key="banker_btn"):
                 place_result("B")
+                st.rerun()
         with col3:
             if st.button("Tie", key="tie_btn"):
                 place_result("T")
+                st.rerun()
         with col4:
             if st.button("Undo Last", key="undo_btn"):
                 try:
@@ -1057,14 +1071,16 @@ def render_prediction():
     """Render the current prediction and advice."""
     logging.debug("Entering render_prediction")
     try:
-        if st.session_state.pending_bet:
+        if st.session_state.target_hit:
+            st.success("Profit target reached! Please start a new session.")
+        elif st.session_state.pending_bet:
             amount, side = st.session_state.pending_bet
             if amount is not None:
                 color = 'blue' if side == 'P' else 'red'
                 st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.2f}</h4>", unsafe_allow_html=True)
             else:
                 st.info("No bet placed: Check conditions (e.g., bankroll, risk limits).")
-        elif not st.session_state.target_hit:
+        else:
             st.info(st.session_state.advice)
         logging.debug("render_prediction completed")
     except Exception as e:
@@ -1317,31 +1333,4 @@ def main():
         st.markdown(f"**App Version**: {APP_VERSION}")
         initialize_session_state()
 
-        if st.session_state.bankroll <= 0 or st.session_state.base_bet <= 0:
-            render_setup_form()
-        else:
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                render_result_input()
-                render_prediction()
-                render_bead_plate()
-                render_insights()
-            with col2:
-                render_status()
-                render_accuracy()
-                render_loss_log()
-                render_history()
-                render_export()
-                render_simulation()
-                if st.button("Reset Session"):
-                    reset_session()
-                    st.success("Session reset successfully!")
-                    st.rerun()
-
-        logging.debug("main completed")
-    except Exception as e:
-        logging.error(f"main error: {str(e)}\n{traceback.format_exc()}")
-        st.error("An unexpected error occurred. Try resetting the session.")
-
-if __name__ == "__main__":
-    main()
+        if st.session_state.bankroll <= 0 or st.session_state
