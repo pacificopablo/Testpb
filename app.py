@@ -565,30 +565,35 @@ def check_target_hit() -> bool:
         st.error("Error checking target. Try resetting the session.")
         return False
 
+
 def update_t3_level():
-    """Update T3 betting level based on recent results."""
+    """Update T3 betting level based on new fixed 3-result rule logic."""
     logging.debug("Entering update_t3_level")
     try:
-        if len(st.session_state.t3_results) >= 3:  # Modified: Check last 3 results
-            wins = st.session_state.t3_results[-3:].count('W')
-            losses = st.session_state.t3_results[-3:].count('L')
+        if len(st.session_state.t3_results) >= 3:
+            recent = st.session_state.t3_results[-3:]
+            pattern = "".join(recent)
             old_level = st.session_state.t3_level
-            if wins == 3:
-                st.session_state.t3_level = max(1, st.session_state.t3_level - 2)  # Decrease by 2
-            elif losses == 3:
-                st.session_state.t3_level += 2  # Increase by 2
-            elif wins == 2 and losses == 1:
-                st.session_state.t3_level = max(1, st.session_state.t3_level - 1)  # Decrease by 1
-            elif losses == 2 and wins == 1:
-                st.session_state.t3_level += 1  # Increase by 1
+
+            if pattern == 'WWW':
+                st.session_state.t3_level = max(1, st.session_state.t3_level - 2)
+            elif pattern == 'LLL':
+                st.session_state.t3_level += 2
+            elif pattern in ('WWL', 'WLW', 'LWW'):
+                st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
+            elif pattern in ('LLW', 'LWL', 'WLL'):
+                st.session_state.t3_level += 1
+
             if old_level != st.session_state.t3_level:
                 st.session_state.t3_level_changes += 1
             st.session_state.t3_peak_level = max(st.session_state.t3_peak_level, st.session_state.t3_level)
+
             # Keep only the last 3 results
             st.session_state.t3_results = st.session_state.t3_results[-3:]
         logging.debug("update_t3_level completed")
     except Exception as e:
-        logging.error(f"update_t3_level error: {str(e)}\n{traceback.format_exc()}")
+        logging.error(f"update_t3_level error: {str(e)}
+{traceback.format_exc()}")
         st.error("Error updating T3 level. Try resetting the session.")
 
 def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optional[str]]:
