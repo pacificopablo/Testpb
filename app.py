@@ -1,4 +1,4 @@
-# Version: 2025-05-14-fix-v11
+# Version: 2025-05-14-fix-v12
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -24,7 +24,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v11"
+APP_VERSION = "2025-05-14-fix-v12"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -530,7 +530,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
             insights['Volatility'] = {
                 'level': 'High',
                 'value': st.session_state.pattern_volatility,
-                'adjustment': '+1.5% threshold
+                'adjustment': '+1.5% threshold'
             }
 
         if prob_p > prob_b and prob_p >= threshold:
