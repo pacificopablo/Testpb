@@ -1,4 +1,3 @@
-# Version: 2025-05-14-fix-v6-updated
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -24,7 +23,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v6-updated"
+APP_VERSION = "2025-05-14-fix-v6-modified"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -339,38 +338,216 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
     """Predict the next outcome with error handling."""
     logging.debug("Entering predict_next")
     try:
-        sequence = [x for x in st.session_state.sequence if x in ['P', 'B']]
-        if len(sequence) < 2:
+        sequence = [x for x in st.session_state.sequence if x in ['P', 'B', 'T']]
+        shadow_sequence = [x for x in sequence if x in ['P', 'B']]
+        if len(shadow_sequence) < 4:
             return 'B', 45.86, {'Initial': 'Default to Banker (insufficient data)'}
 
-        bigram = sequence[-2:]
-        transitions = defaultdict(int)
-        for i in range(len(sequence) - 2):
-            if sequence[i:i+2] == bigram:
-                next_outcome = sequence[i+2]
-                transitions[next_outcome] += 1
-        total_transitions = sum(transitions.values())
-        if total_transitions > 0:
-            prob_p = (transitions['P'] / total_transitions) * 100
-            prob_b = (transitions['B'] / total_transitions) * 100
+        recent_sequence = shadow_sequence[-WINDOW_SIZE:]
+        (bigram_transitions, trigram_transitions, fourgram_transitions, pattern_transitions,
+         streak_count, chop_count, double_count, volatility, shoe_bias, extra_metrics) = analyze_patterns(recent_sequence)
+        st.session_state.pattern_volatility = volatility
+
+        prior_p, prior_b = 44.62 / 100, 45.86 / 100
+        weights = calculate_weights(streak_count, chop_count, double_count, shoe_bias)
+        prob_p = prob_b = total_weight = 0
+        insights = {}
+        pattern_reliability = {}
+        recent_performance = {}
+
+        recent_bets = st.session_state.history[-10:]
+        for pattern in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
+            success = sum(1 for h in recent_bets if h['Bet_Placed'] and h['Win'] and pattern in h.get('Previous_State', {}).get('insights', {}))
+            attempts = sum(1 for h in recent_bets if h['Bet_Placed'] and pattern in h.get('Previous_State', {}).get('insights', {}))
+            recent_performance[pattern] = success / max(attempts, 1) if attempts > 0 else 0.0
+
+        if len(recent_sequence) >= 2:
+            bigram = tuple(recent_sequence[-2:])
+            total = sum(bigram_transitions[bigram].values())
+            if total > 0:
+                p_prob = bigram_transitions[bigram]['P'] / total
+                b_prob = bigram_transitions[bigram]['B'] / total
+                prob_p += weights['bigram'] * (prior_p + p_prob) / (1 + total)
+                prob_b += weights['bigram'] * (prior_b + b_prob) / (1 + total)
+                total_weight += weights['bigram']
+                reliability = min(total / 5, 1.0)
+                pattern_reliability['Bigram'] = reliability
+                insights['Bigram'] = {
+                    'weight': weights['bigram'] * 100,
+                    'p_prob': p_prob * 100,
+                    'b_prob': b_prob * 100,
+                    'reliability': reliability * 100,
+                    'recent_performance': recent_performance['bigram'] * 100
+                }
+
+        if len(recent_sequence) >= 3:
+            trigram = tuple(recent_sequence[-3:])
+            total = sum(trigram_transitions[trigram].values())
+            if total > 0:
+                p_prob = trigram_transitions[trigram]['P'] / total
+                b_prob = trigram_transitions[trigram]['B'] / total
+                prob_p += weights['trigram'] * (prior_p + p_prob) / (1 + total)
+                prob_b += weights['trigram'] * (prior_b + b_prob) / (1 + total)
+                total_weight += weights['trigram']
+                reliability = min(total / 3, 1.0)
+                pattern_reliability['Trigram'] = reliability
+                insights['Trigram'] = {
+                    'weight': weights['trigram'] * 100,
+                    'p_prob': p_prob * 100,
+                    'b_prob': b_prob * 100,
+                    'reliability': reliability * 100,
+                    'recent_performance': recent_performance['trigram'] * 100
+                }
+
+        if len(recent_sequence) >= 4:
+            fourgram = tuple(recent_sequence[-4:])
+            total = sum(fourgram_transitions[fourgram].values())
+            if total > 0:
+                p_prob = fourgram_transitions[fourgram]['P'] / total
+                b_prob = fourgram_transitions[fourgram]['B'] / total
+                prob_p += weights['fourgram'] * (prior_p + p_prob) / (1 + total)
+                prob_b += weights['fourgram'] * (prior_b + b_prob) / (1 + total)
+                total_weight += weights['fourgram']
+                reliability = min(total / 2, 1.0)
+                pattern_reliability['Fourgram'] = reliability
+                insights['Fourgram'] = {
+                    'weight': weights['fourgram'] * 100,
+                    'p_prob': p_prob * 100,
+                    'b_prob': b_prob * 100,
+                    'reliability': reliability * 100,
+                    'recent_performance': recent_performance['fourgram'] * 100
+                }
+
+        if streak_count >= 2:
+            streak_prob = min(0.7, 0.5 + streak_count * 0.05) * (0.8 if streak_count > 4 else 1.0)
+            current_streak = recent_sequence[-1]
+            if current_streak == 'P':
+                prob_p += weights['streak'] * streak_prob
+                prob_b += weights['streak'] * (1 - streak_prob)
+            else:
+                prob_b += weights['streak'] * streak_prob
+                prob_p += weights['streak'] * (1 - streak_prob)
+            total_weight += weights['streak']
+            reliability = min(streak_count / 5, 1.0)
+            pattern_reliability['Streak'] = reliability
+            insights['Streak'] = {
+                'weight': weights['streak'] * 100,
+                'streak_type': current_streak,
+                'streak_count': streak_count,
+                'reliability': reliability * 100,
+                'recent_performance': recent_performance['streak'] * 100
+            }
+
+        if chop_count >= 2:
+            next_pred = 'B' if recent_sequence[-1] == 'P' else 'P'
+            if next_pred == 'P':
+                prob_p += weights['chop'] * 0.6
+                prob_b += weights['chop'] * 0.4
+            else:
+                prob_b += weights['chop'] * 0.6
+                prob_p += weights['chop'] * 0.4
+            total_weight += weights['chop']
+            reliability = min(chop_count / 5, 1.0)
+            pattern_reliability['Chop'] = reliability
+            insights['Chop'] = {
+                'weight': weights['chop'] * 100,
+                'chop_count': chop_count,
+                'next_pred': next_pred,
+                'reliability': reliability * 100,
+                'recent_performance': recent_performance['chop'] * 100
+            }
+
+        if double_count >= 1 and len(recent_sequence) >= 2 and recent_sequence[-1] == recent_sequence[-2]:
+            double_prob = 0.6
+            if recent_sequence[-1] == 'P':
+                prob_p += weights['double'] * double_prob
+                prob_b += weights['double'] * (1 - double_prob)
+            else:
+                prob_b += weights['double'] * double_prob
+                prob_p += weights['double'] * (1 - double_prob)
+            total_weight += weights['double']
+            reliability = min(double_count / 3, 1.0)
+            pattern_reliability['Double'] = reliability
+            insights['Double'] = {
+                'weight': weights['double'] * 100,
+                'double_type': recent_sequence[-1],
+                'reliability': reliability * 100,
+                'recent_performance': recent_performance['double'] * 100
+            }
+
+        if total_weight > 0:
+            prob_p = (prob_p / total_weight) * 100
+            prob_b = (prob_b / total_weight) * 100
         else:
-            prob_p = 44.62
-            prob_b = 45.86
-        insights = {
-            'Bigram': {
-                'weight': 100.0,
-                'p_prob': prob_p,
-                'b_prob': prob_b,
-                'reliability': min(total_transitions / 5, 1.0) * 100,
+            prob_p, prob_b = 44.62, 45.86
+
+        if shoe_bias > 0.1:
+            prob_p *= 1.05
+            prob_b *= 0.95
+            insights['Shoe Bias'] = {'bias': 'Player', 'adjustment': '+5% P, -5% B'}
+        elif shoe_bias < -0.1:
+            prob_b *= 1.05
+            prob_p *= 0.95
+            insights['Shoe Bias'] = {'bias': 'Banker', 'adjustment': '+5% B, -5% P'}
+
+        if abs(prob_p - prob_b) < 2:
+            prob_p += 0.5
+            prob_b -= 0.5
+
+        current_pattern = (
+            'streak' if streak_count >= 2 else
+            'chop' if chop_count >= 2 else
+            'double' if double_count >= 1 else 'other'
+        )
+        total = sum(pattern_transitions[current_pattern].values())
+        if total > 0:
+            p_prob = pattern_transitions[current_pattern]['P'] / total
+            b_prob = pattern_transitions[current_pattern]['B'] / total
+            prob_p = 0.9 * prob_p + 0.1 * p_prob * 100
+            prob_b = 0.9 * prob_b + 0.1 * b_prob * 100
+            reliability = min(total / 5, 1.0)
+            insights['Pattern Transition'] = {
+                'weight': 10,
+                'p_prob': p_prob * 100,
+                'b_prob': b_prob * 100,
+                'current_pattern': current_pattern,
+                'reliability': reliability * 100,
                 'recent_performance': 0.0
             }
-        }
-        if prob_p > prob_b:
+
+        recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
+        threshold = 32.0 + (st.session_state.consecutive_losses * 2.0) - (recent_accuracy * 0.8)
+        threshold = min(max(threshold, 32.0), 48.0)
+        if recent_performance.get('fourgram', 0) > 0.7:
+            threshold -= 2.0
+        elif recent_performance.get('fourgram', 0) < 0.3:
+            threshold += 2.0
+        insights['Threshold'] = {'value': threshold, 'adjusted': f'{threshold:.1f}%'}
+
+        if st.session_state.pattern_volatility > 0.5:
+            threshold += 1.5
+            insights['Volatility'] = {
+                'level': 'High',
+                'value': st.session_state.pattern_volatility,
+                'adjustment': '+1.5% threshold'
+            }
+
+        if prob_p > prob_b and prob_p >= threshold:
             prediction = 'P'
             confidence = prob_p
-        else:
+        elif prob_b >= threshold:
             prediction = 'B'
             confidence = prob_b
+        else:
+            prediction = None
+            confidence = max(prob_p, prob_b)
+            insights['No Bet'] = {'reason': f'Confidence below threshold ({confidence:.1f}% < {threshold:.1f}%)'}
+
+        dominant_pattern = max(insights, key=lambda k: insights[k].get('weight', 0) if k not in ['Threshold', 'Volatility', 'Shoe Bias', 'No Bet'] else 0, default=None)
+        if dominant_pattern and prediction:
+            reliability = pattern_reliability.get(dominant_pattern, 0)
+            recommendation = f"Favor {prediction} due to strong {dominant_pattern.lower()} pattern (Reliability: {reliability*100:.1f}%)"
+            insights['Recommendation'] = {'text': recommendation}
 
         logging.debug("predict_next completed")
         return prediction, confidence, insights
@@ -395,10 +572,10 @@ def check_target_hit() -> bool:
         return False
 
 def update_t3_level():
-    """Update T3 betting level based on recent results."""
+    """Update T3 betting level based on recent results, matching orig.py logic."""
     logging.debug("Entering update_t3_level")
     try:
-        if len(st.session_state.t3_results) == 3:
+        if len(st.session_state.t3_results) == 3:  # Check exactly 3 outcomes, as in orig.py
             wins = st.session_state.t3_results.count('W')
             losses = st.session_state.t3_results.count('L')
             old_level = st.session_state.t3_level
@@ -427,8 +604,8 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
             return None, f"No bet: Paused after {st.session_state.consecutive_losses} losses"
         if st.session_state.pattern_volatility > 0.5:
             return None, f"No bet: High pattern volatility"
-        if pred is None or conf < 50.5:
-            return None, f"No bet: Confidence too low ({conf:.1f}% < 50.5%)"
+        if pred is None or conf < 40.0:
+            return None, f"No bet: Confidence too low"
         if st.session_state.last_win_confidence < 40.0 and st.session_state.consecutive_wins > 0:
             return None, f"No bet: Low-confidence win ({st.session_state.last_win_confidence:.1f}%)"
 
@@ -460,7 +637,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
                 return None, "No bet: Below safety net, levels reset"
 
         logging.debug("calculate_bet_amount completed")
-        return bet_amount, f"Next Bet: ${bet_amount:.2f} on {pred} ({conf:.1f}%)"
+        return bet_amount, f"Next Bet: ${bet_amount:.2f} on {pred}"
     except Exception as e:
         logging.error(f"calculate_bet_amount error: {str(e)}\n{traceback.format_exc()}")
         st.error("Error calculating bet amount. Try resetting the session.")
@@ -517,7 +694,7 @@ def place_result(result: str):
                 st.session_state.wins += 1
                 st.session_state.consecutive_wins += 1
                 st.session_state.consecutive_losses = 0
-                st.session_state.last_win_confidence = previous_state['insights'].get('Bigram', {}).get('p_prob' if selection == 'P' else 'b_prob', 0.0)
+                st.session_state.last_win_confidence = predict_next()[1]
                 logging.debug(f"Win recorded: Total wins={st.session_state.wins}, Consecutive wins={st.session_state.consecutive_wins}")
                 if st.session_state.strategy == 'T3':
                     st.session_state.t3_results.append('W')
@@ -541,7 +718,7 @@ def place_result(result: str):
                         st.session_state.z1003_loss_count = 0
                         st.session_state.z1003_continue = False
                 st.session_state.prediction_accuracy[selection] += 1
-                for pattern in ['bigram']:
+                for pattern in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
                     if pattern in st.session_state.insights:
                         st.session_state.pattern_success[pattern] += 1
                         st.session_state.pattern_attempts[pattern] += 1
@@ -551,6 +728,16 @@ def place_result(result: str):
                 st.session_state.consecutive_wins = 0
                 st.session_state.consecutive_losses += 1
                 logging.debug(f"Loss recorded: Total losses={st.session_state.losses}, Consecutive losses={st.session_state.consecutive_losses}")
+                if st.session_state.strategy == 'T3':
+                    st.session_state.t3_results.append('L')
+                elif st.session_state.strategy == 'Parlay16':
+                    st.session_state.parlay_wins = 0
+                    st.session_state.parlay_using_base = True
+                elif st.session_state.strategy == 'Z1003.1':
+                    st.session_state.z1003_loss_count += 1
+                    st.session_state.z1003_bet_factor = 1.0 + (st.session_state.z1003_loss_count * 0.1)
+                    if st.session_state.z1003_loss_count < 3:
+                        st.session_state.z1003_level_changes += 1
                 _, conf, _ = predict_next()
                 st.session_state.loss_log.append({
                     'sequence': st.session_state.sequence[-10:],
@@ -561,7 +748,7 @@ def place_result(result: str):
                 })
                 if len(st.session_state.loss_log) > LOSS_LOG_LIMIT:
                     st.session_state.loss_log = st.session_state.loss_log[-LOSS_LOG_LIMIT:]
-                for pattern in ['bigram']:
+                for pattern in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
                     if pattern in st.session_state.insights:
                         st.session_state.pattern_attempts[pattern] += 1
             st.session_state.prediction_accuracy['total'] += 1
@@ -658,7 +845,7 @@ def simulate_shoe(num_hands: int = 80) -> Dict:
         try:
             with open(SIMULATION_LOG, 'a', encoding='utf-8') as f:
                 f.write(f"{datetime.now().isoformat()}: Accuracy={accuracy:.1f}%, Correct={correct}/{total}, "
-                        f"Bigram={result['pattern_success'].get('bigram', 0)}/{result['pattern_attempts'].get('bigram', 0)}\n")
+                        f"Fourgram={result['pattern_success'].get('fourgram', 0)}/{result['pattern_attempts'].get('fourgram', 0)}\n")
         except (PermissionError, OSError) as e:
             logging.error(f"Simulation log write error: {str(e)}")
             st.warning("Unable to write to simulation log. Results displayed only.")
@@ -745,8 +932,8 @@ def render_setup_form():
                         'recent_pattern_accuracy': defaultdict(float),
                         'consecutive_wins': 0,
                     })
-                    st.session_state.pattern_success['bigram'] = 0
-                    st.session_state.pattern_attempts['bigram'] = 0
+                    st.session_state.pattern_success['fourgram'] = 0
+                    st.session_state.pattern_attempts['fourgram'] = 0
                     st.success(f"Session started with {betting_strategy} strategy!")
         logging.debug("render_setup_form completed")
     except Exception as e:
@@ -812,7 +999,7 @@ def render_result_input():
                             if st.session_state.pending_bet:
                                 amount, pred = st.session_state.pending_bet
                                 conf = predict_next()[1]
-                                st.session_state.advice = f"Next Bet: ${amount:.2f} on {pred} ({conf:.1f}%)"
+                                st.session_state.advice = f"Next Bet: ${amount:.2f} on {pred}"
                             else:
                                 st.session_state.advice = "No bet pending."
                             st.session_state.last_was_tie = False
@@ -874,8 +1061,7 @@ def render_prediction():
             amount, side = st.session_state.pending_bet
             if amount is not None:
                 color = 'blue' if side == 'P' else 'red'
-                conf = st.session_state.insights.get('Bigram', {}).get('p_prob' if side == 'P' else 'b_prob', 0.0)
-                st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.2f} | Win Prob: {conf:.1f}%</h4>", unsafe_allow_html=True)
+                st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.2f}</h4>", unsafe_allow_html=True)
             else:
                 st.info("No bet placed: Check conditions (e.g., bankroll, risk limits).")
         elif not st.session_state.target_hit:
@@ -904,22 +1090,38 @@ def render_insights():
 
         pattern_insights = {
             k: v for k, v in st.session_state.insights.items()
-            if k in ['Bigram']
+            if k in ['Bigram', 'Trigram', 'Fourgram', 'Streak', 'Chop', 'Double', 'Pattern Transition']
         }
         meta_insights = {
             k: v for k, v in st.session_state.insights.items()
-            if k in ['Threshold', 'Volatility', 'No Bet', 'Recommendation', 'Dominant Pattern']
+            if k in ['Threshold', 'Volatility', 'Shoe Bias', 'No Bet', 'Recommendation', 'Dominant Pattern']
         }
 
         if pattern_insights:
-            st.markdown("**Pattern Contributions**")
+            st.markdown("**Pattern Contributions** (sorted by influence):")
             try:
-                for pattern, data in pattern_insights.items():
-                    with st.expander(f"{pattern} ({data.get('weight', 0):.1f}% weight)", expanded=True):
-                        st.markdown(f"- **Player Probability**: {data.get('p_prob', 0):.1f}%")
-                        st.markdown(f"- **Banker Probability**: {data.get('b_prob', 0):.1f}%")
-                        st.markdown(f"- **Reliability**: {data['reliability']:.1f}% (based on sample size)")
-                        st.markdown(f"- **Recent Performance**: {data.get('recent_performance', 0):.1f}%")
+                sorted_patterns = sorted(
+                    pattern_insights.items(),
+                    key=lambda x: x[1].get('weight', 0),
+                    reverse=True
+                )
+                for pattern, data in sorted_patterns:
+                    with st.expander(f"{pattern} ({data.get('weight', 0):.1f}% weight)", expanded=(pattern == sorted_patterns[0][0])):
+                        if pattern in ['Bigram', 'Trigram', 'Fourgram', 'Pattern Transition']:
+                            st.markdown(f"- **Player Probability**: {data.get('p_prob', 0):.1f}%")
+                            st.markdown(f"- **Banker Probability**: {data.get('b_prob', 0):.1f}%")
+                        elif pattern == 'Streak':
+                            st.markdown(f"- **Streak Type**: {data.get('streak_type', 'N/A')} (Length: {data.get('streak_count', 0)})")
+                        elif pattern == 'Chop':
+                            st.markdown(f"- **Alternations**: {data.get('chop_count', 0)}")
+                            st.markdown(f"- **Next Predicted**: {data.get('next_pred', 'N/A')}")
+                        elif pattern == 'Double':
+                            st.markdown(f"- **Double Type**: {data.get('double_type', 'N/A')}")
+                        if 'reliability' in data:
+                            st.markdown(f"- **Reliability**: {data['reliability']:.1f}% (based on sample size)")
+                        else:
+                            st.markdown("- **Reliability**: Not available")
+                        st.markdown(f"- **Recent Performance**: {data.get('recent_performance', 0):.1f}% (last 10 bets)")
             except Exception as e:
                 logging.error(f"render_insights pattern loop error: {str(e)}\n{traceback.format_exc()}")
                 st.error("Error displaying pattern insights. Try resetting the session.")
@@ -930,6 +1132,8 @@ def render_insights():
                 st.success(f"**Recommendation**: {meta_insights['Recommendation'].get('text', 'N/A')}")
             if 'Dominant Pattern' in meta_insights:
                 st.markdown(f"- **Dominant Pattern**: {meta_insights['Dominant Pattern'].get('pattern', 'N/A')} ({meta_insights['Dominant Pattern'].get('weight', 0):.1f}% weight)")
+            if 'Shoe Bias' in meta_insights:
+                st.markdown(f"- **Shoe Bias**: {meta_insights['Shoe Bias'].get('bias', 'N/A')} ({meta_insights['Shoe Bias'].get('adjustment', 'N/A')})")
             if 'Volatility' in meta_insights:
                 st.warning(f"- **Volatility**: {meta_insights['Volatility'].get('level', 'N/A')} ({meta_insights['Volatility'].get('value', 0):.2f}, {meta_insights['Volatility'].get('adjustment', 'N/A')})")
             if 'Threshold' in meta_insights:
@@ -948,9 +1152,9 @@ def render_insights():
             weights = {k: v.get('weight', 0) for k, v in pattern_insights.items()}
             st.bar_chart(weights, use_container_width=True)
 
-        total_bets = max(st.session_state.pattern_attempts.get('bigram', 1), 1)
-        bigram_success = st.session_state.pattern_success.get('bigram', 0) / total_bets * 100
-        st.markdown(f"**Historical Bigram Success**: {bigram_success:.1f}% (over {total_bets} bets)")
+        total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
+        fourgram_success = st.session_state.pattern_success.get('fourgram', 0) / total_bets * 100
+        st.markdown(f"**Historical Fourgram Success**: {fourgram_success:.1f}% (over {total_bets} bets)")
         logging.debug("render_insights completed")
     except Exception as e:
         logging.error(f"render_insights error: {str(e)}\n{traceback.format_exc()}")
@@ -1113,30 +1317,31 @@ def main():
         st.markdown(f"**App Version**: {APP_VERSION}")
         initialize_session_state()
 
-        if st.button("Reset Session State"):
-            reset_session()
-            st.success("Session state cleared. Please start a new session.")
-            st.rerun()
-
-        render_setup_form()
-        render_result_input()
-        render_bead_plate()
-        render_prediction()
-        render_insights()
-        render_status()
-        render_accuracy()
-        render_loss_log()
-        render_history()
-        render_export()
-        render_simulation()
+        if st.session_state.bankroll <= 0 or st.session_state.base_bet <= 0:
+            render_setup_form()
+        else:
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                render_result_input()
+                render_prediction()
+                render_bead_plate()
+                render_insights()
+            with col2:
+                render_status()
+                render_accuracy()
+                render_loss_log()
+                render_history()
+                render_export()
+                render_simulation()
+                if st.button("Reset Session"):
+                    reset_session()
+                    st.success("Session reset successfully!")
+                    st.rerun()
 
         logging.debug("main completed")
-    except NameError as e:
-        logging.error(f"NameError in main: {str(e)}\n{traceback.format_exc()}")
-        st.error(f"Variable error: {str(e)}. Try resetting the session state or contact support.")
     except Exception as e:
-        logging.error(f"Unexpected error in main: {str(e)}\n{traceback.format_exc()}")
-        st.error("An unexpected error occurred. Try resetting the session or contact support.")
+        logging.error(f"main error: {str(e)}\n{traceback.format_exc()}")
+        st.error("An unexpected error occurred. Try resetting the session.")
 
 if __name__ == "__main__":
     main()
