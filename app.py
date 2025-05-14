@@ -97,7 +97,7 @@ def initialize_session_state():
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
         'safety_net_percentage': 10.0,
-        'safety_net_enabled': True  # New toggle variable
+        'safety_net_enabled': True
     }
     defaults['pattern_success']['fourgram'] = 0
     defaults['pattern_attempts']['fourgram'] = 0
@@ -118,7 +118,7 @@ def reset_session():
         't3_level': 1,
         't3_results': [],
         't3_level_changes': 0,
-        't3_peak_level': 1,
+        't931_peak_level': 1,
         'parlay_step': 1,
         'parlay_wins': 0,
         'parlay_using_base': True,
@@ -155,7 +155,7 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
     current_streak = last_pattern = None
     player_count = banker_count = 0
 
-    filtered_sequence = [x for x in sequence if x in ['P', 'B']]  # Exclude ties for pattern counts
+    filtered_sequence = [x for x in sequence if x in ['P', 'B']]
     for i in range(len(sequence) - 1):
         if sequence[i] == 'P':
             player_count += 1
@@ -220,7 +220,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         'chop': 0.4 if chop_count >= 2 else 0.2,
         'double': 0.4 if double_count >= 1 else 0.2
     }
-    if success_ratios['fourgram'] > 0.6:  # Boost four-gram weight if highly successful
+    if success_ratios['fourgram'] > 0.6:
         success_ratios['fourgram'] *= 1.2
     weights = {k: np.exp(v) / (1 + np.exp(v)) for k, v in success_ratios.items()}
     
@@ -277,7 +277,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
             total_weight += weights['trigram']
             insights['Trigram'] = f"{weights['trigram']*100:.0f}% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
 
-    if len recent_sequence) >= 4:
+    if len(recent_sequence) >= 4:
         fourgram = tuple(recent_sequence[-4:])
         total = sum(fourgram_transitions[fourgram].values())
         if total > 0:
@@ -353,7 +353,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         insights['Pattern Transition'] = f"10% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
 
     recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
-    threshold = 32.0 + (st.session_state.consecutive_losses * 0.5) - (recent_accuracy * 0.8)  # Stricter threshold
+    threshold = 32.0 + (st.session_state.consecutive_losses * 0.5) - (recent_accuracy * 0.8)
     threshold = min(max(threshold, 32.0), 42.0)
     insights['Threshold'] = f"{threshold:.1f}%"
 
@@ -378,7 +378,6 @@ def check_target_hit() -> bool:
 
 def update_t3_level():
     """Update T3 betting level based on recent results."""
-    if len(st.session_state.t3_results) == 3unofficial copy of the file at the start of the article: https://gist.github.com/jamessp/520b4898d7e622120e43
     if len(st.session_state.t3_results) == 3:
         wins = st.session_state.t3_results.count('W')
         losses = st.session_state.t3_results.count('L')
@@ -418,7 +417,6 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
         st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
 
-    # Apply safety net checks only if enabled
     if st.session_state.safety_net_enabled:
         safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
         if (bet_amount > st.session_state.bankroll or
@@ -650,23 +648,20 @@ def render_setup_form():
             index=STRATEGIES.index(st.session_state.strategy),
             help="T3: Adjusts bet size based on wins/losses. Flatbet: Fixed bet size. Parlay16: 16-step progression. Z1003.1: Resets after first win, stops after three losses."
         )
-部分 copy of the file at the start of the article: https://gist.github.com/jamessp/520b4898d7e622120e43
         target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
         target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
         
-        # Add toggle for safety net
         safety_net_enabled = st.checkbox(
             "Enable Safety Net",
             value=st.session_state.safety_net_enabled,
             help="When enabled, ensures a percentage of the initial bankroll is preserved after each bet."
         )
         
-        # Conditionally show safety net percentage input
         safety_net_percentage = st.session_state.safety_net_percentage
         if safety_net_enabled:
             safety_net_percentage = st.number_input(
                 "Safety Net Percentage (%)",
-                min_value=0. Fashion, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
+                min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
                 help="Percentage of initial bankroll to keep as a safety net after each bet."
             )
         
