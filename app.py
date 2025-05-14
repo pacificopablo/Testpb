@@ -1,4 +1,4 @@
-# Version: 2025-05-14-fix-v7-modified
+# Version: 2025-05-14-fix-v8
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -19,7 +19,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v7-modified"
+APP_VERSION = "2025-05-14-fix-v8"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -60,7 +60,7 @@ def track_user_session() -> int:
     except (PermissionError, OSError) as e:
         logging.error(f"Session file write error: {str(e)}")
         st.warning("Session tracking may be inaccurate.")
-        return len(sessions)
+        return len(ssessions)
 
     logging.debug(f"track_user_session: {len(sessions)} active sessions")
     return len(sessions)
@@ -146,7 +146,7 @@ def reset_session():
         'advice': "Session reset.",
         'history': [],
         'wins': 0,
-        'losses': 0,
+        'losses':0,
         'target_hit': False,
         'consecutive_losses': 0,
         'loss_log': [],
@@ -747,13 +747,6 @@ def place_result(result: str):
         st.session_state.history.append({
             "Bet": selection,
             "Result": result,
-            "Amount").append(result)
-        if len(st.session_state.sequence) > SEQUENCE_LIMIT:
-            st.session_state.sequence = st.session_state.sequence[-SEQUENCE_LIMIT:]
-
-        st.session_state.history.append({
-            "Bet": selection,
-            "Result": result,
             "Amount": bet_amount,
             "Win": win,
             "T3_Level": st.session_state.t3_level,
@@ -873,7 +866,7 @@ def render_setup_form():
             )
             target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
             target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
-            safety_net_enabled = st.toggle("Enable Safety Net", value=st.session_state.safety_net_enabled, help="Toggle to enable or disable the safety net protection.")
+            safety_net_enabled = st.toggle("Enable Safety Net", value st.session_state.safety_net_enabled, help="Toggle to enable or disable the safety net protection.")
             safety_net_percentage = st.number_input(
                 "Safety Net Percentage (%)",
                 min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
@@ -1101,7 +1094,7 @@ def render_insights():
             try:
                 sorted_patterns = sorted(
                     pattern_insights.items(),
-                    key=lambda k, v: v.get('weight', 0),
+                    key=lambda x: x[1].get('weight', 0),
                     reverse=True
                 )
                 for pattern, data in sorted_patterns:
@@ -1178,7 +1171,7 @@ def render_status():
             strategy_status += f" | Loss Count: {st.session_state.z1003_loss_count} | Level Changes: {st.session_state.z1003_level_changes} | Continue: {st.session_state.z1003_continue}"
         st.markdown(strategy_status)
         st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
-        st.markdown(f"**Consecutive WIns**: {st.session_state.consecutive_wins}")
+        st.markdown(f"**Consecutive Wins**: {st.session_state.consecutive_wins}")
 
         if st.session_state.initial_base_bet > 0 and st.session_state.initial_bankroll > 0:
             profit = st.session_state.bankroll - st.session_state.initial_bankroll
