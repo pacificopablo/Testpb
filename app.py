@@ -23,7 +23,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-additional-factors-v8"  # Updated to reflect Additional Factors priority
+APP_VERSION = "2025-05-14-additional-factors-pred-v9"  # Updated for new prediction section
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -74,12 +74,12 @@ def initialize_session_state():
     """Initialize session state with default values, prioritizing T3 strategy."""
     logging.debug("Entering initialize_session_state")
     defaults = {
-        'bankroll': 100.0,  # Default from discussion
+        'bankroll': 100.0,
         'base_bet': 1.0,
         'initial_base_bet': 1.0,
         'sequence': [],
         'pending_bet': None,
-        'strategy': 'T3',  # Default to T3 as per discussion
+        'strategy': 'T3',
         't3_level': 1,
         't3_results': [],
         't3_level_changes': 0,
@@ -354,7 +354,6 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         insights = {}
         pattern_reliability = {}
 
-        # Calculate probabilities for confidence, but use for insights only
         recent_bets = st.session_state.history[-10:]
         recent_performance = {}
         for pattern in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
@@ -476,7 +475,6 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         else:
             prob_p, prob_b = 44.62, 45.86
 
-        # Apply Additional Factors
         if shoe_bias > 0.1:
             prob_p *= 1.05
             prob_b *= 0.95
@@ -503,10 +501,9 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
                 'adjustment': '+1.5% threshold'
             }
 
-        # Prediction based on Dominant Pattern and Recommendation
         dominant_pattern = insights.get('Dominant Pattern', {}).get('pattern', 'fourgram')
         if dominant_pattern == 'streak' and streak_count >= 2:
-            prediction = recent_sequence[-1]  # Continue streak
+            prediction = recent_sequence[-1]
             confidence = prob_p if prediction == 'P' else prob_b
         elif dominant_pattern == 'chop' and chop_count >= 2:
             prediction = 'B' if recent_sequence[-1] == 'P' else 'P'
@@ -514,7 +511,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         elif dominant_pattern == 'double' and double_count >= 1 and len(recent_sequence) >= 2 and recent_sequence[-1] == recent_sequence[-2]:
             prediction = recent_sequence[-1]
             confidence = prob_p if prediction == 'P' else prob_b
-        else:  # Default to fourgram or highest-weighted pattern
+        else:
             pattern_probs = {
                 'bigram': bigram_transitions.get(tuple(recent_sequence[-2:]), {}),
                 'trigram': trigram_transitions.get(tuple(recent_sequence[-3:]), {}),
@@ -528,7 +525,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
                 prediction = 'P' if p_prob > b_prob else 'B'
                 confidence = prob_p if prediction == 'P' else prob_b
             else:
-                prediction = 'B'  # Default
+                prediction = 'B'
                 confidence = 45.86
 
         if confidence < threshold:
@@ -536,7 +533,6 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
             insights['No Bet'] = {'reason': f'Confidence below threshold ({confidence:.1f}% < {threshold:.1f}%)'}
             confidence = max(prob_p, prob_b)
 
-        # Set Recommendation
         if prediction:
             reliability = pattern_reliability.get(dominant_pattern, 0)
             recommendation = f"Favor {prediction} due to strong {dominant_pattern.lower()} pattern (Reliability: {reliability*100:.1f}%)"
@@ -621,7 +617,6 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
             st.session_state.z1003_loss_count = 0
             return None, "No bet: Bet exceeds bankroll, levels reset"
 
-        # Safety net check with monetary warning
         if st.session_state.safety_net_enabled:
             safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
             if st.session_state.bankroll - bet_amount < safe_bankroll:
@@ -1041,22 +1036,33 @@ def render_bead_plate():
         logging.error(f"render_bead_plate error: {str(e)}\n{traceback.format_exc()}")
         st.error("Error rendering bead plate. Try resetting the session.")
 
-def render_prediction():
-    """Render current prediction based on Additional Factors."""
-    logging.debug("Entering render_prediction")
+def render_additional_factors_prediction():
+    """Render prediction based solely on Additional Factors."""
+    logging.debug("Entering render_additional_factors_prediction")
     try:
-        if st.session_state.pending_bet:
-            amount, side = st.session_state.pending_bet
-            if amount is not None:
-                color = 'blue' if side == 'P' else 'red'
-                st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.2f}</h4>", unsafe_allow_html=True)
-            else:
-                st.info("No bet placed: Check conditions (e.g., bankroll, risk limits).")
-        elif not st.session_state.target_hit:
-            st.info(st.session_state.advice)
-        logging.debug("render_prediction completed")
+        st.subheader("Prediction (Based on Additional Factors)")
+        if not st.session_state.insights:
+            st.info("No prediction available yet. Enter more results to analyze patterns.")
+            return
+
+        pred, conf, insights = predict_next()
+        recommendation = insights.get('Recommendation', {}).get('text', 'No bet recommended')
+        dominant_pattern = insights.get('Dominant Pattern', {}).get('pattern', 'N/A')
+        shoe_bias = insights.get('Shoe Bias', {}).get('bias', 'Neutral')
+        no_bet_reason = insights.get('No Bet', {}).get('reason', None)
+
+        if no_bet_reason:
+            st.info(f"**No Bet Recommended**: {no_bet_reason}")
+        elif pred:
+            side = "Player" if pred == 'P' else "Banker"
+            st.markdown(f"**Predicted Side**: {side}  ")
+            st.markdown(f"**Confidence**: {conf:.1f}%  ")
+            st.markdown(f"**Explanation**: {recommendation}, Dominant Pattern ({dominant_pattern}), Shoe Bias ({shoe_bias})")
+        else:
+            st.info("**No Bet Recommended**: Insufficient confidence based on Additional Factors.")
+        logging.debug("render_additional_factors_prediction completed")
     except Exception as e:
-        logging.error(f"render_prediction error: {str(e)}\n{traceback.format_exc()}")
+        logging.error(f"render_additional_factors_prediction error: {str(e)}\n{traceback.format_exc()}")
         st.error("Error rendering prediction. Try resetting the session.")
 
 def render_insights():
@@ -1083,7 +1089,6 @@ def render_insights():
 
         st.markdown("**Note**: Predictions are based solely on Additional Factors (Recommendation, Dominant Pattern, Shoe Bias, Volatility, Threshold, No Bet Reason).")
 
-        # Strategy Status with monetary focus
         st.markdown("**Betting Strategy (Money Management)**")
         safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
         if st.session_state.strategy == 'T3':
@@ -1278,7 +1283,7 @@ def main():
         render_setup_form()
         render_result_input()
         render_bead_plate()
-        render_prediction()
+        render_additional_factors_prediction()  # Replaced render_prediction with new function
         render_insights()
         render_status()
         render_accuracy()
