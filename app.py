@@ -23,7 +23,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v6-modified"
+APP_VERSION = "2025-05-14-t3-parlay-v7"  # Updated version reflecting T3/Parlay16 focus
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -71,7 +71,7 @@ def track_user_session() -> int:
 
 # --- Session State Management ---
 def initialize_session_state():
-    """Initialize session state with default values."""
+    """Initialize session state with default values, prioritizing T3 strategy."""
     logging.debug("Entering initialize_session_state")
     defaults = {
         'bankroll': 0.0,
@@ -79,7 +79,7 @@ def initialize_session_state():
         'initial_base_bet': 0.0,
         'sequence': [],
         'pending_bet': None,
-        'strategy': 'T3',
+        'strategy': 'T3',  # Default to T3 as per discussion
         't3_level': 1,
         't3_results': [],
         't3_level_changes': 0,
@@ -170,7 +170,7 @@ def reset_session():
 
 # --- Prediction Logic ---
 def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, int, int, float, float, Dict]:
-    """Analyze sequence patterns with streak and chop metrics."""
+    """Analyze sequence patterns for predictions, used in T3/Parlay16 betting."""
     logging.debug("Entering analyze_patterns")
     try:
         bigram_transitions = defaultdict(lambda: defaultdict(int))
@@ -267,7 +267,7 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
         return ({}, {}, {}, {}, 0, 0, 0, 0.0, 0.0, {})
 
 def calculate_weights(streak_count: int, chop_count: int, double_count: int, shoe_bias: float) -> Dict[str, float]:
-    """Calculate adaptive weights with error handling."""
+    """Calculate pattern weights for T3/Parlay16 predictions."""
     logging.debug("Entering calculate_weights")
     try:
         total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
@@ -335,7 +335,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         return {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
 
 def predict_next() -> Tuple[Optional[str], float, Dict]:
-    """Predict the next outcome with error handling."""
+    """Predict next outcome for T3/Parlay16, using Additional Factors."""
     logging.debug("Entering predict_next")
     try:
         sequence = [x for x in st.session_state.sequence if x in ['P', 'B', 'T']]
@@ -558,7 +558,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
 
 # --- Betting Logic ---
 def check_target_hit() -> bool:
-    """Check if the profit target has been reached."""
+    """Check if profit target is reached for T3/Parlay16."""
     logging.debug("Entering check_target_hit")
     try:
         if st.session_state.target_mode == "Profit %":
@@ -572,7 +572,7 @@ def check_target_hit() -> bool:
         return False
 
 def update_t3_level():
-    """Update T3 betting level based on recent results."""
+    """Update T3 level based on recent results (2 wins: decrease, 2 losses: increase)."""
     logging.debug("Entering update_t3_level")
     try:
         if len(st.session_state.t3_results) >= 2:
@@ -593,7 +593,7 @@ def update_t3_level():
         st.error("Error updating T3 level. Try resetting the session.")
 
 def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optional[str]]:
-    """Calculate the next bet amount with error handling."""
+    """Calculate bet amount for T3/Parlay16, with safety net warnings."""
     logging.debug("Entering calculate_bet_amount")
     try:
         if st.session_state.consecutive_losses >= 3 and conf < 50.0:
@@ -614,7 +614,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         elif st.session_state.strategy == 'T3':
             bet_amount = st.session_state.base_bet * st.session_state.t3_level
             logging.debug(f"T3 bet: base_bet={st.session_state.base_bet}, t3_level={st.session_state.t3_level}, bet_amount={bet_amount}")
-        else:
+        else:  # Parlay16
             key = 'base' if st.session_state.parlay_using_base else 'parlay'
             bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
             st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
@@ -624,6 +624,8 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
             st.session_state.parlay_step = 1
             st.session_state.z1003_loss_count = 0
             return None, "No bet: Bet exceeds bankroll, levels reset"
+        
+        # Safety net check with warning
         if st.session_state.safety_net_enabled:
             safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
             if st.session_state.bankroll - bet_amount < safe_bankroll * 0.5:
@@ -631,6 +633,10 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
                 st.session_state.parlay_step = 1
                 st.session_state.z1003_loss_count = 0
                 return None, "No bet: Below safety net, levels reset"
+            elif st.session_state.bankroll - bet_amount < safe_bankroll * 0.75:
+                st.session_state.insights['Safety Net Warning'] = {
+                    'message': f"Warning: Bankroll approaching safety net (${safe_bankroll:.2f})"
+                }
 
         logging.debug("calculate_bet_amount completed")
         return bet_amount, f"Next Bet: ${bet_amount:.2f} on {pred}"
@@ -640,7 +646,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         return None, "No bet: Calculation error"
 
 def place_result(result: str):
-    """Process a game result with error handling."""
+    """Process game result, updating T3/Parlay16 states."""
     logging.debug("Entering place_result")
     try:
         if st.session_state.target_hit:
@@ -787,7 +793,7 @@ def place_result(result: str):
 
 # --- Simulation Logic ---
 def simulate_shoe(num_hands: int = 80) -> Dict:
-    """Simulate a Baccarat shoe with error handling."""
+    """Simulate a Baccarat shoe for T3/Parlay16 testing."""
     logging.debug("Entering simulate_shoe")
     try:
         outcomes = np.random.choice(
@@ -845,26 +851,27 @@ def simulate_shoe(num_hands: int = 80) -> Dict:
 
 # --- UI Components ---
 def render_setup_form():
-    """Render the setup form for session configuration."""
+    """Render setup form, highlighting T3/Parlay16 options."""
     logging.debug("Entering render_setup_form")
     try:
         st.subheader("Setup")
         with st.form("setup_form"):
-            bankroll = st.number_input("Enter Bankroll ($)", min_value=0.0, value=st.session_state.bankroll or 10.0, step=0.01, format="%.2f")
-            base_bet = st.number_input("Enter Base Bet ($)", min_value=0.01, value=st.session_state.base_bet or 0.20, step=0.01, format="%.2f")
+            bankroll = st.number_input("Enter Bankroll ($)", min_value=0.0, value=st.session_state.bankroll or 100.0, step=0.01, format="%.2f")
+            base_bet = st.number_input("Enter Base Bet ($)", min_value=0.01, value=st.session_state.base_bet or 1.0, step=0.01, format="%.2f")
             betting_strategy = st.selectbox(
                 "Choose Betting Strategy", STRATEGIES,
                 index=STRATEGIES.index(st.session_state.strategy),
-                help="T3: Adjusts bet size based on wins/losses. Flatbet: Fixed bet size. Parlay16: 16-step progression. Z1003.1: Resets after first win, stops after three losses."
+                help="T3: Adjusts bet size based on wins/losses (2 wins: decrease level, 2 losses: increase). "
+                     "Parlay16: 16-step progression, escalates after wins, resets after 2 wins or loss. "
+                     "Flatbet: Fixed bet size. Z1003.1: Resets after first win, stops after three losses."
             )
             target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
             target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
-            safety_net_enabled = st.toggle("Enable Safety Net", value=st.session_state.safety_net_enabled, help="Toggle to enable or disable the safety net protection.")
+            safety_net_enabled = st.toggle("Enable Safety Net", value=st.session_state.safety_net_enabled, help="Protects 10% of initial bankroll.")
             safety_net_percentage = st.number_input(
                 "Safety Net Percentage (%)",
                 min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
-                disabled=not safety_net_enabled,
-                help="Percentage of initial bankroll to keep as a safety net after each bet."
+                disabled=not safety_net_enabled
             )
             start_clicked = st.form_submit_button("Start Session")
 
@@ -927,7 +934,7 @@ def render_setup_form():
         st.error("Error rendering setup form. Try resetting the session.")
 
 def render_result_input():
-    """Render the result input buttons."""
+    """Render result input buttons."""
     logging.debug("Entering render_result_input")
     try:
         st.subheader("Enter Result")
@@ -1007,7 +1014,7 @@ def render_result_input():
         st.error("Error rendering result input. Try resetting the session.")
 
 def render_bead_plate():
-    """Render the current sequence as a bead plate."""
+    """Render current sequence as a bead plate."""
     logging.debug("Entering render_bead_plate")
     try:
         st.subheader("Current Sequence (Bead Plate)")
@@ -1040,7 +1047,7 @@ def render_bead_plate():
         st.error("Error rendering bead plate. Try resetting the session.")
 
 def render_prediction():
-    """Render the current prediction and advice."""
+    """Render current prediction and advice for T3/Parlay16."""
     logging.debug("Entering render_prediction")
     try:
         if st.session_state.pending_bet:
@@ -1058,7 +1065,7 @@ def render_prediction():
         st.error("Error rendering prediction. Try resetting the session.")
 
 def render_insights():
-    """Render prediction insights with error handling."""
+    """Render prediction insights, emphasizing T3/Parlay16 metrics and Additional Factors."""
     logging.debug("Entering render_insights")
     try:
         st.subheader("Prediction Insights")
@@ -1080,8 +1087,22 @@ def render_insights():
         }
         meta_insights = {
             k: v for k, v in st.session_state.insights.items()
-            if k in ['Threshold', 'Volatility', 'Shoe Bias', 'No Bet', 'Recommendation', 'Dominant Pattern']
+            if k in ['Threshold', 'Volatility', 'Shoe Bias', 'No Bet', 'Recommendation', 'Dominant Pattern', 'Safety Net Warning']
         }
+
+        # Strategy-specific insights
+        st.markdown("**Strategy Status**")
+        if st.session_state.strategy == 'T3':
+            bet_amount = st.session_state.base_bet * st.session_state.t3_level
+            st.markdown(f"- **T3 Bet Size**: ${bet_amount:.2f} (Level {st.session_state.t3_level}, Base ${st.session_state.base_bet:.2f})")
+            st.markdown(f"- **T3 Results**: {', '.join(st.session_state.t3_results) or 'None'}")
+            st.markdown(f"- **T3 Rule**: 2 wins → decrease level, 2 losses → increase level")
+        elif st.session_state.strategy == 'Parlay16':
+            key = 'base' if st.session_state.parlay_using_base else 'parlay'
+            bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
+            st.markdown(f"- **Parlay16 Bet Size**: ${bet_amount:.2f} (Step {st.session_state.parlay_step}, {'Base' if st.session_state.parlay_using_base else 'Parlay'})")
+            st.markdown(f"- **Parlay Wins**: {st.session_state.parlay_wins}/2")
+            st.markdown(f"- **Parlay16 Rule**: Win → increase bet, 2 wins or loss → reset to base")
 
         if pattern_insights:
             st.markdown("**Pattern Contributions** (sorted by influence):")
@@ -1126,6 +1147,8 @@ def render_insights():
                 st.markdown(f"- **Betting Threshold**: {meta_insights['Threshold'].get('adjusted', 'N/A')}")
             if 'No Bet' in meta_insights:
                 st.info(f"- **No Bet Reason**: {meta_insights['No Bet'].get('reason', 'N/A')}")
+            if 'Safety Net Warning' in meta_insights:
+                st.warning(f"- **Safety Net Warning**: {meta_insights['Safety Net Warning'].get('message', 'N/A')}")
 
         st.markdown("**Pattern Trends**:")
         st.markdown(f"- **Average Streak Length**: {extra_metrics.get('avg_streak_length', 0):.1f} hands")
@@ -1147,7 +1170,7 @@ def render_insights():
         st.error("Error rendering insights. Try resetting the session.")
 
 def render_status():
-    """Render session status information."""
+    """Render session status, highlighting T3/Parlay16 metrics."""
     logging.debug("Entering render_status")
     try:
         st.subheader("Status")
@@ -1295,7 +1318,7 @@ def render_simulation():
 
 # --- Main Application ---
 def main():
-    """Main application function with comprehensive error handling."""
+    """Main application with T3/Parlay16 and Additional Factors focus."""
     logging.debug("Entering main")
     try:
         st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
