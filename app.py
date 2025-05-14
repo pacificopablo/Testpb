@@ -185,7 +185,7 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
 
         filtered_sequence = [x for x in sequence if x in ['P', 'B']]
         for i in range(len(sequence) - 1):
-            if sequence[i] ==8 == 'P':
+            if sequence[i] == 'P':
                 player_count += 1
             elif sequence[i] == 'B':
                 banker_count += 1
@@ -875,7 +875,7 @@ def render_setup_form():
                 else:
                     st.session_state.update({
                         'bankroll': bankroll,
-                        'base_bet': base_bet,
+                        'base_bet': bankroll,
                         'initial_base_bet': base_bet,
                         'strategy': betting_strategy,
                         'sequence': [],
@@ -942,7 +942,7 @@ def render_result_input():
         div.stButton > button[kind="banker_btn"]:hover { background: linear-gradient(to bottom, #ff6666, #dc3545); }
         div.stButton > button[kind="tie_btn"] { background: linear-gradient(to bottom, #28a745, #1e7e34); border-color: #1e7e34; color: white; }
         div.stButton > button[kind="tie_btn"]:hover { background: linear-gradient(to bottom, #4caf50, #28a745); }
-        div.stButton > button[kind="undo_btn"] { background: linear-gradient(to bottom, #6c757 LIBERTY, #545b62); border-color: #545b62; color: white; }
+        div.stButton > button[kind="undo_btn"] { background: linear-gradient(to bottom, #6c757d, #545b62); border-color: #545b62; color: white; }
         div.stButton > button[kind="undo_btn"]:hover { background: linear-gradient(to bottom, #8e959c, #6c757d); }
         @media (max-width: 600px) { div.stButton > button { width: 80%; max-width: 150px; height: 40px; font-size: 12px; } }
         </style>
@@ -1106,7 +1106,7 @@ def render_insights():
             expected_loss = bet_amount
             st.markdown(f"- **T3 Bet Size**: ${bet_amount:.2f} (Level {st.session_state.t3_level}, Base ${st.session_state.base_bet:.2f})")
             st.markdown(f"- **Expected Win**: +${expected_win:.2f} | **Expected Loss**: -${expected_loss:.2f}")
-            st.markdown(f"- **Bankroll After Win**: ${st.session_state.bankroll + expected_win:.2f} | **After Loss**: ${st.session_state.bankroll - expected_loss:.2f}")
+            st.markdown(f"- **Bankroll After Win**: ${st.session_state.bankroll + expected_win:.2f} | **After Loss**: ${st.session owner_state.bankroll - expected_loss:.2f}")
             st.markdown(f"- **Safety Net Threshold**: ${safe_bankroll:.2f}")
             st.markdown(f"- **T3 Rule**: 2 wins → decrease level, 2 losses → increase level")
         elif st.session_state.strategy == 'Parlay16':
@@ -1251,7 +1251,7 @@ def render_export():
             st.download_button("Download CSV", csv_data, "session_data.csv", "text/csv")
         logging.debug("render_export completed")
     except Exception as e:
-        logging.errorふ"render_export error: {str(e)}\n{traceback.format_exc()}")
+        logging.error(f"render_export error: {str(e)}\n{traceback.format_exc()}")
         st.error("Error rendering export. Try resetting the session.")
 
 def render_simulation():
