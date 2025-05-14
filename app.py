@@ -62,8 +62,8 @@ def initialize_session_state():
     """Initialize session state with default values."""
     defaults = {
         'bankroll': 0.0,
-        'base_bet': 0.0,
-        'initial_base_bet': 0.0,
+        'base_bet': 0.10,  # Updated default to reflect minimum
+        'initial_base_bet': 0.10,
         'sequence': [],
         'pending_bet': None,
         'strategy': 'T3',
@@ -113,12 +113,14 @@ def reset_session():
     initialize_session_state()
     st.session_state.update({
         'bankroll': st.session_state.initial_bankroll,
+        'base_bet': 0.10,
+        'initial_base_bet': 0.10,
         'sequence': [],
         'pending_bet': None,
         't3_level': 1,
         't3_results': [],
         't3_level_changes': 0,
-        't931_peak_level': 1,
+        't3_peak_level': 1,
         'parlay_step': 1,
         'parlay_wins': 0,
         'parlay_using_base': True,
@@ -642,7 +644,7 @@ def render_setup_form():
     st.subheader("Setup")
     with st.form("setup_form"):
         bankroll = st.number_input("Enter Bankroll ($)", min_value=0.0, value=st.session_state.bankroll, step=10.0)
-        base_bet = st.number_input("Enter Base Bet ($)", min_value=0.0, value=st.session_state.base_bet, step=1.0)
+        base_bet = st.number_input("Enter Base Bet ($)", min_value=0.10, value=max(st.session_state.base_bet, 0.10), step=0.10)
         betting_strategy = st.selectbox(
             "Choose Betting Strategy", STRATEGIES,
             index=STRATEGIES.index(st.session_state.strategy),
@@ -670,8 +672,8 @@ def render_setup_form():
         if start_clicked:
             if bankroll <= 0:
                 st.error("Bankroll must be positive.")
-            elif base_bet <= 0:
-                st.error("Base bet must be positive.")
+            elif base_bet < 0.10:
+                st.error("Base bet must be at least $0.10.")
             elif base_bet > bankroll:
                 st.error("Base bet cannot exceed bankroll.")
             else:
