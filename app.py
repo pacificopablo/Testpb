@@ -875,7 +875,7 @@ def render_setup_form():
                 else:
                     st.session_state.update({
                         'bankroll': bankroll,
-                        'base_bet': bankroll,
+                        'base_bet': base_bet,
                         'initial_base_bet': base_bet,
                         'strategy': betting_strategy,
                         'sequence': [],
@@ -1106,7 +1106,7 @@ def render_insights():
             expected_loss = bet_amount
             st.markdown(f"- **T3 Bet Size**: ${bet_amount:.2f} (Level {st.session_state.t3_level}, Base ${st.session_state.base_bet:.2f})")
             st.markdown(f"- **Expected Win**: +${expected_win:.2f} | **Expected Loss**: -${expected_loss:.2f}")
-            st.markdown(f"- **Bankroll After Win**: ${st.session_state.bankroll + expected_win:.2f} | **After Loss**: ${st.session owner_state.bankroll - expected_loss:.2f}")
+            st.markdown(f"- **Bankroll After Win**: ${st.session_state.bankroll + expected_win:.2f} | **After Loss**: ${st.session_state.bankroll - expected_loss:.2f}")
             st.markdown(f"- **Safety Net Threshold**: ${safe_bankroll:.2f}")
             st.markdown(f"- **T3 Rule**: 2 wins → decrease level, 2 losses → increase level")
         elif st.session_state.strategy == 'Parlay16':
