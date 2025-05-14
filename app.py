@@ -1,4 +1,4 @@
-# Version: 2025-05-14-fix-v9
+# Version: 2025-05-14-fix-v10
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -13,13 +13,13 @@ import traceback
 # --- Constants ---
 SESSION_FILE = os.path.join(tempfile.gettempdir(), "online_users.txt")
 SIMULATION_LOG = os.path.join(tempfile.gettempdir(), "simulation_log.txt")
-PARLAY_TABLE = [1, 1, 1, 2, 3, 4, 6, 8, 12, 16, 22, 30, 40, 52, 70, 95]  # Modified: New Parlay16 sequence
+PARLAY_TABLE = [1, 1, 1, 2, 3, 4, 6, 8, 12, 16, 22, 30, 40, 52, 70, 95]  # Parlay16 sequence
 STRATEGIES = ["T3", "Flatbet", "Parlay16", "Z1003.1"]
 SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v9"
+APP_VERSION = "2025-05-14-fix-v10"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -612,10 +612,10 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         elif st.session_state.strategy == 'Flatbet':
             bet_amount = st.session_state.base_bet
         elif st.session_state.strategy == 'T3':
-            bet_amount = st.session_state.base_bet * st.session_state.t3_level  # Modified: Level multiplier
+            bet_amount = st.session_state.base_bet * st.session_state.t3_level
             logging.debug(f"T3 bet: base_bet={st.session_state.base_bet}, t3_level={st.session_state.t3_level}, bet_amount={bet_amount}")
         else:  # Parlay16
-            bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[min(st.session_state.parlay_step - 1, len(PARLAY_TABLE) - 1)]  # Modified: Use new sequence
+            bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[min(st.session_state.parlay_step - 1, len(PARLAY_TABLE) - 1)]
             st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
 
         if bet_amount > st.session_state.bankroll:
@@ -694,14 +694,13 @@ def place_result(result: str):
                     st.session_state.t3_results.append('W')
                 elif st.session_state.strategy == 'Parlay16':
                     st.session_state.parlay_wins += 1
-                    if st.session_state.parlay_wins >= 2:  # Modified: Reset after 2 consecutive wins
+                    if st.session_state.parlay_wins >= 2:
                         old_step = st.session_state.parlay_step
                         st.session_state.parlay_step = 1
                         st.session_state.parlay_wins = 0
                         if old_step != st.session_state.parlay_step:
                             st.session_state.parlay_step_changes += 1
                         st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, old_step)
-                    # No step increment here; handled after loss or non-consecutive win
                 elif st.session_state.strategy == 'Z1003.1':
                     _, conf, _ = predict_next()
                     if conf > 50.0 and st.session_state.pattern_volatility < 0.4:
@@ -733,10 +732,10 @@ def place_result(result: str):
                 for pattern in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
                     if pattern in st.session_state.insights:
                         st.session_state.pattern_attempts[pattern] += 1
-                if st.session_state.strategy == 'Parlay16':  # Modified: Increment step after loss
+                if st.session_state.strategy == 'Parlay16':
                     old_step = st.session_state.parlay_step
                     st.session_state.parlay_step = min(st.session_state.parlay_step + 1, len(PARLAY_TABLE))
-                    st.session_state.parlay_wins = 0  # Reset consecutive wins
+                    st.session_state.parlay_wins = 0
                     if old_step != st.session_state.parlay_step:
                         st.session_state.parlay_step_changes += 1
                     st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
@@ -784,7 +783,6 @@ def place_result(result: str):
         if st.session_state.strategy == 'T3':
             update_t3_level()
         elif st.session_state.strategy == 'Parlay16' and bet_placed and win and st.session_state.parlay_wins < 2:
-            # Modified: Increment step after a non-consecutive win
             old_step = st.session_state.parlay_step
             st.session_state.parlay_step = min(st.session_state.parlay_step + 1, len(PARLAY_TABLE))
             if old_step != st.session_state.parlay_step:
@@ -1189,10 +1187,13 @@ def main():
             st.sidebar.write(f"Consecutive Losses: {st.session_state.consecutive_losses}")
             st.sidebar.write(f"Pattern Volatility: {st.session_state.pattern_volatility:.2f}")
 
-            render_result_input()
-            render_prediction()
-            render_bead_plate()
-            render_insights()
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                render_result_input()
+                render_prediction()
+                render_bead_plate()
+            with col2:
+                render_insights()
 
             with st.expander("Loss Log", expanded=False):
                 if st.session_state.loss_log:
