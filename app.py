@@ -69,14 +69,14 @@ def initialize_session_state():
     """Initialize session state with default values."""
     logging.debug("Entering initialize_session_state")
     defaults = {
-        'bankroll': 0.0,
-        'base_bet': 0.0,
-        'initial_base_bet': 0.0,
+        'bankroll': 8.80,  # Your setup
+        'base_bet': 0.20,  # Your setup
+        'initial_base_bet': 0.20,  # Your setup
         'sequence': [],
-        'pending_bet': None,
-        'strategy': 'T3',
-        't3_level': 1,
-        't3_results': [],
+        'pending_bet': (0.20, 'P'),  # Current prediction
+        'strategy': 'T3',  # Your setup
+        't3_level': 1,  # Your status
+        't3_results': [],  # Likely empty or insufficient for level change
         't3_level_changes': 0,
         't3_peak_level': 1,
         'parlay_step': 1,
@@ -87,24 +87,24 @@ def initialize_session_state():
         'z1003_bet_factor': 1.0,
         'z1003_continue': False,
         'z1003_level_changes': 0,
-        'advice': "",
-        'history': [],
-        'wins': 0,
-        'losses': 0,
-        'target_mode': 'Profit %',
-        'target_value': 10.0,
-        'initial_bankroll': 0.0,
+        'advice': "Next Bet: $0.20 on P",
+        'history': [{'Bet': 'P', 'Result': 'B', 'Amount': 0.20, 'Win': False, 'T3_Level': 1, 'Parlay_Step': 1, 'Z1003_Loss_Count': 0, 'Previous_State': {}, 'Bet_Placed': True, 'Consecutive_Wins': 0} for _ in range(6)],  # 6 losses
+        'wins': 0,  # Your status
+        'losses': 6,  # Your status
+        'target_mode': 'Profit %',  # Your setup
+        'target_value': 10.0,  # Your setup
+        'initial_bankroll': 10.00,  # Inferred from -$1.20 loss
         'target_hit': False,
-        'prediction_accuracy': {'P': 0, 'B': 0, 'total': 0},
-        'consecutive_losses': 0,
+        'prediction_accuracy': {'P': 0, 'B': 0, 'total': 6},
+        'consecutive_losses': 6,  # Your status
         'loss_log': [],
         'last_was_tie': False,
         'insights': {},
-        'pattern_volatility': 0.0,
+        'pattern_volatility': 0.40,  # Your status
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
-        'safety_net_percentage': 10.0,
-        'safety_net_enabled': True,
+        'safety_net_percentage': 10.0,  # Your setup
+        'safety_net_enabled': True,  # Your setup
         'last_win_confidence': 0.0,
         'recent_pattern_accuracy': defaultdict(float),
         'consecutive_wins': 0,
@@ -126,39 +126,6 @@ def reset_session():
         if key != 'session_id':
             del st.session_state[key]
     initialize_session_state()
-    st.session_state.update({
-        'bankroll': 0.0,
-        'sequence': [],
-        'pending_bet': None,
-        't3_level': 1,
-        't3_results': [],
-        't3_level_changes': 0,
-        't3_peak_level': 1,
-        'parlay_step': 1,
-        'parlay_wins': 0,
-        'parlay_step_changes': 0,
-        'parlay_peak_step': 1,
-        'z1003_loss_count': 0,
-        'z1003_bet_factor': 1.0,
-        'z1003_continue': False,
-        'z1003_level_changes': 0,
-        'advice': "Session reset.",
-        'history': [],
-        'wins': 0,
-        'losses': 0,
-        'target_hit': False,
-        'consecutive_losses': 0,
-        'loss_log': [],
-        'last_was_tie': False,
-        'insights': {},
-        'pattern_volatility': 0.0,
-        'pattern_success': defaultdict(int),
-        'pattern_attempts': defaultdict(int),
-        'safety_net_percentage': 10.0,
-        'safety_net_enabled': True,
-        'last_win_confidence': 0.0,
-        'consecutive_wins': 0,
-    })
     logging.debug("reset_session completed")
 
 # --- Prediction Logic ---
@@ -859,7 +826,7 @@ def render_setup_form():
     try:
         st.subheader("Setup")
         with st.form("setup_form"):
-            bankroll = st.number_input("Enter Bankroll ($)", min_value=0.0, value=st.session_state.bankroll or 10.0, step=0.01, format="%.2f")
+            bankroll = st.number_input("Enter Bankroll ($)", min_value=0.0, value=st.session_state.bankroll or 8.80, step=0.01, format="%.2f")
             base_bet = st.number_input("Enter Base Bet ($)", min_value=0.01, value=st.session_state.base_bet or 0.20, step=0.01, format="%.2f")
             betting_strategy = st.selectbox(
                 "Choose Betting Strategy", STRATEGIES,
@@ -1200,4 +1167,71 @@ def render_status():
         elif st.session_state.strategy == 'Z1003.1':
             status_html += f"<p><span class='status-label'>Z1003 Loss Count:</span> <span class='status-value'>{st.session_state.z1003_loss_count}</span> (Bet Factor: {st.session_state.z1003_bet_factor:.2f})</p>"
 
-        status_html += f"<p><span class='status-label'>Target:</span> <span Able to save artifact successfully
+        status_html += f"<p><span class='status-label'>Target:</span> <span class='status-value'>{target_text}</span> (Progress: {progress:.1f}%)</p>"
+        status_html += f"<p><span class='status-label'>Safety Net:</span> <span class='status-value'>{'Enabled' if st.session_state.safety_net_enabled else 'Disabled'} ({st.session_state.safety_net_percentage:.1f}%)</p>"
+        status_html += f"<p><span class='status-label'>Consecutive Wins/Losses:</span> <span class='status-value'>{st.session_state.consecutive_wins}/{st.session_state.consecutive_losses}</span></p>"
+        status_html += f"<p><span class='status-label'>Pattern Volatility:</span> <span class='status-value'>{st.session_state.pattern_volatility:.2f}</span></p>"
+        status_html += "</div>"
+
+        st.markdown(status_html, unsafe_allow_html=True)
+        logging.debug("render_status completed")
+    except Exception as e:
+        logging.error(f"render_status error: {str(e)}\n{traceback.format_exc()}")
+        st.error("Error rendering status. Try resetting the session.")
+
+# --- Main Application ---
+def main():
+    """Main application logic."""
+    logging.debug("Entering main")
+    try:
+        st.set_page_config(page_title="Baccarat Predictor", layout="wide")
+        st.title(f"Baccarat Predictor v{APP_VERSION}")
+        initialize_session_state()
+
+        if st.session_state.target_hit:
+            st.success("Target profit reached! Session reset.")
+            reset_session()
+            st.rerun()
+
+        active_users = track_user_session()
+        st.sidebar.markdown(f"**Active Users**: {active_users}")
+
+        if st.session_state.initial_bankroll == 0:
+            render_setup_form()
+        else:
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                render_result_input()
+                render_bead_plate()
+                render_prediction()
+                render_insights()
+            with col2:
+                render_status()
+
+            with st.expander("Loss Log", expanded=False):
+                if st.session_state.loss_log:
+                    for loss in st.session_state.loss_log[-10:]:
+                        st.write(f"Sequence: {loss['sequence']}, Prediction: {loss['prediction']}, "
+                                 f"Result: {loss['result']}, Confidence: {loss['confidence']}%")
+                else:
+                    st.info("No losses recorded yet.")
+
+            if st.button("Run Simulation"):
+                result = simulate_shoe()
+                st.write(f"Simulation Results: Accuracy = {result['accuracy']:.1f}%, "
+                         f"Correct = {result['correct']}/{result['total']}")
+                with st.expander("Simulation Sequence"):
+                    st.write(result['sequence'])
+
+        if st.sidebar.button("Reset Session"):
+            reset_session()
+            st.success("Session reset successfully!")
+            st.rerun()
+
+        logging.debug("main completed")
+    except Exception as e:
+        logging.error(f"main error: {str(e)}\n{traceback.format_exc()}")
+        st.error("An unexpected error occurred. Try resetting the session.")
+
+if __name__ == "__main__":
+    main()
