@@ -356,7 +356,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
 
     recent_accuracy = (st.session_state.prediction_accuracy['P'] + st.session_state.prediction_accuracy['B']) / max(st.session_state.prediction_accuracy['total'], 1)
     threshold = 32.0 + (st.session_state.consecutive_losses * 0.5) - (recent_accuracy * 0.8)
-    threshold = min(max(threshold, 32.0), 416)
+    threshold = min(max(threshold, 32.0), 42.0)
     insights['Threshold'] = f"{threshold:.1f}%"
 
     if st.session_state.pattern_volatility > 0.5:
@@ -951,8 +951,8 @@ def main():
     render_result_input()
     render_bead_plate()
     render_prediction()
-    render_insights()
     render_status()
+    render_insights()
     render_accuracy()
     render_loss_log()
     render_history()
