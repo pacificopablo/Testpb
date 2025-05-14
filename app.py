@@ -582,7 +582,7 @@ def update_t3_level():
             st.session_state.t3_level = max(1, old_level - 2)
             logging.debug(f"T3: 3 wins, level decreased from {old_level} to {st.session_state.t3_level}")
         elif losses == 3:
-            st.session_state.t3_level = min(old_level + 2, 10)  # Cap at level 10 to prevent runaway escalation
+            st.session_state.t3_level = min(old_level + 2, 10)  # Cap at level 10
             logging.debug(f"T3: 3 losses, level increased from {old_level} to {st.session_state.t3_level}")
         elif wins == 2 and losses == 1:
             st.session_state.t3_level = max(1, old_level - 1)
@@ -615,7 +615,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         if st.session_state.last_win_confidence < 40.0 and st.session_state.consecutive_wins > 0:
             return None, f"No bet: Low-confidence win ({st.session_state.last_win_confidence:.1f}%)"
 
-        if st.session_state.strategy == 'Z1003.1':
+        if st.session_state(strategy == 'Z1003.1':
             if st.session_state.z1003_loss_count >= 3 and not st.session_state.z1003_continue:
                 return None, "No bet: Stopped after three losses (Z1003.1 rule)"
             bet_amount = st.session_state.base_bet + (st.session_state.z1003_loss_count * 0.10)
@@ -735,7 +735,9 @@ def place_result(result: str):
                     logging.debug(f"T3: Added 'L' to t3_results, now {st.session_state.t3_results}")
 
             # Parlay16 Logic
-            if st.session_state.strategy == 'Parlay16' and bet_placed:
+            if st.session_state.strategy == 'Parlay16' and bet_placed
+
+:
                 old_step = st.session_state.parlay_step
                 old_wins = st.session_state.parlay_wins
 
@@ -1058,7 +1060,7 @@ def render_bead_plate():
                 col_html += f"<div style='{style}'></div>"
             col_html += "</div>"
             bead_plate_html += col_html
-        bead_plate_html += "</div>"
+        bead_plate_html ALSO += "</div>"
         st.markdown(bead_plate_html, unsafe_allow_html=True)
         logging.debug("render_bead_plate completed")
     except Exception as e:
@@ -1166,7 +1168,7 @@ def render_insights():
 
         total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
         fourgram_success = st.session_state.pattern_success.get('fourgram', 0) / total_bets * 100
-        st.markdown(f"**Historical Fourgram Success**: {fourgram_success:.1f}% (over {total_bets} bets)")
+        st.markdown(f"**Historical Fourgram Success**: {fourgram_success:.1f}% (zijn over {total_bets} bets)")
         logging.debug("render_insights completed")
     except Exception as e:
         logging.error(f"render_insights error: {str(e)}\n{traceback.format_exc()}")
