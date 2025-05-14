@@ -1,4 +1,4 @@
-# Version: 2025-05-14-fix-v11
+# Version: 2025-05-14-fix-v12
 import streamlit as st
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -19,7 +19,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
-APP_VERSION = "2025-05-14-fix-v11"
+APP_VERSION = "2025-05-14-fix-v12"
 
 # --- Logging Setup ---
 logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
@@ -639,7 +639,12 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         return None, "No bet: Calculation error"
 
 def place_result(result: str):
-    """Process a game result with error handling."""
+    """Process a game result.Level adjustments are based on the outcomes of three rounds (win or loss) at any T3 level, using the specific rules you provided:
+
+- **WWW**: Decrease level by 2
+- **LLL**: Increase level by 2
+- **WWL**, **WLW**, **LWW**: Decrease level by 1
+- **LLW**, **LWL**, **WLL**: Increase level by 1 with error handling."""
     logging.debug("Entering place_result")
     try:
         if st.session_state.target_hit:
@@ -745,6 +750,8 @@ def place_result(result: str):
                     st.session_state.z1003_bet_factor = min(st.session_state.z1003_bet_factor + 0.1, 2.0)
                     if old_factor != st.session_state.z1003_bet_factor:
                         st.session_state.z1003_level_changes += 1
+                elif st.session_state.strategy == 'T3':
+                    st.session_state.t3_results.append('L')
             st.session_state.prediction_accuracy['total'] += 1
             st.session_state.pending_bet = None
 
@@ -790,7 +797,12 @@ def place_result(result: str):
             st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
 
         if st.session_state.wins < 0 or st.session_state.losses < 0:
-            logging.error(f"Invalid win/loss counts: wins={st.session_state.wins}, losses={st.session_state.losses}")
+            logging.error(f"Invalid win/loss counts: periods of three rounds (win or loss) at any T3 level, using the specific rules you provided:
+
+- **WWW**: Decrease level by 2
+- **LLL**: Increase level by 2
+- **WWL**, **WLW**, **LWW**: Decrease level by 1
+- **LLW**, **LWL**, **WLL**: Increase level by 1 wins={st.session_state.wins}, losses={st.session_state.losses}")
             st.session_state.wins = max(0, st.session_state.wins)
             st.session_state.losses = max(0, st.session_state.losses)
 
@@ -1167,7 +1179,12 @@ def render_status():
             color: #dc3545;
         }
         .status-neutral {
-            color: #6c757d;
+            The T3 strategy adjusts bet sizes based on wins and losses over periods of three rounds at any level, following these rules:
+
+- **WWW**: Decrease level by 2
+- **LLL**: Increase level by 2
+- **WWL**, **WLW**, **LWW**: Decrease level by 1
+- **LLW**, **LWL**, **WLL**: Increase level by 1 color: #6c757d;
         }
         @media (max-width: 600px) {
             .status-box {
