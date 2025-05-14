@@ -185,7 +185,7 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
 
         filtered_sequence = [x for x in sequence if x in ['P', 'B']]
         for i in range(len(sequence) - 1):
-            if sequence[i] == 'P':
+            if sequence[i] ==8 == 'P':
                 player_count += 1
             elif sequence[i] == 'B':
                 banker_count += 1
@@ -942,7 +942,7 @@ def render_result_input():
         div.stButton > button[kind="banker_btn"]:hover { background: linear-gradient(to bottom, #ff6666, #dc3545); }
         div.stButton > button[kind="tie_btn"] { background: linear-gradient(to bottom, #28a745, #1e7e34); border-color: #1e7e34; color: white; }
         div.stButton > button[kind="tie_btn"]:hover { background: linear-gradient(to bottom, #4caf50, #28a745); }
-        div.stButton > button[kind="undo_btn"] { background: linear-gradient(to bottom, #6c757d, #545b62); border-color: #545b62; color: white; }
+        div.stButton > button[kind="undo_btn"] { background: linear-gradient(to bottom, #6c757 LIBERTY, #545b62); border-color: #545b62; color: white; }
         div.stButton > button[kind="undo_btn"]:hover { background: linear-gradient(to bottom, #8e959c, #6c757d); }
         @media (max-width: 600px) { div.stButton > button { width: 80%; max-width: 150px; height: 40px; font-size: 12px; } }
         </style>
@@ -1036,7 +1036,7 @@ def render_bead_plate():
         st.error("Error rendering bead plate. Try resetting the session.")
 
 def render_additional_factors_prediction():
-    """Render prediction based solely on Additional Factors with color-coded Predicted Side."""
+    """Render prediction based solely on Additional Factors with color-coded Predicted Side and Bet Amount."""
     logging.debug("Entering render_additional_factors_prediction")
     try:
         if not st.session_state.insights:
@@ -1054,12 +1054,18 @@ def render_additional_factors_prediction():
         elif pred:
             side = "Player" if pred == 'P' else "Banker"
             color = "blue" if pred == 'P' else "red"
-            # Use inline CSS to make the Predicted Side larger, bold, and color-coded
+            # Get bet amount from pending_bet or calculate it
+            bet_amount = st.session_state.pending_bet[0] if st.session_state.pending_bet else None
+            if bet_amount is None:
+                bet_amount, _ = calculate_bet_amount(pred, conf)
+            bet_display = f"${bet_amount:.2f}" if bet_amount else "No Bet"
+            # Display Predicted Side and Bet Amount in large, bold, color-coded text
             st.markdown(
-                f"<span style='font-size: 24px; font-weight: 700; color: {color};'>Predicted Side: {side}</span>",
+                f"<span style='font-size: 24px; font-weight: 700; color: {color};'>"
+                f"Predicted Side: {side} | Bet Amount: {bet_display}</span>",
                 unsafe_allow_html=True
             )
-            st.markdown(f"**Confidence**: {conf:.1f}%  ")
+            st.markdown(f"**Confidence**: {conf:.1f}%")
             st.markdown(f"**Explanation**: {recommendation}, Dominant Pattern ({dominant_pattern}), Shoe Bias ({shoe_bias})")
         else:
             st.info("**No Bet Recommended**: Insufficient confidence based on Additional Factors.")
@@ -1245,7 +1251,7 @@ def render_export():
             st.download_button("Download CSV", csv_data, "session_data.csv", "text/csv")
         logging.debug("render_export completed")
     except Exception as e:
-        logging.error(f"render_export error: {str(e)}\n{traceback.format_exc()}")
+        logging.errorふ"render_export error: {str(e)}\n{traceback.format_exc()}")
         st.error("Error rendering export. Try resetting the session.")
 
 def render_simulation():
