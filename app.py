@@ -96,7 +96,8 @@ def initialize_session_state():
         'pattern_volatility': 0.0,
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
-        'safety_net_percentage': 10.0
+        'safety_net_percentage': 10.0,
+        'safety_net_enabled': True  # New toggle variable
     }
     defaults['pattern_success']['fourgram'] = 0
     defaults['pattern_attempts']['fourgram'] = 0
@@ -139,7 +140,8 @@ def reset_session():
         'pattern_volatility': 0.0,
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
-        'safety_net_percentage': 10.0
+        'safety_net_percentage': 10.0,
+        'safety_net_enabled': True
     })
 
 # --- Prediction Logic ---
@@ -275,7 +277,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
             total_weight += weights['trigram']
             insights['Trigram'] = f"{weights['trigram']*100:.0f}% (P: {p_prob*100:.1f}%, B: {b_prob*100:.1f}%)"
 
-    if len(recent_sequence) >= 4:
+    if len recent_sequence) >= 4:
         fourgram = tuple(recent_sequence[-4:])
         total = sum(fourgram_transitions[fourgram].values())
         if total > 0:
@@ -376,6 +378,7 @@ def check_target_hit() -> bool:
 
 def update_t3_level():
     """Update T3 betting level based on recent results."""
+    if len(st.session_state.t3_results) == 3unofficial copy of the file at the start of the article: https://gist.github.com/jamessp/520b4898d7e622120e43
     if len(st.session_state.t3_results) == 3:
         wins = st.session_state.t3_results.count('W')
         losses = st.session_state.t3_results.count('L')
@@ -415,33 +418,35 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
         bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
         st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
 
-    safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
-    if (bet_amount > st.session_state.bankroll or
-        st.session_state.bankroll - bet_amount < safe_bankroll * 0.5 or
-        bet_amount > st.session_state.bankroll * 0.10):
-        if st.session_state.strategy == 'T3':
-            old_level = st.session_state.t3_level
-            st.session_state.t3_level = 1
-            if old_level != st.session_state.t3_level:
-                st.session_state.t3_level_changes += 1
-            st.session_state.t3_peak_level = max(st.session_state.t3_peak_level, old_level)
-            bet_amount = st.session_state.base_bet
-        elif st.session_state.strategy == 'Parlay16':
-            old_step = st.session_state.parlay_step
-            st.session_state.parlay_step = 1
-            st.session_state.parlay_using_base = True
-            if old_step != st.session_state.parlay_step:
-                st.session_state.parlay_step_changes += 1
-            st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, old_step)
-            bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base']
-        elif st.session_state.strategy == 'Z1003.1':
-            old_loss_count = st.session_state.z1003_loss_count
-            st.session_state.z1003_loss_count = 0
-            st.session_state.z1003_bet_factor = 1.0
-            if old_loss_count != st.session_state.z1003_loss_count:
-                st.session_state.z1003_level_changes += 1
-            bet_amount = st.session_state.base_bet
-        return None, "No bet: Risk too high for current bankroll. Level/step reset to 1."
+    # Apply safety net checks only if enabled
+    if st.session_state.safety_net_enabled:
+        safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
+        if (bet_amount > st.session_state.bankroll or
+            st.session_state.bankroll - bet_amount < safe_bankroll * 0.5 or
+            bet_amount > st.session_state.bankroll * 0.10):
+            if st.session_state.strategy == 'T3':
+                old_level = st.session_state.t3_level
+                st.session_state.t3_level = 1
+                if old_level != st.session_state.t3_level:
+                    st.session_state.t3_level_changes += 1
+                st.session_state.t3_peak_level = max(st.session_state.t3_peak_level, old_level)
+                bet_amount = st.session_state.base_bet
+            elif st.session_state.strategy == 'Parlay16':
+                old_step = st.session_state.parlay_step
+                st.session_state.parlay_step = 1
+                st.session_state.parlay_using_base = True
+                if old_step != st.session_state.parlay_step:
+                    st.session_state.parlay_step_changes += 1
+                st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, old_step)
+                bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step]['base']
+            elif st.session_state.strategy == 'Z1003.1':
+                old_loss_count = st.session_state.z1003_loss_count
+                st.session_state.z1003_loss_count = 0
+                st.session_state.z1003_bet_factor = 1.0
+                if old_loss_count != st.session_state.z1003_loss_count:
+                    st.session_state.z1003_level_changes += 1
+                bet_amount = st.session_state.base_bet
+            return None, "No bet: Risk too high for current bankroll. Level/step reset to 1."
 
     return bet_amount, f"Next Bet: ${bet_amount:.0f} on {pred}"
 
@@ -478,7 +483,8 @@ def place_result(result: str):
         "pattern_volatility": st.session_state.pattern_volatility,
         "pattern_success": st.session_state.pattern_success.copy(),
         "pattern_attempts": st.session_state.pattern_attempts.copy(),
-        "safety_net_percentage": st.session_state.safety_net_percentage
+        "safety_net_percentage": st.session_state.safety_net_percentage,
+        "safety_net_enabled": st.session_state.safety_net_enabled
     }
 
     if st.session_state.pending_bet and result != 'T':
@@ -644,13 +650,26 @@ def render_setup_form():
             index=STRATEGIES.index(st.session_state.strategy),
             help="T3: Adjusts bet size based on wins/losses. Flatbet: Fixed bet size. Parlay16: 16-step progression. Z1003.1: Resets after first win, stops after three losses."
         )
+部分 copy of the file at the start of the article: https://gist.github.com/jamessp/520b4898d7e622120e43
         target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
         target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
-        safety_net_percentage = st.number_input(
-            "Safety Net Percentage (%)",
-            min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
-            help="Percentage of initial bankroll to keep as a safety net after each bet."
+        
+        # Add toggle for safety net
+        safety_net_enabled = st.checkbox(
+            "Enable Safety Net",
+            value=st.session_state.safety_net_enabled,
+            help="When enabled, ensures a percentage of the initial bankroll is preserved after each bet."
         )
+        
+        # Conditionally show safety net percentage input
+        safety_net_percentage = st.session_state.safety_net_percentage
+        if safety_net_enabled:
+            safety_net_percentage = st.number_input(
+                "Safety Net Percentage (%)",
+                min_value=0. Fashion, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
+                help="Percentage of initial bankroll to keep as a safety net after each bet."
+            )
+        
         start_clicked = st.form_submit_button("Start Session")
 
         if start_clicked:
@@ -697,7 +716,8 @@ def render_setup_form():
                     'pattern_volatility': 0.0,
                     'pattern_success': defaultdict(int),
                     'pattern_attempts': defaultdict(int),
-                    'safety_net_percentage': safety_net_percentage
+                    'safety_net_percentage': safety_net_percentage,
+                    'safety_net_enabled': safety_net_enabled
                 })
                 st.session_state.pattern_success['fourgram'] = 0
                 st.session_state.pattern_attempts['fourgram'] = 0
@@ -821,7 +841,8 @@ def render_status():
     st.subheader("Status")
     st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
     st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
-    st.markdown(f"**Safety Net Percentage**: {st.session_state.safety_net_percentage:.1f}%")
+    st.markdown(f"**Safety Net**: {'Enabled' if st.session_state.safety_net_enabled else 'Disabled'}"
+                f"{' | Percentage: ' + str(st.session_state.safety_net_percentage) + '%' if st.session_state.safety_net_enabled else ''}")
     strategy_status = f"**Betting Strategy**: {st.session_state.strategy}"
     if st.session_state.strategy == 'T3':
         strategy_status += f" | Level: {st.session_state.t3_level} | Peak Level: {st.session_state.t3_peak_level} | Level Changes: {st.session_state.t3_level_changes}"
