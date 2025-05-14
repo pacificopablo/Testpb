@@ -13,7 +13,7 @@ import traceback
 # --- Constants ---
 SESSION_FILE = os.path.join(tempfile.gettempdir(), "online_users.txt")
 SIMULATION_LOG = os.path.join(tempfile.gettempdir(), "simulation_log.txt")
-PARLAY_TABLE = [1, 1, 1, 2, 3, 4, 6, 8, 12, 16, 22, 30, 40, 52, 70, 95]  # Modified: New Parlay16 sequence
+PARLAY_TABLE = [1, 1, 1, 2, 3, 4, 6, 8, 12, 16, 22, 30, 40, 52, 70, 95]  # Parlay16 sequence for progressive betting
 STRATEGIES = ["T3", "Flatbet", "Parlay16", "Z1003.1"]
 SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
@@ -566,34 +566,43 @@ def check_target_hit() -> bool:
         return False
 
 def update_t3_level():
-    """Update T3 betting level based on the last three results."""
+    """Update T3 betting level based on the last three results, adjusting dynamically based on wins and losses."""
     logging.debug("Entering update_t3_level")
     try:
-        if len(st.session_state.t3_results) >= 3:
-            wins = st.session_state.t3_results[-3:].count('W')
-            losses = st.session_state.t3_results[-3:].count('L')
-            old_level = st.session_state.t3_level
-            if wins == 3:
-                st.session_state.t3_level = max(1, st.session_state.t3_level - 2)
-                logging.debug(f"T3: 3 wins, level decreased from {old_level} to {st.session_state.t3_level}")
-            elif losses == 3:
-                st.session_state.t3_level += 2
-                logging.debug(f"T3: 3 losses, level increased from {old_level} to {st.session_state.t3_level}")
-            elif wins == 2 and losses == 1:
-                st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
-                logging.debug(f"T3: 2 wins, 1 loss, level decreased from {old_level} to {st.session_state.t3_level}")
-            elif losses == 2 and wins == 1:
-                st.session_state.t3_level += 1
-                logging.debug(f"T3: 2 losses, 1 win, level increased from {old_level} to {st.session_state.t3_level}")
-            if old_level != st.session_state.t3_level:
-                st.session_state.t3_level_changes += 1
-            st.session_state.t3_peak_level = max(st.session_state.t3_peak_level, st.session_state.t3_level)
-        # Ensure t3_results doesn't grow beyond 3
+        if len(st.session_state.t3_results) < 3:
+            logging.debug("T3: Insufficient results for level update")
+            return  # Exit early if not enough results
+
+        wins = st.session_state.t3_results[-3:].count('W')
+        losses = st.session_state.t3_results[-3:].count('L')
+        old_level = st.session_state.t3_level
+
+        # Update T3 level based on recent results
+        if wins == 3:
+            st.session_state.t3_level = max(1, old_level - 2)
+            logging.debug(f"T3: 3 wins, level decreased from {old_level} to {st.session_state.t3_level}")
+        elif losses == 3:
+            st.session_state.t3_level = min(old_level + 2, 10)  # Cap at level 10 to prevent runaway escalation
+            logging.debug(f"T3: 3 losses, level increased from {old_level} to {st.session_state.t3_level}")
+        elif wins == 2 and losses == 1:
+            st.session_state.t3_level = max(1, old_level - 1)
+            logging.debug(f"T3: 2 wins, 1 loss, level decreased from {old_level} to {st.session_state.t3_level}")
+        elif losses == 2 and wins == 1:
+            st.session_state.t3_level = min(old_level + 1, 10)  # Cap at level 10
+            logging.debug(f"T3: 2 losses, 1 win, level increased from {old_level} to {st.session_state.t3_level}")
+
+        # Track level changes and peak level
+        if old_level != st.session_state.t3_level:
+            st.session_state.t3_level_changes += 1
+            logging.debug(f"T3: Level changed, total changes={st.session_state.t3_level_changes}")
+        st.session_state.t3_peak_level = max(st.session_state.t3_peak_level, st.session_state.t3_level)
+
+        # Maintain t3_results length
         st.session_state.t3_results = st.session_state.t3_results[-3:]
         logging.debug(f"T3: Current level={st.session_state.t3_level}, results={st.session_state.t3_results}")
     except Exception as e:
         logging.error(f"update_t3_level error: {str(e)}\n{traceback.format_exc()}")
-        st.error("Error updating T3 level. Try resetting the session.")
+        st.error("Error updating T3 level. Please reset the session.")
 
 def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optional[str]]:
     """Calculate the next bet amount with error handling."""
@@ -690,17 +699,6 @@ def place_result(result: str):
                 if st.session_state.strategy == 'T3':
                     st.session_state.t3_results.append('W')
                     logging.debug(f"T3: Added 'W' to t3_results, now {st.session_state.t3_results}")
-                elif st.session_state.strategy == 'Parlay16':
-                    st.session_state.parlay_wins += 1
-                    logging.debug(f"Parlay16: Win, parlay_wins={st.session_state.parlay_wins}")
-                    if st.session_state.parlay_wins >= 2:
-                        old_step = st.session_state.parlay_step
-                        st.session_state.parlay_step = 1
-                        st.session_state.parlay_wins = 0
-                        if old_step != st.session_state.parlay_step:
-                            st.session_state.parlay_step_changes += 1
-                        st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, old_step)
-                        logging.debug(f"Parlay16: 2 consecutive wins, reset step to {st.session_state.parlay_step}, wins to 0")
                 elif st.session_state.strategy == 'Z1003.1':
                     _, conf, _ = predict_next()
                     if conf > 50.0 and st.session_state.pattern_volatility < 0.4:
@@ -735,14 +733,37 @@ def place_result(result: str):
                 if st.session_state.strategy == 'T3':
                     st.session_state.t3_results.append('L')
                     logging.debug(f"T3: Added 'L' to t3_results, now {st.session_state.t3_results}")
-                elif st.session_state.strategy == 'Parlay16':
-                    old_step = st.session_state.parlay_step
+
+            # Parlay16 Logic
+            if st.session_state.strategy == 'Parlay16' and bet_placed:
+                old_step = st.session_state.parlay_step
+                old_wins = st.session_state.parlay_wins
+
+                if win:
+                    st.session_state.parlay_wins += 1
+                    logging.debug(f"Parlay16: Win recorded, parlay_wins={st.session_state.parlay_wins}")
+
+                    if st.session_state.parlay_wins >= 2:
+                        # Reset after two consecutive wins
+                        st.session_state.parlay_step = 1
+                        st.session_state.parlay_wins = 0
+                        logging.debug(f"Parlay16: 2 consecutive wins, reset step to {st.session_state.parlay_step}, wins to 0")
+                    else:
+                        # Advance step after a single win
+                        st.session_state.parlay_step = min(st.session_state.parlay_step + 1, len(PARLAY_TABLE))
+                        logging.debug(f"Parlay16: Single win, step increased to {st.session_state.parlay_step}")
+                else:
+                    # On loss, advance step and reset wins
                     st.session_state.parlay_step = min(st.session_state.parlay_step + 1, len(PARLAY_TABLE))
                     st.session_state.parlay_wins = 0
-                    if old_step != st.session_state.parlay_step:
-                        st.session_state.parlay_step_changes += 1
-                    st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
                     logging.debug(f"Parlay16: Loss, step increased to {st.session_state.parlay_step}, wins reset to 0")
+
+                # Track step changes and peak step
+                if old_step != st.session_state.parlay_step:
+                    st.session_state.parlay_step_changes += 1
+                    logging.debug(f"Parlay16: Step changed from {old_step} to {st.session_state.parlay_step}, total changes={st.session_state.parlay_step_changes}")
+                st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
+
             st.session_state.prediction_accuracy['total'] += 1
             st.session_state.pending_bet = None
 
@@ -771,14 +792,6 @@ def place_result(result: str):
 
         if st.session_state.strategy == 'T3':
             update_t3_level()
-
-        if st.session_state.strategy == 'Parlay16' and bet_placed and win and st.session_state.parlay_wins < 2:
-            old_step = st.session_state.parlay_step
-            st.session_state.parlay_step = min(st.session_state.parlay_step + 1, len(PARLAY_TABLE))
-            if old_step != st.session_state.parlay_step:
-                st.session_state.parlay_step_changes += 1
-            st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
-            logging.debug(f"Parlay16: Non-consecutive win, step increased to {st.session_state.parlay_step}")
 
         pred, conf, insights = predict_next()
         if st.session_state.strategy == 'Z1003.1' and st.session_state.z1003_loss_count >= 3 and not st.session_state.z1003_continue:
@@ -952,7 +965,7 @@ def render_result_input():
             display: flex; align-items: center; justify-content: center;
         }
         div.stButton > button:hover { transform: scale(1.08); box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3); }
-        div.stButton > button:active { transform: scale(0.95); box-shadow: none; }
+        div.stButton > button:active { transform: scale [class=stButton] { width: 80%; max-width: 150px; height: 40px; font-size: 12px; }
         div.stButton > button[kind="player_btn"] { background: linear-gradient(to bottom, #007bff, #0056b3); border-color: #0056b3; color: white; }
         div.stButton > button[kind="player_btn"]:hover { background: linear-gradient(to bottom, #339cff, #007bff); }
         div.stButton > button[kind="banker_btn"] { background: linear-gradient(to bottom, #dc3545, #a71d2a); border-color: #a71d2a; color: white; }
