@@ -566,6 +566,7 @@ def check_target_hit() -> bool:
         return False
 
 
+
 def update_t3_level():
     """Update T3 betting level based on new fixed 3-result rule logic."""
     logging.debug("Entering update_t3_level")
@@ -592,8 +593,8 @@ def update_t3_level():
             st.session_state.t3_results = st.session_state.t3_results[-3:]
         logging.debug("update_t3_level completed")
     except Exception as e:
-        logging.error(f"update_t3_level error: {str(e)}
-{traceback.format_exc()}")
+        logging.error("update_t3_level error: {}
+{}".format(str(e), traceback.format_exc()))
         st.error("Error updating T3 level. Try resetting the session.")
 
 def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optional[str]]:
