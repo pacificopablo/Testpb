@@ -111,6 +111,7 @@ def initialize_session_state():
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
         'safety_net_percentage': 10.0,
+        'safety_net_enabled': True,  # New: Default to enabled
         'last_win_confidence': 0.0,
         'recent_pattern_accuracy': defaultdict(float),
         'consecutive_wins': 0,
@@ -162,6 +163,7 @@ def reset_session():
         'pattern_success': defaultdict(int),
         'pattern_attempts': defaultdict(int),
         'safety_net_percentage': 10.0,
+        'safety_net_enabled': True,  # New: Default to enabled
         'last_win_confidence': 0.0,
         'consecutive_wins': 0,
     })
@@ -618,17 +620,18 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
             bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[st.session_state.parlay_step][key]
             st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
 
-        safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
         if bet_amount > st.session_state.bankroll:
             st.session_state.t3_level = 1
             st.session_state.parlay_step = 1
             st.session_state.z1003_loss_count = 0
             return None, "No bet: Bet exceeds bankroll, levels reset"
-        if st.session_state.bankroll - bet_amount < safe_bankroll * 0.5:
-            st.session_state.t3_level = 1
-            st.session_state.parlay_step = 1
-            st.session_state.z1003_loss_count = 0
-            return None, "No bet: Below safety net, levels reset"
+        if st.session_state.safety_net_enabled:  # New: Check if safety net is enabled
+            safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
+            if st.session_state.bankroll - bet_amount < safe_bankroll * 0.5:
+                st.session_state.t3_level = 1
+                st.session_state.parlay_step = 1
+                st.session_state.z1003_loss_count = 0
+                return None, "No bet: Below safety net, levels reset"
 
         logging.debug("calculate_bet_amount completed")
         return bet_amount, f"Next Bet: ${bet_amount:.2f} on {pred}"
@@ -673,6 +676,7 @@ def place_result(result: str):
             "pattern_success": st.session_state.pattern_success.copy(),
             "pattern_attempts": st.session_state.pattern_attempts.copy(),
             "safety_net_percentage": st.session_state.safety_net_percentage,
+            "safety_net_enabled": st.session_state.safety_net_enabled,  # New: Include in previous state
             "consecutive_wins": st.session_state.consecutive_wins,
             "last_win_confidence": st.session_state.last_win_confidence,
             "insights": st.session_state.insights.copy(),
@@ -689,10 +693,6 @@ def place_result(result: str):
                 st.session_state.consecutive_losses = 0
                 st.session_state.last_win_confidence = predict_next()[1]
                 logging.debug(f"Win recorded: Total wins={st.session_state.wins}, Consecutive wins={st.session_state.consecutive_wins}")
-                # Modified: Disabled base_bet increase
-                # if st.session_state.consecutive_wins >= 3:
-                #     st.session_state.base_bet *= 1.05
-                #     st.session_state.base_bet = round(st.session_state.base_bet, 2)
                 if st.session_state.strategy == 'T3':
                     st.session_state.t3_results.append('W')
                 elif st.session_state.strategy == 'Parlay16':
@@ -861,9 +861,11 @@ def render_setup_form():
             )
             target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
             target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
+            safety_net_enabled = st.toggle("Enable Safety Net", value=st.session_state.safety_net_enabled, help="Toggle to enable or disable the safety net protection.")
             safety_net_percentage = st.number_input(
                 "Safety Net Percentage (%)",
                 min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
+                disabled=not safety_net_enabled,  # Disable percentage input if safety net is off
                 help="Percentage of initial bankroll to keep as a safety net after each bet."
             )
             start_clicked = st.form_submit_button("Start Session")
@@ -913,6 +915,7 @@ def render_setup_form():
                         'pattern_success': defaultdict(int),
                         'pattern_attempts': defaultdict(int),
                         'safety_net_percentage': safety_net_percentage,
+                        'safety_net_enabled': safety_net_enabled,  # New: Store toggle state
                         'last_win_confidence': 0.0,
                         'recent_pattern_accuracy': defaultdict(float),
                         'consecutive_wins': 0,
@@ -1152,12 +1155,12 @@ def render_status():
         st.subheader("Status")
         st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
         st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
-        st.markdown(f"**Safety Net Percentage**: {st.session_state.safety_net_percentage}%")
+        st.markdown(f"**Safety Net**: {'Enabled' if st.session_state.safety_net_enabled else 'Disabled'} | Percentage: {st.session_state.safety_net_percentage}%")
         st.markdown(f"**Online Users**: {track_user_session()}")
         strategy_status = f"**Betting Strategy**: {st.session_state.strategy}"
         if st.session_state.strategy == 'T3':
             strategy_status += f" | Level: {st.session_state.t3_level} | Peak Level: {st.session_state.t3_peak_level} | Level Changes: {st.session_state.t3_level_changes}"
-            st.markdown(f"**T3 Results**: {', '.join(st.session_state.t3_results) or 'None'}")  # Modified: Added t3_results
+            st.markdown(f"**T3 Results**: {', '.join(st.session_state.t3_results) or 'None'}")
         elif st.session_state.strategy == 'Parlay16':
             strategy_status += f" | Steps: {st.session_state.parlay_step}/16 | Peak Steps: {st.session_state.parlay_peak_step} | Step Changes: {st.session_state.parlay_step_changes} | Consecutive Wins: {st.session_state.parlay_wins}"
         elif st.session_state.strategy == 'Z1003.1':
