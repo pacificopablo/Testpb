@@ -13,7 +13,7 @@ import traceback
 # --- Constants ---
 SESSION_FILE = os.path.join(tempfile.gettempdir(), "online_users.txt")
 SIMULATION_LOG = os.path.join(tempfile.gettempdir(), "simulation_log.txt")
-PARLAY_TABLE = [1, 1, 1, 2, 3, 4, 6, 8, 12, 16, 22, 30, 40, 52, 70, 95]  # Parlay16 sequence for progressive betting
+PARLAY_TABLE = [1, 1, 1, 2, 3, 4, 6, 8, 12, 16, 22, 30, 40, 52, 70, 95]  # Modified: New Parlay16 sequence
 STRATEGIES = ["T3", "Flatbet", "Parlay16", "Z1003.1"]
 SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
@@ -566,78 +566,69 @@ def check_target_hit() -> bool:
         return False
 
 def update_t3_level():
-    """Update T3 betting level based on the last three results, adjusting dynamically based on wins and losses."""
+    """Update T3 betting level based on recent results."""
     logging.debug("Entering update_t3_level")
     try:
-        if len(st.session_state.t3_results) < 3:
-            logging.debug("T3: Insufficient results for level update")
-            return  # Exit early if not enough results
-
-        wins = st.session_state.t3_results[-3:].count('W')
-        losses = st.session_state.t3_results[-3:].count('L')
-        old_level = st.session_state.t3_level
-
-        # Update T3 level based on recent results
-        if wins == 3:
-            st.session_state.t3_level = max(1, old_level - 2)
-            logging.debug(f"T3: 3 wins, level decreased from {old_level} to {st.session_state.t3_level}")
-        elif losses == 3:
-            st.session_state.t3_level = min(old_level + 2, 10)  # Cap at level 10
-            logging.debug(f"T3: 3 losses, level increased from {old_level} to {st.session_state.t3_level}")
-        elif wins == 2 and losses == 1:
-            st.session_state.t3_level = max(1, old_level - 1)
-            logging.debug(f"T3: 2 wins, 1 loss, level decreased from {old_level} to {st.session_state.t3_level}")
-        elif losses == 2 and wins == 1:
-            st.session_state.t3_level = min(old_level + 1, 10)  # Cap at level 10
-            logging.debug(f"T3: 2 losses, 1 win, level increased from {old_level} to {st.session_state.t3_level}")
-
-        # Track level changes and peak level
-        if old_level != st.session_state.t3_level:
-            st.session_state.t3_level_changes += 1
-            logging.debug(f"T3: Level changed, total changes={st.session_state.t3_level_changes}")
-        st.session_state.t3_peak_level = max(st.session_state.t3_peak_level, st.session_state.t3_level)
-
-        # Maintain t3_results length
-        st.session_state.t3_results = st.session_state.t3_results[-3:]
-        logging.debug(f"T3: Current level={st.session_state.t3_level}, results={st.session_state.t3_results}")
+        if len(st.session_state.t3_results) >= 3:  # Modified: Check last 3 results
+            wins = st.session_state.t3_results[-3:].count('W')
+            losses = st.session_state.t3_results[-3:].count('L')
+            old_level = st.session_state.t3_level
+            if wins == 3:
+                st.session_state.t3_level = max(1, st.session_state.t3_level - 2)  # Decrease by 2
+            elif losses == 3:
+                st.session_state.t3_level += 2  # Increase by 2
+            elif wins == 2 and losses == 1:
+                st.session_state.t3_level = max(1, st.session_state.t3_level - 1)  # Decrease by 1
+            elif losses == 2 and wins == 1:
+                st.session_state.t3_level += 1  # Increase by 1
+            if old_level != st.session_state.t3_level:
+                st.session_state.t3_level_changes += 1
+            st.session_state.t3_peak_level = max(st.session_state.t3_peak_level, st.session_state.t3_level)
+            # Keep only the last 3 results
+            st.session_state.t3_results = st.session_state.t3_results[-3:]
+        logging.debug("update_t3_level completed")
     except Exception as e:
         logging.error(f"update_t3_level error: {str(e)}\n{traceback.format_exc()}")
-        st.error("Error updating T3 level. Please reset the session.")
+        st.error("Error updating T3 level. Try resetting the session.")
 
 def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optional[str]]:
     """Calculate the next bet amount with error handling."""
     logging.debug("Entering calculate_bet_amount")
     try:
         if st.session_state.pattern_volatility > 0.5:
-            return None, f"No bet: High pattern volatility ({st.session_state.pattern_volatility:.2f})"
+            return None, f"No bet: High pattern volatility"
         if pred is None or conf < 40.0:
-            return None, f"No bet: Confidence too low ({conf:.1f}%)"
+            return None, f"No bet: Confidence too low"
         if st.session_state.last_win_confidence < 40.0 and st.session_state.consecutive_wins > 0:
             return None, f"No bet: Low-confidence win ({st.session_state.last_win_confidence:.1f}%)"
 
-        if st.session_state['strategy'] == 'Z1003.1':
+        if st.session_state.strategy == 'Z1003.1':
             if st.session_state.z1003_loss_count >= 3 and not st.session_state.z1003_continue:
                 return None, "No bet: Stopped after three losses (Z1003.1 rule)"
             bet_amount = st.session_state.base_bet + (st.session_state.z1003_loss_count * 0.10)
         elif st.session_state.strategy == 'Flatbet':
             bet_amount = st.session_state.base_bet
         elif st.session_state.strategy == 'T3':
-            bet_amount = st.session_state.base_bet * st.session_state.t3_level
+            bet_amount = st.session_state.base_bet * st.session_state.t3_level  # Modified: Level multiplier
             logging.debug(f"T3 bet: base_bet={st.session_state.base_bet}, t3_level={st.session_state.t3_level}, bet_amount={bet_amount}")
         else:  # Parlay16
-            bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[min(st.session_state.parlay_step - 1, len(PARLAY_TABLE) - 1)]
-            logging.debug(f"Parlay16 bet: initial_base_bet={st.session_state.initial_base_bet}, step={st.session_state.parlay_step}, multiplier={PARLAY_TABLE[min(st.session_state.parlay_step - 1, len(PARLAY_TABLE) - 1)]}, bet_amount={bet_amount}")
+            bet_amount = st.session_state.initial_base_bet * PARLAY_TABLE[min(st.session_state.parlay_step - 1, len(PARLAY_TABLE) - 1)]  # Modified: Use new sequence
+            st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
 
         if bet_amount > st.session_state.bankroll:
-            logging.warning(f"Bet amount {bet_amount} exceeds bankroll {st.session_state.bankroll}. Skipping bet.")
-            return None, "No bet: Bet exceeds bankroll"
+            st.session_state.t3_level = 1
+            st.session_state.parlay_step = 1
+            st.session_state.z1003_loss_count = 0
+            return None, "No bet: Bet exceeds bankroll, levels reset"
         if st.session_state.safety_net_enabled:
             safe_bankroll = st.session_state.initial_bankroll * (st.session_state.safety_net_percentage / 100)
             if st.session_state.bankroll - bet_amount < safe_bankroll * 0.5:
-                logging.warning(f"Bankroll {st.session_state.bankroll} - bet {bet_amount} < safety net {safe_bankroll * 0.5}. Skipping bet.")
-                return None, "No bet: Below safety net"
+                st.session_state.t3_level = 1
+                st.session_state.parlay_step = 1
+                st.session_state.z1003_loss_count = 0
+                return None, "No bet: Below safety net, levels reset"
 
-        logging.debug(f"calculate_bet_amount completed: bet_amount={bet_amount}, advice='Next Bet: ${bet_amount:.2f} on {pred}'")
+        logging.debug("calculate_bet_amount completed")
         return bet_amount, f"Next Bet: ${bet_amount:.2f} on {pred}"
     except Exception as e:
         logging.error(f"calculate_bet_amount error: {str(e)}\n{traceback.format_exc()}")
@@ -646,7 +637,7 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
 
 def place_result(result: str):
     """Process a game result with error handling."""
-    logging.debug(f"Entering place_result with result={result}")
+    logging.debug("Entering place_result")
     try:
         if st.session_state.target_hit:
             reset_session()
@@ -698,7 +689,16 @@ def place_result(result: str):
                 logging.debug(f"Win recorded: Total wins={st.session_state.wins}, Consecutive wins={st.session_state.consecutive_wins}")
                 if st.session_state.strategy == 'T3':
                     st.session_state.t3_results.append('W')
-                    logging.debug(f"T3: Added 'W' to t3_results, now {st.session_state.t3_results}")
+                elif st.session_state.strategy == 'Parlay16':
+                    st.session_state.parlay_wins += 1
+                    if st.session_state.parlay_wins >= 2:  # Modified: Reset after 2 consecutive wins
+                        old_step = st.session_state.parlay_step
+                        st.session_state.parlay_step = 1
+                        st.session_state.parlay_wins = 0
+                        if old_step != st.session_state.parlay_step:
+                            st.session_state.parlay_step_changes += 1
+                        st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, old_step)
+                    # No step increment here; handled after loss or non-consecutive win
                 elif st.session_state.strategy == 'Z1003.1':
                     _, conf, _ = predict_next()
                     if conf > 50.0 and st.session_state.pattern_volatility < 0.4:
@@ -730,44 +730,13 @@ def place_result(result: str):
                 for pattern in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
                     if pattern in st.session_state.insights:
                         st.session_state.pattern_attempts[pattern] += 1
-                if st.session_state.strategy == 'T3':
-                    st.session_state.t3_results.append('L')
-                    logging.debug(f"T3: Added 'L' to t3_results, now {st.session_state.t3_results}")
-                elif st.session_state.strategy == 'Z1003.1':
-                    st.session_state.z1003_loss_count += 1
-                    old_factor = st.session_state.z1003_bet_factor
-                    if st.session_state.z1003_loss_count >= 3:
-                        st.session_state.z1003_bet_factor = 1.0
-                        st.session_state.z1003_continue = False
-                    else:
-                        st.session_state.z1003_bet_factor = min(st.session_state.z1003_bet_factor + 0.1, 2.0)
-                    if old_factor != st.session_state.z1003_bet_factor:
-                        st.session_state.z1003_level_changes += 1
-                        logging.debug(f"Z1003.1: Bet factor changed from {old_factor} to {st.session_state.z1003_bet_factor}, total changes={st.session_state.z1003_level_changes}")
-
-            # Parlay16 Logic
-            if st.session_state.strategy == 'Parlay16' and bet_placed:
-                old_step = st.session_state.parlay_step
-                old_wins = st.session_state.parlay_wins
-                if win:
-                    st.session_state.parlay_wins += 1
-                    logging.debug(f"Parlay16: Win recorded, parlay_wins={st.session_state.parlay_wins}")
-                    if st.session_state.parlay_wins >= 2:
-                        st.session_state.parlay_step = 1
-                        st.session_state.parlay_wins = 0
-                        logging.debug(f"Parlay16: 2 consecutive wins, reset step to {st.session_state.parlay_step}, wins to 0")
-                    else:
-                        st.session_state.parlay_step = min(st.session_state.parlay_step + 1, len(PARLAY_TABLE))
-                        logging.debug(f"Parlay16: Single win, step increased to {st.session_state.parlay_step}")
-                else:
+                if st.session_state.strategy == 'Parlay16':  # Modified: Increment step after loss
+                    old_step = st.session_state.parlay_step
                     st.session_state.parlay_step = min(st.session_state.parlay_step + 1, len(PARLAY_TABLE))
-                    st.session_state.parlay_wins = 0
-                    logging.debug(f"Parlay16: Loss, step increased to {st.session_state.parlay_step}, wins reset to 0")
-                if old_step != st.session_state.parlay_step:
-                    st.session_state.parlay_step_changes += 1
-                    logging.debug(f"Parlay16: Step changed from {old_step} to {st.session_state.parlay_step}, total changes={st.session_state.parlay_step_changes}")
-                st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
-
+                    st.session_state.parlay_wins = 0  # Reset consecutive wins
+                    if old_step != st.session_state.parlay_step:
+                        st.session_state.parlay_step_changes += 1
+                    st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
             st.session_state.prediction_accuracy['total'] += 1
             st.session_state.pending_bet = None
 
@@ -794,9 +763,6 @@ def place_result(result: str):
             st.session_state.target_hit = True
             return
 
-        if st.session_state.strategy == 'T3':
-            update_t3_level()
-
         pred, conf, insights = predict_next()
         if st.session_state.strategy == 'Z1003.1' and st.session_state.z1003_loss_count >= 3 and not st.session_state.z1003_continue:
             bet_amount, advice = None, "No bet: Stopped after three losses (Z1003.1 rule)"
@@ -806,12 +772,22 @@ def place_result(result: str):
         st.session_state.advice = advice
         st.session_state.insights = insights
 
+        if st.session_state.strategy == 'T3':
+            update_t3_level()
+        elif st.session_state.strategy == 'Parlay16' and bet_placed and win and st.session_state.parlay_wins < 2:
+            # Modified: Increment step after a non-consecutive win
+            old_step = st.session_state.parlay_step
+            st.session_state.parlay_step = min(st.session_state.parlay_step + 1, len(PARLAY_TABLE))
+            if old_step != st.session_state.parlay_step:
+                st.session_state.parlay_step_changes += 1
+            st.session_state.parlay_peak_step = max(st.session_state.parlay_peak_step, st.session_state.parlay_step)
+
         if st.session_state.wins < 0 or st.session_state.losses < 0:
             logging.error(f"Invalid win/loss counts: wins={st.session_state.wins}, losses={st.session_state.losses}")
             st.session_state.wins = max(0, st.session_state.wins)
             st.session_state.losses = max(0, st.session_state.losses)
 
-        logging.debug(f"place_result completed: bankroll={st.session_state.bankroll}, pending_bet={st.session_state.pending_bet}, advice={st.session_state.advice}")
+        logging.debug("place_result completed")
     except Exception as e:
         logging.error(f"place_result error: {str(e)}\n{traceback.format_exc()}")
         st.error("Error processing result. Try resetting the session.")
@@ -969,7 +945,7 @@ def render_result_input():
             display: flex; align-items: center; justify-content: center;
         }
         div.stButton > button:hover { transform: scale(1.08); box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3); }
-        div.stButton > button:active { transform: scale(0.95); }
+        div.stButton > button:active { transform: scale(0.95); box-shadow: none; }
         div.stButton > button[kind="player_btn"] { background: linear-gradient(to bottom, #007bff, #0056b3); border-color: #0056b3; color: white; }
         div.stButton > button[kind="player_btn"]:hover { background: linear-gradient(to bottom, #339cff, #007bff); }
         div.stButton > button[kind="banker_btn"] { background: linear-gradient(to bottom, #dc3545, #a71d2a); border-color: #a71d2a; color: white; }
@@ -1092,6 +1068,7 @@ def render_insights():
     logging.debug("Entering render_insights")
     try:
         st.subheader("Prediction Insights")
+        
         if not st.session_state.insights:
             st.info("No insights available yet. Enter more results to analyze patterns.")
             return
