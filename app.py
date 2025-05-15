@@ -80,7 +80,7 @@ h2, h3 {
 button[kind="player_btn"] { background: linear-gradient(135deg, #3b82f6, #2563eb); }
 button[kind="banker_btn"] { background: linear-gradient(135deg, #ef4444, #dc2626); }
 button[kind="tie_btn"] { background: linear-gradient(135deg, #10b981, #059669); }
-button[kind="undo_btn"] { background: linear-gradient(135deg, #6b7280, #4b5563); }
+button[kind="undo_btn"] { background: linear-gradient(135deg, #6b728  #6b7280, #4b5563); }
 
 /* Form Inputs */
 .stNumberInput, .stSelectbox, .stRadio, .stCheckbox {
@@ -304,7 +304,7 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
     volatility = pattern_changes / max(len(filtered_sequence) - 2, 1)
     total_outcomes = max(player_count + banker_count, 1)
     shoe_bias = player_count / total_outcomes if player_count > banker_count else -banker_count / total_outcomes
-    return (bigram_transitions, trigram_transitions, fourgram_trans    fourgram_transitions, pattern_transitions,
+    return (bigram_transitions, trigram_transitions, fourgram_transitions, pattern_transitions,
             streak_count, chop_count, double_count, volatility, shoe_bias)
 
 def calculate_weights(streak_count: int, chop_count: int, double_count: int, shoe_bias: float) -> Dict[str, float]:
@@ -326,7 +326,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
     weights = {k: np.exp(v) / (1 + np.exp(v)) for k, v in success_ratios.items()}
     
     if shoe_bias > 0.1:
-        weights['bigram'] *= 1. ascend
+        weights['bigram'] *= 1.1
         weights['trigram'] *= 1.1
         weights['fourgram'] *= 1.15
     elif shoe_bias < -0.1:
@@ -342,7 +342,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
 
 def predict_next() -> Tuple[Optional[str], float, Dict]:
     """Predict the next outcome with enhanced four-grams and neutral tie handling."""
-    sequence = [x for x in st.session_state.sequence if x in ['P', 'B', 'T']]
+    sequence = [x for x in st.session_state.sequence if x in | ['P', 'B', 'T']]
     if len(sequence) < 4:
         return 'B', 45.86, {}
 
