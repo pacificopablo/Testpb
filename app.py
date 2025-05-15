@@ -373,7 +373,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
     if total_w == 0:
         weights = {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
         total_w = sum(weights.values())
-    return {k: max(w / total_w, 0.05) for k, w in weights.items()}
+    return {k: max(w / total_w, 0.05) for k, v in weights.items()}
 
 def predict_next() -> Tuple[Optional[str], float, Dict]:
     """Predict the next outcome with enhanced four-grams and neutral tie handling."""
@@ -776,86 +776,85 @@ def simulate_shoe(num_hands: int = 80) -> Dict:
 def render_setup_form():
     """Render the setup form for session configuration."""
     with st.container():
-        st.markdown('<div class="card"><h2>Setup Session</h2>', unsafe_allow_html=True)
-        with st.form("setup_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                bankroll = st.number_input("Bankroll ($)", min_value=0.0, value=st.session_state.bankroll, step=10.0)
-                base_bet = st.number_input("Base Bet ($)", min_value=0.10, value=max(st.session_state.base_bet, 0.10), step=0.10)
-            with col2:
-                betting_strategy = st.selectbox(
-                    "Betting Strategy", STRATEGIES,
-                    index=STRATEGIES.index(st.session_state.strategy),
-                    help="T3: Adjusts bet size based on wins/losses. Flatbet: Fixed bet size. Parlay16: 16-step progression. Z1003.1: Resets after first win, stops after three losses."
+        with st.expander("Setup Session", expanded=True):
+            with st.form("setup_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    bankroll = st.number_input("Bankroll ($)", min_value=0.0, value=st.session_state.bankroll, step=10.0)
+                    base_bet = st.number_input("Base Bet ($)", min_value=0.10, value=max(st.session_state.base_bet, 0.10), step=0.10)
+                with col2:
+                    betting_strategy = st.selectbox(
+                        "Betting Strategy", STRATEGIES,
+                        index=STRATEGIES.index(st.session_state.strategy),
+                        help="T3: Adjusts bet size based on wins/losses. Flatbet: Fixed bet size. Parlay16: 16-step progression. Z1003.1: Resets after first win, stops after three losses."
+                    )
+                    target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
+                target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
+                
+                safety_net_enabled = st.checkbox(
+                    "Enable Safety Net",
+                    value=st.session_state.safety_net_enabled,
+                    help="Ensures a percentage of the initial bankroll is preserved after each bet."
                 )
-                target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
-            target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
-            
-            safety_net_enabled = st.checkbox(
-                "Enable Safety Net",
-                value=st.session_state.safety_net_enabled,
-                help="Ensures a percentage of the initial bankroll is preserved after each bet."
-            )
-            
-            safety_net_percentage = st.session_state.safety_net_percentage
-            if safety_net_enabled:
-                safety_net_percentage = st.number_input(
-                    "Safety Net Percentage (%)",
-                    min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
-                    help="Percentage of initial bankroll to keep as a safety net."
-                )
-            
-            if st.form_submit_button("Start Session"):
-                if bankroll <= 0:
-                    st.error("Bankroll must be positive.")
-                elif base_bet < 0.10:
-                    st.error("Base bet must be at least $0.10.")
-                elif base_bet > bankroll:
-                    st.error("Base bet cannot exceed bankroll.")
-                else:
-                    st.session_state.update({
-                        'bankroll': bankroll,
-                        'base_bet': base_bet,
-                        'initial_base_bet': base_bet,
-                        'strategy': betting_strategy,
-                        'sequence': [],
-                        'pending_bet': None,
-                        't3_level': 1,
-                        't3_results': [],
-                        't3_level_changes': 0,
-                        't3_peak_level': 1,
-                        'parlay_step': 1,
-                        'parlay_wins': 0,
-                        'parlay_using_base': True,
-                        'parlay_step_changes': 0,
-                        'parlay_peak_step': 1,
-                        'z1003_loss_count': 0,
-                        'z1003_bet_factor': 1.0,
-                        'z1003_continue': False,
-                        'z1003_level_changes': 0,
-                        'advice': "",
-                        'history': [],
-                        'wins': 0,
-                        'losses': 0,
-                        'target_mode': target_mode,
-                        'target_value': target_value,
-                        'initial_bankroll': bankroll,
-                        'target_hit': False,
-                        'prediction_accuracy': {'P': 0, 'B': 0, 'total': 0},
-                        'consecutive_losses': 0,
-                        'loss_log': [],
-                        'last_was_tie': False,
-                        'insights': {},
-                        'pattern_volatility': 0.0,
-                        'pattern_success': defaultdict(int),
-                        'pattern_attempts': defaultdict(int),
-                        'safety_net_percentage': safety_net_percentage,
-                        'safety_net_enabled': safety_net_enabled
-                    })
-                    st.session_state.pattern_success['fourgram'] = 0
-                    st.session_state.pattern_attempts['fourgram'] = 0
-                    st.success(f"Session started with {betting_strategy} strategy!")
-        st.markdown('</div>', unsafe_allow_html=True)
+                
+                safety_net_percentage = st.session_state.safety_net_percentage
+                if safety_net_enabled:
+                    safety_net_percentage = st.number_input(
+                        "Safety Net Percentage (%)",
+                        min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
+                        help="Percentage of initial bankroll to keep as a safety net."
+                    )
+                
+                if st.form_submit_button("Start Session"):
+                    if bankroll <= 0:
+                        st.error("Bankroll must be positive.")
+                    elif base_bet < 0.10:
+                        st.error("Base bet must be at least $0.10.")
+                    elif base_bet > bankroll:
+                        st.error("Base bet cannot exceed bankroll.")
+                    else:
+                        st.session_state.update({
+                            'bankroll': bankroll,
+                            'base_bet': base_bet,
+                            'initial_base_bet': base_bet,
+                            'strategy': betting_strategy,
+                            'sequence': [],
+                            'pending_bet': None,
+                            't3_level': 1,
+                            't3_results': [],
+                            't3_level_changes': 0,
+                            't3_peak_level': 1,
+                            'parlay_step': 1,
+                            'parlay_wins': 0,
+                            'parlay_using_base': True,
+                            'parlay_step_changes': 0,
+                            'parlay_peak_step': 1,
+                            'z1003_loss_count': 0,
+                            'z1003_bet_factor': 1.0,
+                            'z1003_continue': False,
+                            'z1003_level_changes': 0,
+                            'advice': "",
+                            'history': [],
+                            'wins': 0,
+                            'losses': 0,
+                            'target_mode': target_mode,
+                            'target_value': target_value,
+                            'initial_bankroll': bankroll,
+                            'target_hit': False,
+                            'prediction_accuracy': {'P': 0, 'B': 0, 'total': 0},
+                            'consecutive_losses': 0,
+                            'loss_log': [],
+                            'last_was_tie': False,
+                            'insights': {},
+                            'pattern_volatility': 0.0,
+                            'pattern_success': defaultdict(int),
+                            'pattern_attempts': defaultdict(int),
+                            'safety_net_percentage': safety_net_percentage,
+                            'safety_net_enabled': safety_net_enabled
+                        })
+                        st.session_state.pattern_success['fourgram'] = 0
+                        st.session_state.pattern_attempts['fourgram'] = 0
+                        st.success(f"Session started with {betting_strategy} strategy!")
 
 def render_result_input():
     """Render the result input buttons."""
