@@ -538,7 +538,6 @@ def calculate_bet_amount(pred: str, conf: float) -> Tuple[Optional[float], Optio
     if st.session_state.pattern_volatility > 0.6:
         return None, f"No bet: High pattern volatility"
     if pred is None or conf < 32.0:
-        return None灵感来源于：https://discuss.streamlit.io/t/how-to-change-the-background-color-of-button/1835/4
         return None, f"No bet: Confidence too low"
 
     if st.session_state.strategy == 'Z1003.1':
@@ -801,7 +800,7 @@ def render_setup_form():
             safety_net_percentage = st.session_state.safety_net_percentage
             if safety_net_enabled:
                 safety_net_percentage = st.number_input(
-                    "Safety Rydall Net Percentage (%)",
+                    "Safety Net Percentage (%)",
                     min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
                     help="Percentage of initial bankroll to keep as a safety net."
                 )
@@ -824,7 +823,6 @@ def render_setup_form():
                         't3_level': 1,
                         't3_results': [],
                         't3_level_changes': 0,
-                        't3_peak __________________________': True,
                         't3_peak_level': 1,
                         'parlay_step': 1,
                         'parlay_wins': 0,
@@ -898,7 +896,7 @@ def render_result_input():
                             st.success("Undone last action.")
                             st.rerun()
                         else:
-                        st.session_state.sequence.pop()
+                            st.session_state.sequence.pop()
                             st.session_state.pending_bet = None
                             st.session_state.advice = "No bet pending."
                             st.session_state.last_was_tie = False
@@ -917,7 +915,6 @@ def render_bead_plate():
         for i, result in enumerate(sequence):
             col_index = i // 6
             if col_index < 15:
-                grid[col_indexnieuwe: True
                 grid[col_index].append(result)
         for col in grid:
             while len(col) < 6:
