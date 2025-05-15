@@ -81,10 +81,10 @@ h2, h3 {
 
 /* Custom Button Styles */
 button[kind="player_btn"] { 
-    background: #3b82f6; 
+    background: #1E90FF; 
 }
 button[kind="player_btn"]:hover { 
-    background: #60a5fa; 
+    background: #4B9FFF; 
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
@@ -92,10 +92,10 @@ button[kind="player_btn"]:active {
     transform: translateY(0);
 }
 button[kind="banker_btn"] { 
-    background: #ef4444; 
+    background: #DC143C; 
 }
 button[kind="banker_btn"]:hover { 
-    background: #f87171; 
+    background: #FF4040; 
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
@@ -103,10 +103,10 @@ button[kind="banker_btn"]:active {
     transform: translateY(0);
 }
 button[kind="tie_btn"] { 
-    background: #10b981; 
+    background: #32CD32; 
 }
 button[kind="tie_btn"]:hover { 
-    background: #34d399; 
+    background: #49E249; 
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
@@ -926,7 +926,7 @@ def render_bead_plate():
             for result in col:
                 style = (
                     "width: 24px; height: 24px; border: 1px solid #e5e7eb; border-radius: 50%; background: #f9fafb;" if result == '' else
-                    f"width: 24px; height: 24px; background-color: {'#3b82f6' if result == 'P' else '#ef4444' if result == 'B' else '#10b981'}; border-radius: 50%;"
+                    f"width: 24px; height: 24px; background-color: {'#1E90FF' if result == 'P' else '#DC143C' if result == 'B' else '#32CD32'}; border-radius: 50%;"
                 )
                 col_html += f"<div style='{style}'></div>"
             col_html += "</div>"
@@ -941,7 +941,7 @@ def render_prediction():
         st.markdown('<div class="card"><h2>Prediction</h2>', unsafe_allow_html=True)
         if st.session_state.pending_bet:
             amount, side = st.session_state.pending_bet
-            color = '#3b82f6' if side == 'P' else '#ef4444'
+            color = '#1E90FF' if side == 'P' else '#DC143C'
             st.markdown(f"<h4 style='color:{color}; margin: 0;'>Bet: ${amount:.2f} on {side}</h4>", unsafe_allow_html=True)
         elif not st.session_state.target_hit:
             st.info(st.session_state.advice)
@@ -1103,4 +1103,4 @@ def main():
         render_simulation()
 
 if __name__ == "__main__":
-    main()
+    main()A
