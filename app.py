@@ -101,7 +101,7 @@ h3 {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Specific Button Colors */
+/* Specific Button Colors with Gradients */
 button[kind="player_btn"] {
     background: linear-gradient(135deg, #2563eb, #1e3a8a);
 }
