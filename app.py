@@ -7,9 +7,6 @@ import numpy as np
 from typing import Tuple, Dict, Optional, List
 import uuid
 
-# --- Set Page Config (Must be the first Streamlit command) ---
-st.set_page_config(layout="wide", page_title="MANG BACCARAT GROUP")
-
 # --- Constants ---
 SESSION_FILE = "online_users.txt"
 SIMULATION_LOG = "simulation_log.txt"
@@ -25,178 +22,100 @@ HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
 
-# --- Custom CSS for Elegant Design ---
+# --- Custom CSS for Modern Design ---
 st.markdown("""
 <style>
 /* General Styling */
 body {
-    font-family: 'Roboto', sans-serif;
-    background-color: #f8fafc;
-    color: #1e293b;
+    font-family: 'Inter', sans-serif;
+    background-color: #f5f7fa;
 }
 .stApp {
-    max-width: 1280px;
+    max-width: 1200px;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 20px;
 }
 
 /* Card Styling */
 .card {
-    background: #ffffff;
-    border-radius: 16px;
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-.card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-bottom: 20px;
 }
 
 /* Headers */
 h1 {
-    color: #1e40af;
+    color: #1a3c6e;
     font-weight: 700;
     text-align: center;
-    margin-bottom: 2rem;
-    font-size: 2.5rem;
-    letter-spacing: 0.5px;
+    margin-bottom: 30px;
 }
-h2 {
-    color: #1e293b;
+h2, h3 {
+    color: #2c5282;
     font-weight: 600;
-    font-size: 1.75rem;
-    margin-bottom: 1rem;
-}
-h3 {
-    color: #475569;
-    font-weight: 500;
-    font-size: 1.25rem;
 }
 
 /* Buttons */
 .stButton > button {
-    display: block;
-    color: #ffffff;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
     border: none;
-    border-radius: 6px;
-    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    padding: 10px 20px;
     font-weight: 500;
-    font-size: 0.95rem;
-    min-width: 100px;
-    width: 100%;
-    text-align: center;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin: 0.2rem 0;
+    transition: all 0.3s ease;
 }
 .stButton > button:hover {
-    transform: scale(1.05);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    filter: brightness(1.05);
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 .stButton > button:active {
-    transform: scale(1);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transform: translateY(0);
 }
 
-/* Specific Button Colors with Gradients */
-button[kind="player_btn"] {
-    background: linear-gradient(135deg, #2563eb, #1e3a8a);
-}
-button[kind="banker_btn"] {
-    background: linear-gradient(135deg, #dc2626, #991b1b);
-}
-button[kind="tie_btn"] {
-    background: linear-gradient(135deg, #059669, #064e3b);
-}
-button[kind="undo_btn"] {
-    background: linear-gradient(135deg, #6b7280, #374151);
-}
-
-/* Ensure Columns are Visible */
-.st-emotion-cache-1r4s1t7 {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 0.5rem;
-    justify-content: center;
-    width: 100%;
-}
+/* Custom Button Styles */
+button[kind="player_btn"] { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+button[kind="banker_btn"] { background: linear-gradient(135deg, #ef4444, #dc2626); }
+button[kind="tie_btn"] { background: linear-gradient(135deg, #10b981, #059669); }
+button[kind="undo_btn"] { background: linear-gradient(135deg, #6b7280, #4b5563); }
 
 /* Form Inputs */
 .stNumberInput, .stSelectbox, .stRadio, .stCheckbox {
-    background: #f1f5f9;
+    background: #f9fafb;
     border-radius: 8px;
-    padding: 0.5rem;
-    border: 1px solid #e2e8f0;
-}
-.stNumberInput > div > div > input,
-.stSelectbox > div > div > select {
-    border: none;
-    background: transparent;
+    padding: 10px;
 }
 
 /* Expander */
 .stExpander {
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    background: #ffffff;
-    padding: 0.5rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
 }
 
 /* Bead Plate */
 .bead-plate {
-    background: #ffffff;
-    padding: 1rem;
-    border-radius: 12px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
-}
-
-/* Dataframe and Tables */
-.stDataFrame {
+    background: white;
+    padding: 15px;
     border-radius: 8px;
-    overflow: hidden;
-}
-.stDataFrame table {
-    background: #ffffff;
-    border-collapse: collapse;
-}
-.stDataFrame th {
-    background: #f1f5f9;
-    color: #1e293b;
-    font-weight: 600;
-}
-.stDataFrame td {
-    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
     .stApp {
-        padding: 1rem;
+        padding: 10px;
     }
     .stButton > button {
-        min-width: 80px;
-        padding: 0.5rem 1rem;
-        font-size: 0.9rem;
+        width: 100%;
+        margin-bottom: 10px;
     }
-    .st-emotion-cache-1r4s1t7 {
+    .stColumns {
         flex-direction: column;
-        gap: 0.3rem;
-        align-items: stretch;
     }
-    h1 {
-        font-size: 2rem;
-    }
-    h2 {
-        font-size: 1.5rem;
-    }
-}
-
-/* Smooth Scroll */
-html {
-    scroll-behavior: smooth;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -385,7 +304,7 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
     volatility = pattern_changes / max(len(filtered_sequence) - 2, 1)
     total_outcomes = max(player_count + banker_count, 1)
     shoe_bias = player_count / total_outcomes if player_count > banker_count else -banker_count / total_outcomes
-    return (bigram_transitions, trigram_transitions, fourgram_transitions, pattern_transitions,
+    return (bigram_transitions, trigram_transitions, fourgram_trans    fourgram_transitions, pattern_transitions,
             streak_count, chop_count, double_count, volatility, shoe_bias)
 
 def calculate_weights(streak_count: int, chop_count: int, double_count: int, shoe_bias: float) -> Dict[str, float]:
@@ -407,7 +326,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
     weights = {k: np.exp(v) / (1 + np.exp(v)) for k, v in success_ratios.items()}
     
     if shoe_bias > 0.1:
-        weights['bigram'] *= 1.1
+        weights['bigram'] *= 1. ascend
         weights['trigram'] *= 1.1
         weights['fourgram'] *= 1.15
     elif shoe_bias < -0.1:
@@ -907,17 +826,17 @@ def render_result_input():
     """Render the result input buttons."""
     with st.container():
         st.markdown('<div class="card"><h2>Enter Result</h2>', unsafe_allow_html=True)
-        cols = st.columns(4)
-        with cols[0]:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
             if st.button("Player", key="player_btn"):
                 place_result("P")
-        with cols[1]:
+        with col2:
             if st.button("Banker", key="banker_btn"):
                 place_result("B")
-        with cols[2]:
+        with col3:
             if st.button("Tie", key="tie_btn"):
                 place_result("T")
-        with cols[3]:
+        with col4:
             if st.button("Undo Last", key="undo_btn"):
                 if not st.session_state.sequence:
                     st.warning("No results to undo.")
@@ -971,8 +890,8 @@ def render_bead_plate():
             col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
             for result in col:
                 style = (
-                    "width: 24px; height: 24px; border: 1px solid #e2e8f0; border-radius: 50%; background: #f1f5f9;" if result == '' else
-                    f"width: 24px; height: 24px; background-color: {'#2563eb' if result == 'P' else '#dc2626' if result == 'B' else '#059669'}; border-radius: 50%;"
+                    "width: 24px; height: 24px; border: 1px solid #e5e7eb; border-radius: 50%; background: #f9fafb;" if result == '' else
+                    f"width: 24px; height: 24px; background-color: {'#3b82f6' if result == 'P' else '#ef4444' if result == 'B' else '#10b981'}; border-radius: 50%;"
                 )
                 col_html += f"<div style='{style}'></div>"
             col_html += "</div>"
@@ -987,7 +906,7 @@ def render_prediction():
         st.markdown('<div class="card"><h2>Prediction</h2>', unsafe_allow_html=True)
         if st.session_state.pending_bet:
             amount, side = st.session_state.pending_bet
-            color = '#2563eb' if side == 'P' else '#dc2626'
+            color = '#3b82f6' if side == 'P' else '#ef4444'
             st.markdown(f"<h4 style='color:{color}; margin: 0;'>Bet: ${amount:.2f} on {side}</h4>", unsafe_allow_html=True)
         elif not st.session_state.target_hit:
             st.info(st.session_state.advice)
@@ -1127,6 +1046,7 @@ def render_simulation():
 # --- Main Application ---
 def main():
     """Main application function."""
+    st.set_page_config(layout="wide", page_title="MANG BACCARAT GROUP")
     st.title("MANG BACCARAT GROUP")
     initialize_session_state()
 
