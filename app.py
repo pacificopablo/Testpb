@@ -24,6 +24,7 @@ SEQUENCE_LIMIT = 100
 HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
+EPSILON = 1e-10  # Small value to prevent division-by-zero
 
 # --- Custom CSS for Modern Design ---
 st.markdown("""
@@ -370,10 +371,19 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         weights['fourgram'] *= 0.85
 
     total_w = sum(weights.values())
-    if total_w == 0:
+    if abs(total_w) < EPSILON:  # Check for zero or near-zero total weight
         weights = {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
         total_w = sum(weights.values())
-    return {k: max(w / total_w, 0.05) for k, v in weights.items()}
+    
+    # Ensure total_w is never zero by adding a small epsilon
+    total_w = max(total_w, EPSILON)
+    normalized_weights = {k: max(w / total_w, 0.05) for k, v in weights.items()}
+    
+    # Debug logging to diagnose issues
+    if abs(total_w) < 1e-5:
+        st.warning(f"Low total weight detected: {total_w}. Success ratios: {success_ratios}, Weights: {weights}")
+    
+    return normalized_weights
 
 def predict_next() -> Tuple[Optional[str], float, Dict]:
     """Predict the next outcome with enhanced four-grams and neutral tie handling."""
