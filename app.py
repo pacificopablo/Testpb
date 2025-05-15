@@ -253,6 +253,18 @@ def initialize_session_state():
         st.session_state.pattern_success[key] = 0
         st.session_state.pattern_attempts[key] = 0
 
+    # Validate session state
+    if not isinstance(st.session_state.pattern_success, defaultdict):
+        st.session_state.pattern_success = defaultdict(int)
+        for key in pattern_keys:
+            st.session_state.pattern_success[key] = 0
+        st.warning("Re-initialized invalid pattern_success")
+    if not isinstance(st.session_state.pattern_attempts, defaultdict):
+        st.session_state.pattern_attempts = defaultdict(int)
+        for key in pattern_keys:
+            st.session_state.pattern_attempts[key] = 0
+        st.warning("Re-initialized invalid pattern_attempts")
+
     if st.session_state.strategy not in STRATEGIES:
         st.session_state.strategy = 'T3'
 
@@ -364,8 +376,9 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
 
 def calculate_weights(streak_count: int, chop_count: int, double_count: int, shoe_bias: float) -> Dict[str, float]:
     """Calculate adaptive weights, emphasizing four-grams when reliable."""
-    # Validate pattern_attempts and pattern_success
     pattern_keys = ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']
+    
+    # Validate pattern_attempts and pattern_success
     for key in pattern_keys:
         if key not in st.session_state.pattern_attempts or not isinstance(st.session_state.pattern_attempts[key], (int, float)) or st.session_state.pattern_attempts[key] < 0:
             st.session_state.pattern_attempts[key] = 0
@@ -375,9 +388,22 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
             st.warning(f"Invalid pattern_success[{key}]: Reset to 0")
 
     total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
-    if total_bets <= 0:
+    if total_bets <= 0 or not np.isfinite(total_bets):
         total_bets = 1
         st.warning(f"Invalid total_bets: {total_bets}. Reset to 1. Pattern_attempts: {dict(st.session_state.pattern_attempts)}")
+
+    # Check if pattern_attempts is effectively empty
+    attempts_empty = all(st.session_state.pattern_attempts[key] == 0 for key in ['bigram', 'trigram', 'fourgram'])
+    if attempts_empty:
+        st.warning(f"No pattern attempts recorded. Using default weights. Pattern_attempts: {dict(st.session_state.pattern_attempts)}")
+        return {
+            'bigram': 0.30,
+            'trigram': 0.25,
+            'fourgram': 0.25,
+            'streak': 0.15,
+            'chop': 0.05,
+            'double': 0.05
+        }
 
     success_ratios = {
         'bigram': st.session_state.pattern_success.get('bigram', 0) / total_bets
@@ -391,14 +417,14 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         'double': 0.4 if double_count >= 1 else 0.2
     }
 
-    # Cap success_ratios and check for invalid values
+    # Validate and cap success_ratios
     for key in success_ratios:
         if not np.isfinite(success_ratios[key]) or success_ratios[key] < 0 or success_ratios[key] > 1:
             success_ratios[key] = 0.5
             st.warning(f"Invalid success_ratio[{key}]: {success_ratios[key]}. Reset to 0.5")
 
-    # Reset to defaults if all n-gram ratios are invalid
-    if all(success_ratios[key] == 0.5 for key in ['bigram', 'trigram', 'fourgram']):
+    # Reset to defaults if all n-gram ratios are invalid and no attempts
+    if all(success_ratios[key] == 0.5 for key in ['bigram', 'trigram', 'fourgram']) and attempts_empty:
         success_ratios = {
             'bigram': 0.5,
             'trigram': 0.5,
@@ -407,7 +433,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
             'chop': 0.4 if chop_count >= 2 else 0.2,
             'double': 0.4 if double_count >= 1 else 0.2
         }
-        st.warning(f"All n-gram success ratios invalid. Reset to defaults: {success_ratios}")
+        st.warning(f"All n-gram success ratios invalid and no attempts. Reset to defaults: {success_ratios}")
 
     if success_ratios['fourgram'] > 0.6:
         success_ratios['fourgram'] = min(success_ratios['fourgram'] * 1.2, 1.0)
@@ -425,7 +451,14 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
 
     total_w = sum(weights.values())
     if abs(total_w) < EPSILON:
-        weights = {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
+        weights = {
+            'bigram': 0.30,
+            'trigram': 0.25,
+            'fourgram': 0.25,
+            'streak': 0.15,
+            'chop': 0.05,
+            'double': 0.05
+        }
         total_w = sum(weights.values())
         st.warning(f"Total weight near zero: {total_w}. Reset weights: {weights}. Pattern_attempts: {dict(st.session_state.pattern_attempts)}, Pattern_success: {dict(st.session_state.pattern_success)}, Success_ratios: {success_ratios}")
     
@@ -439,7 +472,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
 
 def predict_next() -> Tuple[Optional[str], float, Dict]:
     """Predict the next outcome with enhanced four-grams and neutral tie handling."""
-    # Debug: Validate session state
+    # Validate session state
     sequence = st.session_state.get('sequence', [])
     if not isinstance(sequence, list):
         st.error(f"Invalid sequence type: {type(sequence)}. Resetting to empty list.")
@@ -461,9 +494,14 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
         for key in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
             st.session_state.pattern_attempts[key] = 0
 
+    # Check if pattern_attempts is uninitialized
+    if all(st.session_state.pattern_attempts[key] == 0 for key in ['bigram', 'trigram', 'fourgram']):
+        st.warning(f"No pattern attempts recorded. Returning default prediction. Pattern_attempts: {dict(st.session_state.pattern_attempts)}")
+        return 'B', 45.86, {'Status': 'Default prediction due to uninitialized pattern data'}
+
     sequence = [x for x in sequence if x in ['P', 'B', 'T']]
     if len(sequence) < 4:
-        return 'B', 45.86, {}
+        return 'B', 45.86, {'Status': 'Insufficient sequence length (<4)'}
 
     recent_sequence = sequence[-WINDOW_SIZE:]
     (bigram_transitions, trigram_transitions, fourgram_transitions, pattern_transitions,
@@ -551,7 +589,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
     if shoe_bias > 0.1:
         prob_p *= 1.05
         prob_b *= 0.95
-    elif shoe_bias < -0.1:
+ jimelif shoe_bias < -0.1:
         prob_b *= 1.05
         prob_p *= 0.95
 
@@ -673,6 +711,18 @@ def place_result(result: str):
     if st.session_state.target_hit:
         reset_session()
         return
+
+    # Validate session state before processing
+    if not isinstance(st.session_state.pattern_success, defaultdict):
+        st.session_state.pattern_success = defaultdict(int)
+        for key in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
+            st.session_state.pattern_success[key] = 0
+        st.warning("Re-initialized invalid pattern_success in place_result")
+    if not isinstance(st.session_state.pattern_attempts, defaultdict):
+        st.session_state.pattern_attempts = defaultdict(int)
+        for key in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
+            st.session_state.pattern_attempts[key] = 0
+        st.warning("Re-initialized invalid pattern_attempts in place_result")
 
     st.session_state.last_was_tie = (result == 'T')
     bet_amount = 0
@@ -947,6 +997,18 @@ def render_result_input():
     """Render the result input buttons."""
     with st.container():
         with st.expander("Enter Result", expanded=True):
+            # Validate session state before rendering buttons
+            if not isinstance(st.session_state.pattern_success, defaultdict):
+                st.session_state.pattern_success = defaultdict(int)
+                for key in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
+                    st.session_state.pattern_success[key] = 0
+                st.warning("Re-initialized invalid pattern_success in render_result_input")
+            if not isinstance(st.session_state.pattern_attempts, defaultdict):
+                st.session_state.pattern_attempts = defaultdict(int)
+                for key in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
+                    st.session_state.pattern_attempts[key] = 0
+                st.warning("Re-initialized invalid pattern_attempts in render_result_input")
+
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 if st.button("Player", key="player_btn"):
