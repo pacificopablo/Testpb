@@ -395,7 +395,6 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
     # Check if pattern_attempts is effectively empty
     attempts_empty = all(st.session_state.pattern_attempts[key] == 0 for key in ['bigram', 'trigram', 'fourgram'])
     if attempts_empty:
-        st.warning(f"No pattern attempts recorded. Using default weights. Pattern_attempts: {dict(st.session_state.pattern_attempts)}")
         return {
             'bigram': 0.30,
             'trigram': 0.25,
@@ -435,7 +434,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         }
         st.warning(f"All n-gram success ratios invalid and no attempts. Reset to defaults: {success_ratios}")
 
-    if success_ratios['fourgram'] > 0.6:
+    if success_r ratios['fourgram'] > 0.6:
         success_ratios['fourgram'] = min(success_ratios['fourgram'] * 1.2, 1.0)
 
     weights = {k: np.exp(v) / (1 + np.exp(v)) for k, v in success_ratios.items()}
@@ -496,7 +495,6 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
 
     # Check if pattern_attempts is uninitialized
     if all(st.session_state.pattern_attempts[key] == 0 for key in ['bigram', 'trigram', 'fourgram']):
-        st.warning(f"No pattern attempts recorded. Returning default prediction. Pattern_attempts: {dict(st.session_state.pattern_attempts)}")
         return 'B', 45.86, {'Status': 'Default prediction due to uninitialized pattern data'}
 
     sequence = [x for x in sequence if x in ['P', 'B', 'T']]
