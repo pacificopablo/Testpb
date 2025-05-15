@@ -234,8 +234,12 @@ def initialize_session_state():
         'safety_net_percentage': 10.0,
         'safety_net_enabled': True
     }
-    defaults['pattern_success']['fourgram'] = 0
-    defaults['pattern_attempts']['fourgram'] = 0
+    # Explicitly initialize pattern keys
+    pattern_keys = ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']
+    for key in pattern_keys:
+        defaults['pattern_success'][key] = 0
+        defaults['pattern_attempts'][key] = 0
+
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
@@ -280,6 +284,11 @@ def reset_session():
         'safety_net_percentage': 10.0,
         'safety_net_enabled': True
     })
+    # Explicitly reset pattern keys
+    pattern_keys = ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']
+    for key in pattern_keys:
+        st.session_state.pattern_success[key] = 0
+        st.session_state.pattern_attempts[key] = 0
 
 # --- Prediction Logic ---
 def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, int, int, float, float]:
@@ -357,8 +366,15 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         'chop': 0.4 if chop_count >= 2 else 0.2,
         'double': 0.4 if double_count >= 1 else 0.2
     }
+    # Check for invalid success ratios
+    for key, value in success_ratios.items():
+        if not np.isfinite(value):
+            success_ratios[key] = 0.5
+            st.warning(f"Invalid success ratio for {key}: {value}. Reset to 0.5.")
+
     if success_ratios['fourgram'] > 0.6:
         success_ratios['fourgram'] *= 1.2
+
     weights = {k: np.exp(v) / (1 + np.exp(v)) for k, v in success_ratios.items()}
     
     if shoe_bias > 0.1:
@@ -374,20 +390,32 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
     if abs(total_w) < EPSILON:  # Check for zero or near-zero total weight
         weights = {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
         total_w = sum(weights.values())
+        st.warning(f"Total weight near zero: {total_w}. Reset weights: {weights}")
     
-    # Ensure total_w is never zero by adding a small epsilon
+    # Ensure total_w is never zero
     total_w = max(total_w, EPSILON)
     normalized_weights = {k: max(w / total_w, 0.05) for k, v in weights.items()}
     
-    # Debug logging to diagnose issues
+    # Debug logging
     if abs(total_w) < 1e-5:
-        st.warning(f"Low total weight detected: {total_w}. Success ratios: {success_ratios}, Weights: {weights}")
-    
+        st.warning(f"Low total weight: {total_w}. Success ratios: {success_ratios}, Weights: {weights}")
+
     return normalized_weights
 
 def predict_next() -> Tuple[Optional[str], float, Dict]:
     """Predict the next outcome with enhanced four-grams and neutral tie handling."""
-    sequence = [x for x in st.session_state.sequence if x in ['P', 'B', 'T']]
+    # Debug: Log sequence and session state
+    sequence = st.session_state.get('sequence', [])
+    if not isinstance(sequence, list):
+        st.error(f"Invalid sequence type: {type(sequence)}. Resetting to empty list.")
+        st.session_state.sequence = []
+        sequence = []
+    if not all(x in ['P', 'B', 'T', None] for x in sequence):
+        st.warning(f"Invalid sequence values: {sequence}. Filtering invalid entries.")
+        sequence = [x for x in sequence if x in ['P', 'B', 'T']]
+        st.session_state.sequence = sequence
+
+    sequence = [x for x in sequence if x in ['P', 'B', 'T']]
     if len(sequence) < 4:
         return 'B', 45.86, {}
 
@@ -862,8 +890,11 @@ def render_setup_form():
                             'safety_net_percentage': safety_net_percentage,
                             'safety_net_enabled': safety_net_enabled
                         })
-                        st.session_state.pattern_success['fourgram'] = 0
-                        st.session_state.pattern_attempts['fourgram'] = 0
+                        # Explicitly set pattern keys
+                        pattern_keys = ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']
+                        for key in pattern_keys:
+                            st.session_state.pattern_success[key] = 0
+                            st.session_state.pattern_attempts[key] = 0
                         st.success(f"Session started with {betting_strategy} strategy!")
 
 def render_result_input():
@@ -1082,7 +1113,7 @@ def render_simulation():
             for pattern in result['pattern_success']:
                 success = result['pattern_success'][pattern]
                 attempts = result['pattern_attempts'][pattern]
-                st.markdown(f"{pattern}: {success}/{attempts} ({success/attempts*100:.1f}%)" if attempts > 0 else f"{pattern}: 0/0 (0%)")
+                st.markdown(f"{pattern}: {success}/{attempts} ({success/attacks*100:.1f}%)" if attempts > 0 else f"{pattern}: 0/0 (0%)")
             st.markdown("Results logged to simulation_log.txt")
         st.markdown('</div>', unsafe_allow_html=True)
 
