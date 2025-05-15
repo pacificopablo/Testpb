@@ -79,35 +79,44 @@ h3 {
 .stButton > button {
     color: #ffffff;
     border: none;
-    border-radius: 8px;
-    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    padding: 0.6rem 1.2rem;
     font-weight: 500;
-    font-size: 1rem;
-    transition: all 0.3s ease;
+    font-size: 0.95rem;
+    min-width: 90px;
+    transition: all 0.2s ease;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 .stButton > button:hover {
-    transform: translateY(-2px);
+    transform: scale(1.05);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    filter: brightness(1.1);
+    filter: brightness(1.05);
 }
 .stButton > button:active {
-    transform: translateY(0);
+    transform: scale(1);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* Specific Button Colors */
 button[kind="player_btn"] {
-    background: linear-gradient(135deg, #3b82f6, #1e40af);
+    background: linear-gradient(135deg, #2563eb, #1e3a8a);
 }
 button[kind="banker_btn"] {
-    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    background: linear-gradient(135deg, #dc2626, #991b1b);
 }
 button[kind="tie_btn"] {
-    background: linear-gradient(135deg, #10b981, #047857);
+    background: linear-gradient(135deg, #059669, #064e3b);
 }
 button[kind="undo_btn"] {
-    background: linear-gradient(135deg, #6b7280, #4b5563);
+    background: linear-gradient(135deg, #6b7280, #374151);
+}
+
+/* Button Container */
+.button-container {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
 }
 
 /* Form Inputs */
@@ -163,11 +172,14 @@ button[kind="undo_btn"] {
         padding: 1rem;
     }
     .stButton > button {
-        width: 100%;
-        margin-bottom: 0.5rem;
+        min-width: 80px;
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
     }
-    .stColumns {
+    .button-container {
+        gap: 0.3rem;
         flex-direction: column;
+        align-items: stretch;
     }
     h1 {
         font-size: 2rem;
@@ -890,7 +902,8 @@ def render_result_input():
     """Render the result input buttons."""
     with st.container():
         st.markdown('<div class="card"><h2>Enter Result</h2>', unsafe_allow_html=True)
-        col1, col2, col3, col4 = st.columns(4)
+        st.markdown('<div class="button-container">', unsafe_allow_html=True)
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1], gap="small")
         with col1:
             if st.button("Player", key="player_btn"):
                 place_result("P")
@@ -934,6 +947,7 @@ def render_result_input():
                     except Exception as e:
                         st.error(f"Error undoing last action: {str(e)}")
         st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def render_bead_plate():
     """Render the current sequence as a bead plate."""
@@ -955,7 +969,7 @@ def render_bead_plate():
             for result in col:
                 style = (
                     "width: 24px; height: 24px; border: 1px solid #e2e8f0; border-radius: 50%; background: #f1f5f9;" if result == '' else
-                    f"width: 24px; height: 24px; background-color: {'#3b82f6' if result == 'P' else '#ef4444' if result == 'B' else '#10b981'}; border-radius: 50%;"
+                    f"width: 24px; height: 24px; background-color: {'#2563eb' if result == 'P' else '#dc2626' if result == 'B' else '#059669'}; border-radius: 50%;"
                 )
                 col_html += f"<div style='{style}'></div>"
             col_html += "</div>"
@@ -970,7 +984,7 @@ def render_prediction():
         st.markdown('<div class="card"><h2>Prediction</h2>', unsafe_allow_html=True)
         if st.session_state.pending_bet:
             amount, side = st.session_state.pending_bet
-            color = '#3b82f6' if side == 'P' else '#ef4444'
+            color = '#2563eb' if side == 'P' else '#dc2626'
             st.markdown(f"<h4 style='color:{color}; margin: 0;'>Bet: ${amount:.2f} on {side}</h4>", unsafe_allow_html=True)
         elif not st.session_state.target_hit:
             st.info(st.session_state.advice)
