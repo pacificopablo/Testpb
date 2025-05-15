@@ -732,7 +732,7 @@ def place_result(result: str):
 
     previous_state = {
         "bankroll": st.session_state.bankroll,
-        "t3_level": st.session_state.t3_level,
+        "t3_level 3
         "t3_results": st.session_state.t3_results.copy(),
         "parlay_step": st.session_state.parlay_step,
         "parlay_wins": st.session_state.parlay_wins,
@@ -997,18 +997,6 @@ def render_result_input():
     """Render the result input buttons."""
     with st.container():
         with st.expander("Enter Result", expanded=True):
-            # Validate session state before rendering buttons
-            if not isinstance(st.session_state.pattern_success, defaultdict):
-                st.session_state.pattern_success = defaultdict(int)
-                for key in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
-                    st.session_state.pattern_success[key] = 0
-                st.warning("Re-initialized invalid pattern_success in render_result_input")
-            if not isinstance(st.session_state.pattern_attempts, defaultdict):
-                st.session_state.pattern_attempts = defaultdict(int)
-                for key in ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']:
-                    st.session_state.pattern_attempts[key] = 0
-                st.warning("Re-initialized invalid pattern_attempts in render_result_input")
-
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 if st.button("Player", key="player_btn"):
