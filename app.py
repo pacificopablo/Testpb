@@ -80,10 +80,42 @@ h2, h3 {
 }
 
 /* Custom Button Styles */
-button[kind="player_btn"] { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-button[kind="banker_btn"] { background: linear-gradient(135deg, #ef4444, #dc2626); }
-button[kind="tie_btn"] { background: linear-gradient(135deg, #10b981, #059669); }
-button[kind="undo_btn"] { background: linear-gradient(135deg, #6b7280, #4b5563); }
+button[kind="player_btn"] { 
+    background: #3b82f6; 
+}
+button[kind="player_btn"]:hover { 
+    background: #60a5fa; 
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+button[kind="player_btn"]:active {
+    transform: translateY(0);
+}
+button[kind="banker_btn"] { 
+    background: #ef4444; 
+}
+button[kind="banker_btn"]:hover { 
+    background: #f87171; 
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+button[kind="banker_btn"]:active {
+    transform: translateY(0);
+}
+button[kind="tie_btn"] { 
+    background: #10b981; 
+}
+button[kind="tie_btn"]:hover { 
+    background: #34d399; 
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+button[kind="tie_btn"]:active {
+    transform: translateY(0);
+}
+button[kind="undo_btn"] { 
+    background: linear-gradient(135deg, #6b7280, #4b5563); 
+}
 
 /* Form Inputs */
 .stNumberInput, .stSelectbox, .stRadio, .stCheckbox {
@@ -290,6 +322,179 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
             current_streak = None
             streak_count = 0
             if i > 1 and filtered_sequence[i] != filtered_sequence[i-2]:
+                chop_count += 1
+
+        if i < len(filtered_sequence) - 1:
+            current_pattern = (
+                'streak' if streak_count >= 2 else
+                'chop' if chop_count >= 2 else
+                'double' if double_count >= 1 else 'other'
+            )
+            if last_pattern and last_pattern != current_pattern:
+                pattern_changes += 1
+            last_pattern = current_pattern
+            next_outcome = filtered_sequence[i+1]
+            pattern_transitions[current_pattern][next_outcome] += 1
+
+    volatility = pattern_changes / max(len(filtered_sequence) - 2, 1)
+    total_outcomes = max(player_count + banker_count, 1)
+    shoe_bias = player_count / total_outcomes if player_count > banker_count else -banker_count / total_outcomes
+    return (bigram_transitions, trigram_transitions, fourgram_transitions, pattern_transitions,
+            streak_count, chop_count, double_count, volatility, shoe_bias)
+
+def calculate_weights(streak_count: int, chop_count: int, double_count: int, shoe_bias: float) -> Dict[str, float]:
+    """Calculate adaptive weights, emphasizing four-grams when reliable."""
+    total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
+    success_ratios = {
+        'bigram': st.session_state.pattern_success.get('bigram', 0) / total_bets
+                  if st.session_state.pattern_attempts.get('bigram', 0) > 0 else 0.5,
+        'trigram': st.session_state.pattern_success.get('trigram', 0) / total_bets
+                   if st.session_state.pattern_attempts.get('trigram', 0) > 0 else 0.5,
+        'fourgram': st.session_state.pattern_success.get('fourgram', 0) / total_bets
+                    if st.session_state.pattern_attempts.get('fourgram', 0) > 0 else 0.5,
+        'streak': 0.6 if streak_count >= 2 else 0.3,
+        'chop': 0.4 if chop_count >= 2 else 0.2,
+        'double': 0.4 if double_count >= 1 else 0.2
+    }
+    if success_ratios['fourgram'] > 0.6:
+        success_ratios['fourgram'] *= 1.2
+    weights = {k: np.exp(v) / (1 + np.exp(v)) for k, v in success_ratios.items()}
+    
+    if shoe_bias > 0.1:
+        weights['bigram'] *= 1.1
+        weights['trigram'] *= 1.1
+        weights['fourgram'] *= 1.15
+    elif shoe_bias < -0.1:
+        weights['bigram'] *= 0.9
+        weights['trigram'] *= 0.9
+        weights['fourgram'] *= 0.85
+
+    total_w = sum(weights.values())
+    if total_w == 0:
+        weights = {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
+        total_w = sum(weights.values())
+    return {k: max(w / total_w, 0.05) for k, w in weights.items()}
+
+def predict_next() -> Tuple[Optional[str], float, Dict]:
+    """Predict the next outcome with enhanced four-grams and neutral tie handling."""
+    sequence = [x for x in st.session_state.sequence if x in ['P', 'B', 'T']]
+    if len(sequence) < 4:
+        return 'B', 45.86, {}
+
+    recent_sequence = sequence[-WINDOW_SIZE:]
+    (bigram_transitions, trigram_transitions, fourgram_transitions, pattern_transitions,
+     streak_count, chop_count, double_count, volatility, shoe_bias) = analyze_patterns(recent_sequence)
+    st.session_state.pattern_volatility = volatility
+
+    prior_p, prior_b = 44.62 / 100, 45.86 / 100
+    weights = calculate_weights(streak_count, chop_count, double_count, shoe_bias)
+    prob_p = prob_b = total_weight = 0
+',
+        'losses': 0,
+        'target_mode': 'Profit %',
+        'target_value': 10.0,
+        'initial_bankroll': 0.0,
+        'target_hit': False,
+        'prediction_accuracy': {'P': 0, 'B': 0, 'total': 0},
+        'consecutive_losses': 0,
+        'loss_log': [],
+        'last_was_tie': False,
+        'insights': {},
+        'pattern_volatility': 0.0,
+        'pattern_success': defaultdict(int),
+        'pattern_attempts': defaultdict(int),
+        'safety_net_percentage': 10.0,
+        'safety_net_enabled': True
+    }
+    defaults['pattern_success']['fourgram'] = 0
+    defaults['pattern_attempts']['fourgram'] = 0
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+    if st.session_state.strategy not in STRATEGIES:
+        st.session_state.strategy = 'T3'
+
+def reset_session():
+    """Reset session state to initial values after target is hit."""
+    initialize_session_state()
+    st.session_state.update({
+        'bankroll': st.session_state.initial_bankroll,
+        'base_bet': 0.10,
+        'initial_base_bet': 0.10,
+        'sequence': [],
+        'pending_bet': None,
+        't3_level': 1,
+        't3_results': [],
+        't3_level_changes': 0,
+        't3_peak_level': 1,
+        'parlay_step': 1,
+        'parlay_wins': 0,
+        'parlay_using_base': True,
+        'parlay_step_changes': 0,
+        'parlay_peak_step': 1,
+        'z1003_loss_count': 0,
+        'z1003_bet_factor': 1.0,
+        'z1003_continue': False,
+        'z1003_level_changes': 0,
+        'advice': "Session reset: Target reached.",
+        'history': [],
+        'wins': 0,
+        'losses': 0,
+        'target_hit': False,
+        'consecutive_losses': 0,
+        'loss_log': [],
+        'last_was_tie': False,
+        'insights': {},
+        'pattern_volatility': 0.0,
+        'pattern_success': defaultdict(int),
+        'pattern_attempts': defaultdict(int),
+        'safety_net_percentage': 10.0,
+        'safety_net_enabled': True
+    })
+
+# --- Prediction Logic ---
+def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, int, int, float, float]:
+    """Analyze sequence patterns, excluding ties from streak/chop/double counts."""
+    bigram_transitions = defaultdict(lambda: defaultdict(int))
+    trigram_transitions = defaultdict(lambda: defaultdict(int))
+    fourgram_transitions = defaultdict(lambda: defaultdict(int))
+    pattern_transitions = defaultdict(lambda: defaultdict(int))
+    streak_count = chop_count = double_count = pattern_changes = 0
+    current_streak = last_pattern = None
+    player_count = banker_count = 0
+
+    filtered_sequence = [x for x in sequence if x in ['P', 'B']]
+    for i in range(len(sequence) - 1):
+        if sequence[i] == 'P':
+            player_count += 1
+        elif sequence[i] == 'B':
+            banker_count += 1
+
+        if i < len(sequence) - 2:
+            bigram = tuple(sequence[i:i+2])
+            trigram = tuple(sequence[i:i+3])
+            next_outcome = sequence[i+2]
+            bigram_transitions[bigram][next_outcome] += 1
+            if i < len(sequence) - 3:
+                trigram_transitions[trigram][next_outcome] += 1
+                if i < len(sequence) - 4:
+                    fourgram = tuple(sequence[i:i+4])
+                    fourgram_transitions[fourgram][next_outcome] += 1
+
+    for i in range(1, len(filtered_sequence)):
+        if filtered_sequence[i] == filtered_sequence[i-1]:
+            if current_streak == filtered_sequence[i]:
+                streak_count += 1
+            else:
+                current_streak = filtered_sequence[i]
+                streak_count = 1
+            if i > 1 and filtered_sequence[i-1] == filtered_sequence[i-2]:
+                double_count += 1
+        else:
+            current_streak = None
+            streak_count = 0
+            if i > 1 and Filtered_sequence[i] != filtered_sequence[i-2]:
                 chop_count += 1
 
         if i < len(filtered_sequence) - 1:
@@ -645,7 +850,7 @@ def place_result(result: str):
                 'prediction': selection,
                 'result': result,
                 'confidence': f"{conf:.1f}",
-                'insights': st.session_state.insights.copy()
+                'ights': st.session_state.insights.copy()
             })
             if len(st.session_state.loss_log) > LOSS_LOG_LIMIT:
                 st.session_state.loss_log = st.session_state.loss_log[-LOSS_LOG_LIMIT:]
