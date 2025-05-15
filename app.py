@@ -7,6 +7,9 @@ import numpy as np
 from typing import Tuple, Dict, Optional, List
 import uuid
 
+# --- Set Page Config (Must be the first Streamlit command) ---
+st.set_page_config(layout="wide", page_title="MANG BACCARAT GROUP")
+
 # --- Constants ---
 SESSION_FILE = "online_users.txt"
 SIMULATION_LOG = "simulation_log.txt"
@@ -346,7 +349,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
     if len(sequence) < 4:
         return 'B', 45.86, {}
 
-    recent_scene = sequence[-WINDOW_SIZE:]
+    recent_sequence = sequence[-WINDOW_SIZE:]
     (bigram_transitions, trigram_transitions, fourgram_transitions, pattern_transitions,
      streak_count, chop_count, double_count, volatility, shoe_bias) = analyze_patterns(recent_sequence)
     st.session_state.pattern_volatility = volatility
@@ -1046,7 +1049,6 @@ def render_simulation():
 # --- Main Application ---
 def main():
     """Main application function."""
-    st.set_page_config(layout="wide", page_title="MANG BACCARAT GROUP")
     st.title("MANG BACCARAT GROUP")
     initialize_session_state()
 
