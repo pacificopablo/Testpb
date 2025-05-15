@@ -25,100 +25,161 @@ HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
 
-# --- Custom CSS for Modern Design ---
+# --- Custom CSS for Elegant Design ---
 st.markdown("""
 <style>
 /* General Styling */
 body {
-    font-family: 'Inter', sans-serif;
-    background-color: #f5f7fa;
+    font-family: 'Roboto', sans-serif;
+    background-color: #f8fafc;
+    color: #1e293b;
 }
 .stApp {
-    max-width: 1200px;
+    max-width: 1280px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 2rem;
 }
 
 /* Card Styling */
 .card {
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    padding: 20px;
-    margin-bottom: 20px;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
 }
 
 /* Headers */
 h1 {
-    color: #1a3c6e;
+    color: #1e40af;
     font-weight: 700;
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: 2rem;
+    font-size: 2.5rem;
+    letter-spacing: 0.5px;
 }
-h2, h3 {
-    color: #2c5282;
+h2 {
+    color: #1e293b;
     font-weight: 600;
+    font-size: 1.75rem;
+    margin-bottom: 1rem;
+}
+h3 {
+    color: #475569;
+    font-weight: 500;
+    font-size: 1.25rem;
 }
 
 /* Buttons */
 .stButton > button {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    color: white;
+    color: #ffffff;
     border: none;
     border-radius: 8px;
-    padding: 10px 20px;
+    padding: 0.75rem 1.5rem;
     font-weight: 500;
+    font-size: 1rem;
     transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 .stButton > button:hover {
-    background: linear-gradient(135deg, #60a5fa, #3b82f6);
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    filter: brightness(1.1);
 }
 .stButton > button:active {
     transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Custom Button Styles */
-button[kind="player_btn"] { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-button[kind="banker_btn"] { background: linear-gradient(135deg, #ef4444, #dc2626); }
-button[kind="tie_btn"] { background: linear-gradient(135deg, #10b981, #059669); }
-button[kind="undo_btn"] { background: linear-gradient(135deg, #6b7280, #4b5563); }
+/* Specific Button Colors */
+button[kind="player_btn"] {
+    background: linear-gradient(135deg, #3b82f6, #1e40af);
+}
+button[kind="banker_btn"] {
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+}
+button[kind="tie_btn"] {
+    background: linear-gradient(135deg, #10b981, #047857);
+}
+button[kind="undo_btn"] {
+    background: linear-gradient(135deg, #6b7280, #4b5563);
+}
 
 /* Form Inputs */
 .stNumberInput, .stSelectbox, .stRadio, .stCheckbox {
-    background: #f9fafb;
+    background: #f1f5f9;
     border-radius: 8px;
-    padding: 10px;
+    padding: 0.5rem;
+    border: 1px solid #e2e8f0;
+}
+.stNumberInput > div > div > input,
+.stSelectbox > div > div > select {
+    border: none;
+    background: transparent;
 }
 
 /* Expander */
 .stExpander {
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #ffffff;
+    padding: 0.5rem;
 }
 
 /* Bead Plate */
 .bead-plate {
-    background: white;
-    padding: 15px;
+    background: #ffffff;
+    padding: 1rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Dataframe and Tables */
+.stDataFrame {
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+.stDataFrame table {
+    background: #ffffff;
+    border-collapse: collapse;
+}
+.stDataFrame th {
+    background: #f1f5f9;
+    color: #1e293b;
+    font-weight: 600;
+}
+.stDataFrame td {
+    border: 1px solid #e2e8f0;
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
     .stApp {
-        padding: 10px;
+        padding: 1rem;
     }
     .stButton > button {
         width: 100%;
-        margin-bottom: 10px;
+        margin-bottom: 0.5rem;
     }
     .stColumns {
         flex-direction: column;
     }
+    h1 {
+        font-size: 2rem;
+    }
+    h2 {
+        font-size: 1.5rem;
+    }
+}
+
+/* Smooth Scroll */
+html {
+    scroll-behavior: smooth;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -893,7 +954,7 @@ def render_bead_plate():
             col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
             for result in col:
                 style = (
-                    "width: 24px; height: 24px; border: 1px solid #e5e7eb; border-radius: 50%; background: #f9fafb;" if result == '' else
+                    "width: 24px; height: 24px; border: 1px solid #e2e8f0; border-radius: 50%; background: #f1f5f9;" if result == '' else
                     f"width: 24px; height: 24px; background-color: {'#3b82f6' if result == 'P' else '#ef4444' if result == 'B' else '#10b981'}; border-radius: 50%;"
                 )
                 col_html += f"<div style='{style}'></div>"
