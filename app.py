@@ -859,51 +859,50 @@ def render_setup_form():
 def render_result_input():
     """Render the result input buttons."""
     with st.container():
-        st.markdown('<div class="card"><h2>Enter Result</h2>', unsafe_allow_html=True)
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            if st.button("Player", key="player_btn"):
-                place_result("P")
-        with col2:
-            if st.button("Banker", key="banker_btn"):
-                place_result("B")
-        with col3:
-            if st.button("Tie", key="tie_btn"):
-                place_result("T")
-        with col4:
-            if st.button("Undo Last", key="undo_btn"):
-                if not st.session_state.sequence:
-                    st.warning("No results to undo.")
-                else:
-                    try:
-                        if st.session_state.history:
-                            last = st.session_state.history.pop()
-                            previous_state = last['Previous_State']
-                            for key, value in previous_state.items():
-                                st.session_state[key] = value
-                            st.session_state.sequence.pop()
-                            if last['Bet_Placed'] and not last['Win'] and st.session_state.loss_log:
-                                if st.session_state.loss_log[-1]['result'] == last['Result']:
-                                    st.session_state.loss_log.pop()
-                            if st.session_state.pending_bet:
-                                amount, pred = st.session_state.pending_bet
-                                conf = predict_next()[1]
-                                st.session_state.advice = f"Next Bet: ${amount:.2f} on {pred}"
+        with st.expander("Enter Result", expanded=True):
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                if st.button("Player", key="player_btn"):
+                    place_result("P")
+            with col2:
+                if st.button("Banker", key="banker_btn"):
+                    place_result("B")
+            with col3:
+                if st.button("Tie", key="tie_btn"):
+                    place_result("T")
+            with col4:
+                if st.button("Undo Last", key="undo_btn"):
+                    if not st.session_state.sequence:
+                        st.warning("No results to undo.")
+                    else:
+                        try:
+                            if st.session_state.history:
+                                last = st.session_state.history.pop()
+                                previous_state = last['Previous_State']
+                                for key, value in previous_state.items():
+                                    st.session_state[key] = value
+                                st.session_state.sequence.pop()
+                                if last['Bet_Placed'] and not last['Win'] and st.session_state.loss_log:
+                                    if st.session_state.loss_log[-1]['result'] == last['Result']:
+                                        st.session_state.loss_log.pop()
+                                if st.session_state.pending_bet:
+                                    amount, pred = st.session_state.pending_bet
+                                    conf = predict_next()[1]
+                                    st.session_state.advice = f"Next Bet: ${amount:.2f} on {pred}"
+                                else:
+                                    st.session_state.advice = "No bet pending."
+                                st.session_state.last_was_tie = False
+                                st.success("Undone last action.")
+                                st.rerun()
                             else:
+                                st.session_state.sequence.pop()
+                                st.session_state.pending_bet = None
                                 st.session_state.advice = "No bet pending."
-                            st.session_state.last_was_tie = False
-                            st.success("Undone last action.")
-                            st.rerun()
-                        else:
-                            st.session_state.sequence.pop()
-                            st.session_state.pending_bet = None
-                            st.session_state.advice = "No bet pending."
-                            st.session_state.last_was_tie = False
-                            st.success("Undone last result.")
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Error undoing last action: {str(e)}")
-        st.markdown('</div>', unsafe_allow_html=True)
+                                st.session_state.last_was_tie = False
+                                st.success("Undone last result.")
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"Error undoing last action: {str(e)}")
 
 def render_bead_plate():
     """Render the current sequence as a bead plate."""
