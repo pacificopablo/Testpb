@@ -732,7 +732,7 @@ def place_result(result: str):
 
     previous_state = {
         "bankroll": st.session_state.bankroll,
-        "t3_level 3
+        "t3_level": st.session_state.t3_level,
         "t3_results": st.session_state.t3_results.copy(),
         "parlay_step": st.session_state.parlay_step,
         "parlay_wins": st.session_state.parlay_wins,
