@@ -241,8 +241,13 @@ def initialize_session_state():
         defaults['pattern_attempts'][key] = 0
 
     for key, value in defaults.items():
-        if key not in st.session_state:
+        if key not in st.session_state or st.session_state[key] is None:
             st.session_state[key] = value
+
+    # Ensure pattern keys are set
+    for key in pattern_keys:
+        st.session_state.pattern_success[key] = 0
+        st.session_state.pattern_attempts[key] = 0
 
     if st.session_state.strategy not in STRATEGIES:
         st.session_state.strategy = 'T3'
@@ -354,7 +359,21 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
 
 def calculate_weights(streak_count: int, chop_count: int, double_count: int, shoe_bias: float) -> Dict[str, float]:
     """Calculate adaptive weights, emphasizing four-grams when reliable."""
+    # Validate pattern_attempts and pattern_success
+    pattern_keys = ['bigram', 'trigram', 'fourgram']
+    for key in pattern_keys:
+        if key not in st.session_state.pattern_attempts or st.session_state.pattern_attempts[key] < 0:
+            st.session_state.pattern_attempts[key] = 0
+            st.warning(f"Invalid pattern_attempts[{key}]: Reset to 0")
+        if key not in st.session_state.pattern_success or st.session_state.pattern_success[key] < 0:
+            st.session_state.pattern_success[key] = 0
+            st.warning(f"Invalid pattern_success[{key}]: Reset to 0")
+
     total_bets = max(st.session_state.pattern_attempts.get('fourgram', 1), 1)
+    if total_bets <= 0:
+        total_bets = 1
+        st.warning(f"Invalid total_bets: {total_bets}. Reset to 1")
+
     success_ratios = {
         'bigram': st.session_state.pattern_success.get('bigram', 0) / total_bets
                   if st.session_state.pattern_attempts.get('bigram', 0) > 0 else 0.5,
@@ -366,11 +385,12 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
         'chop': 0.4 if chop_count >= 2 else 0.2,
         'double': 0.4 if double_count >= 1 else 0.2
     }
+
     # Check for invalid success ratios
     for key, value in success_ratios.items():
-        if not np.isfinite(value):
+        if not np.isfinite(value) or value < 0:
             success_ratios[key] = 0.5
-            st.warning(f"Invalid success ratio for {key}: {value}. Reset to 0.5.")
+            st.warning(f"Invalid success ratio for {key}: {value}. Reset to 0.5")
 
     if success_ratios['fourgram'] > 0.6:
         success_ratios['fourgram'] *= 1.2
@@ -390,7 +410,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
     if abs(total_w) < EPSILON:  # Check for zero or near-zero total weight
         weights = {'bigram': 0.30, 'trigram': 0.25, 'fourgram': 0.25, 'streak': 0.15, 'chop': 0.05, 'double': 0.05}
         total_w = sum(weights.values())
-        st.warning(f"Total weight near zero: {total_w}. Reset weights: {weights}")
+        st.warning(f"Total weight near zero: {total_w}. Reset weights: {weights}. Pattern_attempts: {dict(st.session_state.pattern_attempts)}, Pattern_success: {dict(st.session_state.pattern_success)}, Success_ratios: {success_ratios}")
     
     # Ensure total_w is never zero
     total_w = max(total_w, EPSILON)
@@ -398,7 +418,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
     
     # Debug logging
     if abs(total_w) < 1e-5:
-        st.warning(f"Low total weight: {total_w}. Success ratios: {success_ratios}, Weights: {weights}")
+        st.warning(f"Low total weight: {total_w}. Success_ratios: {success_ratios}, Weights: {weights}, Pattern_attempts: {dict(st.session_state.pattern_attempts)}, Pattern_success: {dict(st.session_state.pattern_success)}")
 
     return normalized_weights
 
@@ -934,6 +954,11 @@ def render_result_input():
                                     st.session_state.advice = "No bet pending."
                                 st.session_state.last_was_tie = False
                                 st.success("Undone last action.")
+                                # Explicitly reset pattern keys after undo
+                                pattern_keys = ['bigram', 'trigram', 'fourgram', 'streak', 'chop', 'double']
+                                for key in pattern_keys:
+                                    st.session_state.pattern_success[key] = previous_state['pattern_success'].get(key, 0)
+                                    st.session_state.pattern_attempts[key] = previous_state['pattern_attempts'].get(key, 0)
                                 st.rerun()
                             else:
                                 st.session_state.sequence.pop()
@@ -1113,7 +1138,7 @@ def render_simulation():
             for pattern in result['pattern_success']:
                 success = result['pattern_success'][pattern]
                 attempts = result['pattern_attempts'][pattern]
-                st.markdown(f"{pattern}: {success}/{attempts} ({success/attacks*100:.1f}%)" if attempts > 0 else f"{pattern}: 0/0 (0%)")
+                st.markdown(f"{pattern}: {success}/{attempts} ({success/attempts*100:.1f}%)" if attempts > 0 else f"{pattern}: 0/0 (0%)")
             st.markdown("Results logged to simulation_log.txt")
         st.markdown('</div>', unsafe_allow_html=True)
 
