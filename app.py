@@ -5,6 +5,7 @@ import os
 import time
 import numpy as np
 from typing import Tuple, Dict, Optional, List
+import uuid
 
 # --- Constants ---
 SESSION_FILE = "online_users.txt"
@@ -21,11 +22,109 @@ HISTORY_LIMIT = 1000
 LOSS_LOG_LIMIT = 50
 WINDOW_SIZE = 50
 
+# --- Custom CSS for Modern Design ---
+st.markdown("""
+<style>
+/* General Styling */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f5f7fa;
+}
+.stApp {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Card Styling */
+.card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+/* Headers */
+h1 {
+    color: #1a3c6e;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 30px;
+}
+h2, h3 {
+    color: #2c5282;
+    font-weight: 600;
+}
+
+/* Buttons */
+.stButton > button {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+.stButton > button:hover {
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+.stButton > button:active {
+    transform: translateY(0);
+}
+
+/* Custom Button Styles */
+button[kind="player_btn"] { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+button[kind="banker_btn"] { background: linear-gradient(135deg, #ef4444, #dc2626); }
+button[kind="tie_btn"] { background: linear-gradient(135deg, #10b981, #059669); }
+button[kind="undo_btn"] { background: linear-gradient(135deg, #6b7280, #4b5563); }
+
+/* Form Inputs */
+.stNumberInput, .stSelectbox, .stRadio, .stCheckbox {
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+/* Expander */
+.stExpander {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
+}
+
+/* Bead Plate */
+.bead-plate {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .stApp {
+        padding: 10px;
+    }
+    .stButton > button {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    .stColumns {
+        flex-direction: column;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
 # --- Session Tracking ---
 def track_user_session() -> int:
     """Track active user sessions using a file-based approach."""
     if 'session_id' not in st.session_state:
-        st.session_state.session_id = str(time.time())
+        st.session_state.session_id = str(uuid.uuid4())
 
     sessions = {}
     current_time = datetime.now()
@@ -205,7 +304,7 @@ def analyze_patterns(sequence: List[str]) -> Tuple[Dict, Dict, Dict, Dict, int, 
     volatility = pattern_changes / max(len(filtered_sequence) - 2, 1)
     total_outcomes = max(player_count + banker_count, 1)
     shoe_bias = player_count / total_outcomes if player_count > banker_count else -banker_count / total_outcomes
-    return (bigram_transitions, trigram_transitions, fourgram_transitions, pattern_transitions,
+    return (bigram_transitions, trigram_transitions, fourgram_trans    fourgram_transitions, pattern_transitions,
             streak_count, chop_count, double_count, volatility, shoe_bias)
 
 def calculate_weights(streak_count: int, chop_count: int, double_count: int, shoe_bias: float) -> Dict[str, float]:
@@ -227,7 +326,7 @@ def calculate_weights(streak_count: int, chop_count: int, double_count: int, sho
     weights = {k: np.exp(v) / (1 + np.exp(v)) for k, v in success_ratios.items()}
     
     if shoe_bias > 0.1:
-        weights['bigram'] *= 1.1
+        weights['bigram'] *= 1. ascend
         weights['trigram'] *= 1.1
         weights['fourgram'] *= 1.15
     elif shoe_bias < -0.1:
@@ -641,323 +740,333 @@ def simulate_shoe(num_hands: int = 80) -> Dict:
 # --- UI Components ---
 def render_setup_form():
     """Render the setup form for session configuration."""
-    st.subheader("Setup")
-    with st.form("setup_form"):
-        bankroll = st.number_input("Enter Bankroll ($)", min_value=0.0, value=st.session_state.bankroll, step=10.0)
-        base_bet = st.number_input("Enter Base Bet ($)", min_value=0.10, value=max(st.session_state.base_bet, 0.10), step=0.10)
-        betting_strategy = st.selectbox(
-            "Choose Betting Strategy", STRATEGIES,
-            index=STRATEGIES.index(st.session_state.strategy),
-            help="T3: Adjusts bet size based on wins/losses. Flatbet: Fixed bet size. Parlay16: 16-step progression. Z1003.1: Resets after first win, stops after three losses."
-        )
-        target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
-        target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
-        
-        safety_net_enabled = st.checkbox(
-            "Enable Safety Net",
-            value=st.session_state.safety_net_enabled,
-            help="When enabled, ensures a percentage of the initial bankroll is preserved after each bet."
-        )
-        
-        safety_net_percentage = st.session_state.safety_net_percentage
-        if safety_net_enabled:
-            safety_net_percentage = st.number_input(
-                "Safety Net Percentage (%)",
-                min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
-                help="Percentage of initial bankroll to keep as a safety net after each bet."
+    with st.container():
+        st.markdown('<div class="card"><h2>Setup Session</h2>', unsafe_allow_html=True)
+        with st.form("setup_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                bankroll = st.number_input("Bankroll ($)", min_value=0.0, value=st.session_state.bankroll, step=10.0)
+                base_bet = st.number_input("Base Bet ($)", min_value=0.10, value=max(st.session_state.base_bet, 0.10), step=0.10)
+            with col2:
+                betting_strategy = st.selectbox(
+                    "Betting Strategy", STRATEGIES,
+                    index=STRATEGIES.index(st.session_state.strategy),
+                    help="T3: Adjusts bet size based on wins/losses. Flatbet: Fixed bet size. Parlay16: 16-step progression. Z1003.1: Resets after first win, stops after three losses."
+                )
+                target_mode = st.radio("Target Type", ["Profit %", "Units"], index=0, horizontal=True)
+            target_value = st.number_input("Target Value", min_value=1.0, value=float(st.session_state.target_value), step=1.0)
+            
+            safety_net_enabled = st.checkbox(
+                "Enable Safety Net",
+                value=st.session_state.safety_net_enabled,
+                help="Ensures a percentage of the initial bankroll is preserved after each bet."
             )
-        
-        start_clicked = st.form_submit_button("Start Session")
-
-        if start_clicked:
-            if bankroll <= 0:
-                st.error("Bankroll must be positive.")
-            elif base_bet < 0.10:
-                st.error("Base bet must be at least $0.10.")
-            elif base_bet > bankroll:
-                st.error("Base bet cannot exceed bankroll.")
-            else:
-                st.session_state.update({
-                    'bankroll': bankroll,
-                    'base_bet': base_bet,
-                    'initial_base_bet': base_bet,
-                    'strategy': betting_strategy,
-                    'sequence': [],
-                    'pending_bet': None,
-                    't3_level': 1,
-                    't3_results': [],
-                    't3_level_changes': 0,
-                    't3_peak_level': 1,
-                    'parlay_step': 1,
-                    'parlay_wins': 0,
-                    'parlay_using_base': True,
-                    'parlay_step_changes': 0,
-                    'parlay_peak_step': 1,
-                    'z1003_loss_count': 0,
-                    'z1003_bet_factor': 1.0,
-                    'z1003_continue': False,
-                    'z1003_level_changes': 0,
-                    'advice': "",
-                    'history': [],
-                    'wins': 0,
-                    'losses': 0,
-                    'target_mode': target_mode,
-                    'target_value': target_value,
-                    'initial_bankroll': bankroll,
-                    'target_hit': False,
-                    'prediction_accuracy': {'P': 0, 'B': 0, 'total': 0},
-                    'consecutive_losses': 0,
-                    'loss_log': [],
-                    'last_was_tie': False,
-                    'insights': {},
-                    'pattern_volatility': 0.0,
-                    'pattern_success': defaultdict(int),
-                    'pattern_attempts': defaultdict(int),
-                    'safety_net_percentage': safety_net_percentage,
-                    'safety_net_enabled': safety_net_enabled
-                })
-                st.session_state.pattern_success['fourgram'] = 0
-                st.session_state.pattern_attempts['fourgram'] = 0
-                st.success(f"Session started with {betting_strategy} strategy!")
+            
+            safety_net_percentage = st.session_state.safety_net_percentage
+            if safety_net_enabled:
+                safety_net_percentage = st.number_input(
+                    "Safety Net Percentage (%)",
+                    min_value=0.0, max_value=50.0, value=st.session_state.safety_net_percentage, step=5.0,
+                    help="Percentage of initial bankroll to keep as a safety net."
+                )
+            
+            if st.form_submit_button("Start Session"):
+                if bankroll <= 0:
+                    st.error("Bankroll must be positive.")
+                elif base_bet < 0.10:
+                    st.error("Base bet must be at least $0.10.")
+                elif base_bet > bankroll:
+                    st.error("Base bet cannot exceed bankroll.")
+                else:
+                    st.session_state.update({
+                        'bankroll': bankroll,
+                        'base_bet': base_bet,
+                        'initial_base_bet': base_bet,
+                        'strategy': betting_strategy,
+                        'sequence': [],
+                        'pending_bet': None,
+                        't3_level': 1,
+                        't3_results': [],
+                        't3_level_changes': 0,
+                        't3_peak_level': 1,
+                        'parlay_step': 1,
+                        'parlay_wins': 0,
+                        'parlay_using_base': True,
+                        'parlay_step_changes': 0,
+                        'parlay_peak_step': 1,
+                        'z1003_loss_count': 0,
+                        'z1003_bet_factor': 1.0,
+                        'z1003_continue': False,
+                        'z1003_level_changes': 0,
+                        'advice': "",
+                        'history': [],
+                        'wins': 0,
+                        'losses': 0,
+                        'target_mode': target_mode,
+                        'target_value': target_value,
+                        'initial_bankroll': bankroll,
+                        'target_hit': False,
+                        'prediction_accuracy': {'P': 0, 'B': 0, 'total': 0},
+                        'consecutive_losses': 0,
+                        'loss_log': [],
+                        'last_was_tie': False,
+                        'insights': {},
+                        'pattern_volatility': 0.0,
+                        'pattern_success': defaultdict(int),
+                        'pattern_attempts': defaultdict(int),
+                        'safety_net_percentage': safety_net_percentage,
+                        'safety_net_enabled': safety_net_enabled
+                    })
+                    st.session_state.pattern_success['fourgram'] = 0
+                    st.session_state.pattern_attempts['fourgram'] = 0
+                    st.success(f"Session started with {betting_strategy} strategy!")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def render_result_input():
     """Render the result input buttons."""
-    st.subheader("Enter Result")
-    st.markdown("""
-    <style>
-    div.stButton > button {
-        width: 90px; height: 35px; font-size: 14px; font-weight: bold; border-radius: 6px; border: 1px solid;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); cursor: pointer; transition: all 0.15s ease;
-        display: flex; align-items: center; justify-content: center;
-    }
-    div.stButton > button:hover { transform: scale(1.08); box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3); }
-    div.stButton > button:active { transform: scale(0.95); box-shadow: none; }
-    div.stButton > button[kind="player_btn"] { background: linear-gradient(to bottom, #007bff, #0056b3); border-color: #0056b3; color: white; }
-    div.stButton > button[kind="player_btn"]:hover { background: linear-gradient(to bottom, #339cff, #007bff); }
-    div.stButton > button[kind="banker_btn"] { background: linear-gradient(to bottom, #dc3545, #a71d2a); border-color: #a71d2a; color: white; }
-    div.stButton > button[kind="banker_btn"]:hover { background: linear-gradient(to bottom, #ff6666, #dc3545); }
-    div.stButton > button[kind="tie_btn"] { background: linear-gradient(to bottom, #28a745, #1e7e34); border-color: #1e7e34; color: white; }
-    div.stButton > button[kind="tie_btn"]:hover { background: linear-gradient(to bottom, #4caf50, #28a745); }
-    div.stButton > button[kind="undo_btn"] { background: linear-gradient(to bottom, #6c757d, #545b62); border-color: #545b62; color: white; }
-    div.stButton > button[kind="undo_btn"]:hover { background: linear-gradient(to bottom, #8e959c, #6c757d); }
-    @media (max-width: 600px) { div.stButton > button { width: 80%; max-width: 150px; height: 40px; font-size: 12px; } }
-    </style>
-    """, unsafe_allow_html=True)
-
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        if st.button("Player", key="player_btn"):
-            place_result("P")
-    with col2:
-        if st.button("Banker", key="banker_btn"):
-            place_result("B")
-    with col3:
-        if st.button("Tie", key="tie_btn"):
-            place_result("T")
-    with col4:
-        if st.button("Undo Last", key="undo_btn"):
-            if not st.session_state.sequence:
-                st.warning("No results to undo.")
-            else:
-                try:
-                    if st.session_state.history:
-                        last = st.session_state.history.pop()
-                        previous_state = last['Previous_State']
-                        for key, value in previous_state.items():
-                            st.session_state[key] = value
-                        st.session_state.sequence.pop()
-                        if last['Bet_Placed'] and not last['Win'] and st.session_state.loss_log:
-                            if st.session_state.loss_log[-1]['result'] == last['Result']:
-                                st.session_state.loss_log.pop()
-                        if st.session_state.pending_bet:
-                            amount, pred = st.session_state.pending_bet
-                            conf = predict_next()[1]
-                            st.session_state.advice = f"Next Bet: ${amount:.2f} on {pred}"
+    with st.container():
+        st.markdown('<div class="card"><h2>Enter Result</h2>', unsafe_allow_html=True)
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if st.button("Player", key="player_btn"):
+                place_result("P")
+        with col2:
+            if st.button("Banker", key="banker_btn"):
+                place_result("B")
+        with col3:
+            if st.button("Tie", key="tie_btn"):
+                place_result("T")
+        with col4:
+            if st.button("Undo Last", key="undo_btn"):
+                if not st.session_state.sequence:
+                    st.warning("No results to undo.")
+                else:
+                    try:
+                        if st.session_state.history:
+                            last = st.session_state.history.pop()
+                            previous_state = last['Previous_State']
+                            for key, value in previous_state.items():
+                                st.session_state[key] = value
+                            st.session_state.sequence.pop()
+                            if last['Bet_Placed'] and not last['Win'] and st.session_state.loss_log:
+                                if st.session_state.loss_log[-1]['result'] == last['Result']:
+                                    st.session_state.loss_log.pop()
+                            if st.session_state.pending_bet:
+                                amount, pred = st.session_state.pending_bet
+                                conf = predict_next()[1]
+                                st.session_state.advice = f"Next Bet: ${amount:.2f} on {pred}"
+                            else:
+                                st.session_state.advice = "No bet pending."
+                            st.session_state.last_was_tie = False
+                            st.success("Undone last action.")
+                            st.rerun()
                         else:
+                            st.session_state.sequence.pop()
+                            st.session_state.pending_bet = None
                             st.session_state.advice = "No bet pending."
-                        st.session_state.last_was_tie = False
-                        st.success("Undone last action.")
-                        st.rerun()
-                    else:
-                        st.session_state.sequence.pop()
-                        st.session_state.pending_bet = None
-                        st.session_state.advice = "No bet pending."
-                        st.session_state.last_was_tie = False
-                        st.success("Undone last result.")
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Error undoing last action: {str(e)}")
+                            st.session_state.last_was_tie = False
+                            st.success("Undone last result.")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Error undoing last action: {str(e)}")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def render_bead_plate():
     """Render the current sequence as a bead plate."""
-    st.subheader("Current Sequence (Bead Plate)")
-    sequence = st.session_state.sequence[-90:]
-    grid = [[] for _ in range(15)]
-    for i, result in enumerate(sequence):
-        col_index = i // 6
-        if col_index < 15:
-            grid[col_index].append(result)
-    for col in grid:
-        while len(col) < 6:
-            col.append('')
+    with st.container():
+        st.markdown('<div class="card bead-plate"><h2>Current Sequence (Bead Plate)</h2>', unsafe_allow_html=True)
+        sequence = st.session_state.sequence[-90:]
+        grid = [[] for _ in range(15)]
+        for i, result in enumerate(sequence):
+            col_index = i // 6
+            if col_index < 15:
+                grid[col_index].append(result)
+        for col in grid:
+            while len(col) < 6:
+                col.append('')
 
-    bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 100%; overflow-x: auto;'>"
-    for col in grid:
-        col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
-        for result in col:
-            style = (
-                "width: 20px; height: 20px; border: 1px solid #ddd; border-radius: 50%;" if result == '' else
-                f"width: 20px; height: 20px; background-color: {'blue' if result == 'P' else 'red' if result == 'B' else 'green'}; border-radius: 50%;"
-            )
-            col_html += f"<div style='{style}'></div>"
-        col_html += "</div>"
-        bead_plate_html += col_html
-    bead_plate_html += "</div>"
-    st.markdown(bead_plate_html, unsafe_allow_html=True)
+        bead_plate_html = "<div style='display: flex; flex-direction: row; gap: 5px; max-width: 100%; overflow-x: auto;'>"
+        for col in grid:
+            col_html = "<div style='display: flex; flex-direction: column; gap: 5px;'>"
+            for result in col:
+                style = (
+                    "width: 24px; height: 24px; border: 1px solid #e5e7eb; border-radius: 50%; background: #f9fafb;" if result == '' else
+                    f"width: 24px; height: 24px; background-color: {'#3b82f6' if result == 'P' else '#ef4444' if result == 'B' else '#10b981'}; border-radius: 50%;"
+                )
+                col_html += f"<div style='{style}'></div>"
+            col_html += "</div>"
+            bead_plate_html += col_html
+        bead_plate_html += "</div>"
+        st.markdown(bead_plate_html, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def render_prediction():
     """Render the current prediction and advice."""
-    if st.session_state.pending_bet:
-        amount, side = st.session_state.pending_bet
-        color = 'blue' if side == 'P' else 'red'
-        st.markdown(f"<h4 style='color:{color};'>Prediction: {side} | Bet: ${amount:.2f}</h4>", unsafe_allow_html=True)
-    elif not st.session_state.target_hit:
-        st.info(st.session_state.advice)
+    with st.container():
+        st.markdown('<div class="card"><h2>Prediction</h2>', unsafe_allow_html=True)
+        if st.session_state.pending_bet:
+            amount, side = st.session_state.pending_bet
+            color = '#3b82f6' if side == 'P' else '#ef4444'
+            st.markdown(f"<h4 style='color:{color}; margin: 0;'>Bet: ${amount:.2f} on {side}</h4>", unsafe_allow_html=True)
+        elif not st.session_state.target_hit:
+            st.info(st.session_state.advice)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def render_insights():
-    """Render prediction insights and volatility warnings in a collapsible section."""
-    with st.expander("Prediction Insights", expanded=True):
-        if st.session_state.insights:
-            for factor, contribution in st.session_state.insights.items():
-                st.markdown(f"**{factor}**: {contribution}")
-        else:
-            st.write("No insights available yet.")
-        if st.session_state.pattern_volatility > 0.5:
-            st.warning(f"High Pattern Volatility: {st.session_state.pattern_volatility:.2f} (Betting paused)")
+    """Render prediction insights and volatility warnings."""
+    with st.container():
+        st.markdown('<div class="card"><h2>Prediction Insights</h2>', unsafe_allow_html=True)
+        with st.expander("View Details", expanded=True):
+            if st.session_state.insights:
+                for factor, contribution in st.session_state.insights.items():
+                    st.markdown(f"**{factor}**: {contribution}")
+            else:
+                st.write("No insights available yet.")
+            if st.session_state.pattern_volatility > 0.5:
+                st.warning(f"High Pattern Volatility: {st.session_state.pattern_volatility:.2f} (Betting paused)")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def render_status():
     """Render session status information."""
-    st.subheader("Status")
-    st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
-    st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
-    st.markdown(f"**Safety Net**: {'Enabled' if st.session_state.safety_net_enabled else 'Disabled'}"
-                f"{' | Percentage: ' + str(st.session_state.safety_net_percentage) + '%' if st.session_state.safety_net_enabled else ''}")
-    strategy_status = f"**Betting Strategy**: {st.session_state.strategy}"
-    if st.session_state.strategy == 'T3':
-        strategy_status += f" | Level: {st.session_state.t3_level} | Peak Level: {st.session_state.t3_peak_level} | Level Changes: {st.session_state.t3_level_changes}"
-    elif st.session_state.strategy == 'Parlay16':
-        strategy_status += f" | Steps: {st.session_state.parlay_step}/16 | Peak Steps: {st.session_state.parlay_peak_step} | Step Changes: {st.session_state.parlay_step_changes} | Consecutive Wins: {st.session_state.parlay_wins}"
-    elif st.session_state.strategy == 'Z1003.1':
-        strategy_status += f" | Loss Count: {st.session_state.z1003_loss_count} | Level Changes: {st.session_state.z1003_level_changes} | Continue: {st.session_state.z1003_continue}"
-    st.markdown(strategy_status)
-    st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
-    st.markdown(f"**Online Users**: {track_user_session()}")
+    with st.container():
+        st.markdown('<div class="card"><h2>Session Status</h2>', unsafe_allow_html=True)
+        st.markdown(f"**Bankroll**: ${st.session_state.bankroll:.2f}")
+        st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
+        st.markdown(f"**Safety Net**: {'Enabled' if st.session_state.safety_net_enabled else 'Disabled'}"
+                    f"{' | Percentage: ' + str(st.session_state.safety_net_percentage) + '%' if st.session_state.safety_net_enabled else ''}")
+        strategy_status = f"**Betting Strategy**: {st.session_state.strategy}"
+        if st.session_state.strategy == 'T3':
+            strategy_status += f" | Level: {st.session_state.t3_level} | Peak Level: {st.session_state.t3_peak_level} | Level Changes: {st.session_state.t3_level_changes}"
+        elif st.session_state.strategy == 'Parlay16':
+            strategy_status += f" | Steps: {st.session_state.parlay_step}/16 | Peak Steps: {st.session_state.parlay_peak_step} | Step Changes: {st.session_state.parlay_step_changes} | Consecutive Wins: {st.session_state.parlay_wins}"
+        elif st.session_state.strategy == 'Z1003.1':
+            strategy_status += f" | Loss Count: {st.session_state.z1003_loss_count} | Level Changes: {st.session_state.z1003_level_changes} | Continue: {st.session_state.z1003_continue}"
+        st.markdown(strategy_status)
+        st.markdown(f"**Wins**: {st.session_state.wins} | **Losses**: {st.session_state.losses}")
+        st.markdown(f"**Online Users**: {track_user_session()}")
 
-    if st.session_state.initial_base_bet > 0 and st.session_state.initial_bankroll > 0:
-        profit = st.session_state.bankroll - st.session_state.initial_bankroll
-        units_profit = profit / st.session_state.initial_base_bet
-        st.markdown(f"**Units Profit**: {units_profit:.2f} units (${profit:.2f})")
-    else:
-        st.markdown("**Units Profit**: 0.00 units ($0.00)")
+        if st.session_state.initial_base_bet > 0 and st.session_state.initial_bankroll > 0:
+            profit = st.session_state.bankroll - st.session_state.initial_bankroll
+            units_profit = profit / st.session_state.initial_base_bet
+            st.markdown(f"**Units Profit**: {units_profit:.2f} units (${profit:.2f})")
+        else:
+            st.markdown("**Units Profit**: 0.00 units ($0.00)")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def render_accuracy():
     """Render prediction accuracy metrics and trend chart."""
-    st.subheader("Prediction Accuracy")
-    total = st.session_state.prediction_accuracy['total']
-    if total > 0:
-        p_accuracy = (st.session_state.prediction_accuracy['P'] / total) * 100
-        b_accuracy = (st.session_state.prediction_accuracy['B'] / total) * 100
-        st.markdown(f"**Player Bets**: {st.session_state.prediction_accuracy['P']}/{total} ({p_accuracy:.1f}%)")
-        st.markdown(f"**Banker Bets**: {st.session_state.prediction_accuracy['B']}/{total} ({b_accuracy:.1f}%)")
+    with st.container():
+        st.markdown('<div class="card"><h2>Prediction Accuracy</h2>', unsafe_allow_html=True)
+        total = st.session_state.prediction_accuracy['total']
+        if total > 0:
+            p_accuracy = (st.session_state.prediction_accuracy['P'] / total) * 100
+            b_accuracy = (st.session_state.prediction_accuracy['B'] / total) * 100
+            st.markdown(f"**Player Bets**: {st.session_state.prediction_accuracy['P']}/{total} ({p_accuracy:.1f}%)")
+            st.markdown(f"**Banker Bets**: {st.session_state.prediction_accuracy['B']}/{total} ({b_accuracy:.1f}%)")
 
-    st.subheader("Prediction Accuracy Trend")
-    if st.session_state.history:
-        accuracy_data = []
-        correct = total = 0
-        for h in st.session_state.history[-50:]:
-            if h['Bet_Placed'] and h['Bet'] in ['P', 'B']:
-                total += 1
-                if h['Win']:
-                    correct += 1
-                accuracy_data.append(correct / max(total, 1) * 100)
-        if accuracy_data:
-            st.line_chart(accuracy_data, use_container_width=True)
+        st.markdown('<h3>Accuracy Trend</h3>', unsafe_allow_html=True)
+        if st.session_state.history:
+            accuracy_data = []
+            correct = total = 0
+            for h in st.session_state.history[-50:]:
+                if h['Bet_Placed'] and h['Bet'] in ['P', 'B']:
+                    total += 1
+                    if h['Win']:
+                        correct += 1
+                    accuracy_data.append(correct / max(total, 1) * 100)
+            if accuracy_data:
+                st.line_chart(accuracy_data, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def render_loss_log():
     """Render recent loss log."""
     if st.session_state.loss_log:
-        st.subheader("Recent Losses")
-        st.dataframe([
-            {
-                "Sequence": ", ".join(log['sequence']),
-                "Prediction": log['prediction'],
-                "Result": log['result'],
-                "Confidence": f"{log['confidence']}%",
-                "Insights": "; ".join([f"{k}: {v}" for k, v in log['insights'].items()])
-            }
-            for log in st.session_state.loss_log[-5:]
-        ])
+        with st.container():
+            st.markdown('<div class="card"><h2>Recent Losses</h2>', unsafe_allow_html=True)
+            st.dataframe([
+                {
+                    "Sequence": ", ".join(log['sequence']),
+                    "Prediction": log['prediction'],
+                    "Result": log['result'],
+                    "Confidence": f"{log['confidence']}%",
+                    "Insights": "; ".join([f"{k}: {v}" for k, v in log['insights'].items()])
+                }
+                for log in st.session_state.loss_log[-5:]
+            ])
+            st.markdown('</div>', unsafe_allow_html=True)
 
 def render_history():
     """Render betting history table."""
     if st.session_state.history:
-        st.subheader("Bet History")
-        n = st.slider("Show last N bets", 5, 50, 10)
-        st.dataframe([
-            {
-                "Bet": h["Bet"] if h["Bet"] else "-",
-                "Result": h["Result"],
-                "Amount": f"${h['Amount']:.2f}" if h["Bet_Placed"] else "-",
-                "Outcome": "Win" if h["Win"] else "Loss" if h["Bet_Placed"] else "-",
-                "T3_Level": h["T3_Level"] if st.session_state.strategy == 'T3' else "-",
-                "Parlay_Step": h["Parlay_Step"] if st.session_state.strategy == 'Parlay16' else "-",
-                "Z1003_Loss_Count": h["Z1003_Loss_Count"] if st.session_state.strategy == 'Z1003.1' else "-",
-            }
-            for h in st.session_state.history[-n:]
-        ])
+        with st.container():
+            st.markdown('<div class="card"><h2>Bet History</h2>', unsafe_allow_html=True)
+            n = st.slider("Show last N bets", 5, 50, 10)
+            st.dataframe([
+                {
+                    "Bet": h["Bet"] if h["Bet"] else "-",
+                    "Result": h["Result"],
+                    "Amount": f"${h['Amount']:.2f}" if h["Bet_Placed"] else "-",
+                    "Outcome": "Win" if h["Win"] else "Loss" if h["Bet_Placed"] else "-",
+                    "T3_Level": h["T3_Level"] if st.session_state.strategy == 'T3' else "-",
+                    "Parlay_Step": h["Parlay_Step"] if st.session_state.strategy == 'Parlay16' else "-",
+                    "Z1003_Loss_Count": h["Z1003_Loss_Count"] if st.session_state.strategy == 'Z1003.1' else "-",
+                }
+                for h in st.session_state.history[-n:]
+            ])
+            st.markdown('</div>', unsafe_allow_html=True)
 
 def render_export():
     """Render session data export option."""
-    st.subheader("Export Session")
-    if st.button("Download Session Data"):
-        csv_data = "Bet,Result,Amount,Win,T3_Level,Parlay_Step,Z1003_Loss_Count\n"
-        for h in st.session_state.history:
-            csv_data += f"{h['Bet'] or '-'},{h['Result']},${h['Amount']:.2f},{h['Win']},{h['T3_Level']},{h['Parlay_Step']},{h['Z1003_Loss_Count']}\n"
-        st.download_button("Download CSV", csv_data, "session_data.csv", "text/csv")
+    with st.container():
+        st.markdown('<div class="card"><h2>Export Session</h2>', unsafe_allow_html=True)
+        if st.button("Download Session Data"):
+            csv_data = "Bet,Result,Amount,Win,T3_Level,Parlay_Step,Z1003_Loss_Count\n"
+            for h in st.session_state.history:
+                csv_data += f"{h['Bet'] or '-'},{h['Result']},${h['Amount']:.2f},{h['Win']},{h['T3_Level']},{h['Parlay_Step']},{h['Z1003_Loss_Count']}\n"
+            st.download_button("Download CSV", csv_data, "session_data.csv", "text/csv")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def render_simulation():
     """Render simulation controls and results."""
-    st.subheader("Run Simulation")
-    num_hands = st.number_input("Number of Hands to Simulate", min_value=10, max_value=200, value=80, step=10)
-    if st.button("Run Simulation"):
-        result = simulate_shoe(num_hands)
-        st.write(f"**Simulation Results**")
-        st.write(f"Accuracy: {result['accuracy']:.1f}% ({result['correct']}/{result['total']} correct)")
-        st.write("Pattern Performance:")
-        for pattern in result['pattern_success']:
-            success = result['pattern_success'][pattern]
-            attempts = result['pattern_attempts'][pattern]
-            st.write(f"{pattern}: {success}/{attempts} ({success/attempts*100:.1f}%)" if attempts > 0 else f"{pattern}: 0/0 (0%)")
-        st.write("Results logged to simulation_log.txt")
+    with st.container():
+        st.markdown('<div class="card"><h2>Run Simulation</h2>', unsafe_allow_html=True)
+        num_hands = st.number_input("Number of Hands to Simulate", min_value=10, max_value=200, value=80, step=10)
+        if st.button("Run Simulation"):
+            result = simulate_shoe(num_hands)
+            st.markdown("**Simulation Results**")
+            st.markdown(f"Accuracy: {result['accuracy']:.1f}% ({result['correct']}/{result['total']} correct)")
+            st.markdown("**Pattern Performance:**")
+            for pattern in result['pattern_success']:
+                success = result['pattern_success'][pattern]
+                attempts = result['pattern_attempts'][pattern]
+                st.markdown(f"{pattern}: {success}/{attempts} ({success/attempts*100:.1f}%)" if attempts > 0 else f"{pattern}: 0/0 (0%)")
+            st.markdown("Results logged to simulation_log.txt")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Main Application ---
 def main():
     """Main application function."""
-    st.set_page_config(layout="centered", page_title="MANG BACCARAT GROUP")
+    st.set_page_config(layout="wide", page_title="MANG BACCARAT GROUP")
     st.title("MANG BACCARAT GROUP")
     initialize_session_state()
 
-    render_setup_form()
-    render_result_input()
-    render_bead_plate()
-    render_prediction()
-    render_status()
-    render_insights()
-    render_accuracy()
-    render_loss_log()
-    render_history()
-    render_export()
-    render_simulation()
+    # Split layout into two columns for better organization
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        render_setup_form()
+        render_result_input()
+        render_bead_plate()
+        render_prediction()
+        render_insights()
+        render_history()
+
+    with col2:
+        render_status()
+        render_accuracy()
+        render_loss_log()
+        render_export()
+        render_simulation()
 
 if __name__ == "__main__":
     main()
