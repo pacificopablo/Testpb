@@ -589,7 +589,7 @@ def predict_next() -> Tuple[Optional[str], float, Dict]:
     if shoe_bias > 0.1:
         prob_p *= 1.05
         prob_b *= 0.95
- jimelif shoe_bias < -0.1:
+    elif shoe_bias < -0.1:
         prob_b *= 1.05
         prob_p *= 0.95
 
