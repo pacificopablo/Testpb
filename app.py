@@ -3,6 +3,8 @@ import random
 
 # Constants
 SHOE_SIZE = 80
+GRID_ROWS = 6  # Added to match aibet2
+GRID_COLS = 16  # Added to match aibet2
 HISTORY_LIMIT = 50
 STOP_LOSS_DEFAULT = 0.0
 WIN_LIMIT = 6.0
@@ -20,7 +22,7 @@ GRID = [[1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 0],
         [4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
 
-# CSS Styling
+# CSS Styling (updated to include aibet2's bead-plate class)
 st.markdown("""
 <style>
 body {
@@ -123,6 +125,12 @@ h1 {
 .target-profit-section .icon {
     margin-right: 0.5rem;
     font-size: 1.2rem;
+}
+.bead-plate {
+    background-color: #edf2f7;
+    padding: 10px;
+    border-radius: 8px;
+    overflow-x: auto;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -542,7 +550,7 @@ def render_setup_form():
             base_bet = st.number_input("Base Bet ($)", min_value=0.10, value=st.session_state.base_bet or 5.00, step=0.10)
             money_management = st.selectbox("Money Management Strategy", MONEY_MANAGEMENT_STRATEGIES, index=MONEY_MANAGEMENT_STRATEGIES.index(st.session_state.money_management))
             st.markdown('<div class="target-profit-section">', unsafe_allow_html=True)
-            st.markdown('<h3><span class="icon">ðŸ›¡</span>Safety & Limits</h3>', unsafe_allow_html=True)
+            st.markdown('<h3><span class="icon">🛡️</span>Safety & Limits</h3>', unsafe_allow_html=True)
             safety_net_enabled = st.checkbox("Enable Safety Net", value=True)
             safety_net_percentage = st.number_input("Safety Net Percentage (%)", min_value=0.0, max_value=100.0, value=st.session_state.safety_net_percentage * 100 or 2.00, step=0.1, disabled=not safety_net_enabled)
             stop_loss_enabled = st.checkbox("Enable Stop-Loss", value=True)
@@ -712,10 +720,6 @@ def render_result_input():
                         st.session_state.advice = f"AI Skipped betting (bet ${bet_amount:.2f} exceeds bankroll)"
                     st.success("Undone last action.")
                     st.rerun()
-        if st.session_state.shoe_completed and st.button("Reset and Start New Shoe", key="new_shoe_btn"):
-            reset_session()
-            st.session_state.shoe_completed = False
-            st.rerun()
 
 def render_prediction():
     with st.expander("Prediction", expanded=True):
@@ -805,27 +809,20 @@ def render_status():
 
 def render_bead_plate():
     with st.expander("Bead Plate", expanded=True):
-        if not st.session_state.sequence:
-            st.write("No results yet.")
-        else:
-            bead_plate = []
-            row = []
-            for i, result in enumerate(st.session_state.sequence):
-                if i % 6 == 0 and i != 0:
-                    bead_plate.append(row)
-                    row = []
-                color = '#3182ce' if result == 'P' else '#e53e3e' if result == 'B' else '#38a169'
-                row.append(f'<div style="width:30px; height:30px; background-color:{color}; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold;">{result}</div>')
-            if row:
-                bead_plate.append(row + [''] * (6 - len(row)))
-            html = '<table style="border-collapse:collapse;">'
-            for row in bead_plate:
-                html += '<tr>'
-                for cell in row:
-                    html += f'<td style="padding:5px;">{cell}</td>'
-                html += '</tr>'
-            html += '</table>'
-            st.markdown(html, unsafe_allow_html=True)
+        st.markdown("**Bead Plate**")
+        sequence = st.session_state.sequence[-(GRID_ROWS * GRID_COLS):]  # Limit to last 96 results
+        grid = [['' for _ in range(GRID_COLS)] for _ in range(GRID_ROWS)]
+        for i, result in enumerate(sequence):
+            if result in ['P', 'B', 'T']:
+                col = i // GRID_ROWS
+                row = i % GRID_ROWS
+                if col < GRID_COLS:
+                    color = '#3182ce' if result == 'P' else '#e53e3e' if result == 'B' else '#38a169'
+                    grid[row][col] = f'<div style="width: 20px; height: 20px; background-color: {color}; border-radius: 50%; display: inline-block;"></div>'
+        st.markdown('<div class="bead-plate">', unsafe_allow_html=True)
+        for row in grid:
+            st.markdown(' '.join(row), unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def track_user_session():
     return 1  # Placeholder for user tracking
