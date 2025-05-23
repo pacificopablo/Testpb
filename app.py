@@ -3,8 +3,8 @@ import random
 
 # Constants
 SHOE_SIZE = 80
-GRID_ROWS = 6  # Added to match aibet2
-GRID_COLS = 16  # Added to match aibet2
+GRID_ROWS = 6
+GRID_COLS = 16
 HISTORY_LIMIT = 50
 STOP_LOSS_DEFAULT = 0.0
 WIN_LIMIT = 6.0
@@ -22,7 +22,7 @@ GRID = [[1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 0],
         [4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
 
-# CSS Styling (updated to include aibet2's bead-plate class)
+# CSS Styling
 st.markdown("""
 <style>
 body {
@@ -544,87 +544,88 @@ def place_result(result: str):
         st.error("Error processing result.")
 
 def render_setup_form():
-    with st.expander("Session Setup", expanded=st.session_state.bankroll == 0):
-        with st.form("setup_form"):
-            bankroll = st.number_input("Bankroll ($)", min_value=0.0, value=st.session_state.bankroll or 1233.00, step=10.0)
-            base_bet = st.number_input("Base Bet ($)", min_value=0.10, value=st.session_state.base_bet or 5.00, step=0.10)
-            money_management = st.selectbox("Money Management Strategy", MONEY_MANAGEMENT_STRATEGIES, index=MONEY_MANAGEMENT_STRATEGIES.index(st.session_state.money_management))
-            st.markdown('<div class="target-profit-section">', unsafe_allow_html=True)
-            st.markdown('<h3><span class="icon">🛡️</span>Safety & Limits</h3>', unsafe_allow_html=True)
-            safety_net_enabled = st.checkbox("Enable Safety Net", value=True)
-            safety_net_percentage = st.number_input("Safety Net Percentage (%)", min_value=0.0, max_value=100.0, value=st.session_state.safety_net_percentage * 100 or 2.00, step=0.1, disabled=not safety_net_enabled)
-            stop_loss_enabled = st.checkbox("Enable Stop-Loss", value=True)
-            stop_loss_percentage = st.number_input("Stop-Loss Percentage (%)", min_value=0.0, max_value=100.0, value=st.session_state.stop_loss_percentage * 100 or 100.00, step=0.1, disabled=not stop_loss_enabled)
-            profit_lock_threshold = st.number_input("Profit Lock Threshold (% of Initial Bankroll)", min_value=100.0, max_value=1000.0, value=st.session_state.win_limit * 100 or 600.00, step=1.0)
-            smart_skip_enabled = st.checkbox("Enable Smart Skip", value=False)
-            st.markdown('</div>', unsafe_allow_html=True)
+    with st.sidebar:
+        with st.expander("Session Setup", expanded=st.session_state.bankroll == 0):
+            with st.form("setup_form"):
+                bankroll = st.number_input("Bankroll ($)", min_value=0.0, value=st.session_state.bankroll or 1233.00, step=10.0)
+                base_bet = st.number_input("Base Bet ($)", min_value=0.10, value=st.session_state.base_bet or 5.00, step=0.10)
+                money_management = st.selectbox("Money Management Strategy", MONEY_MANAGEMENT_STRATEGIES, index=MONEY_MANAGEMENT_STRATEGIES.index(st.session_state.money_management))
+                st.markdown('<div class="target-profit-section">', unsafe_allow_html=True)
+                st.markdown('<h3><span class="icon">🛡️</span>Safety & Limits</h3>', unsafe_allow_html=True)
+                safety_net_enabled = st.checkbox("Enable Safety Net", value=True)
+                safety_net_percentage = st.number_input("Safety Net Percentage (%)", min_value=0.0, max_value=100.0, value=st.session_state.safety_net_percentage * 100 or 2.00, step=0.1, disabled=not safety_net_enabled)
+                stop_loss_enabled = st.checkbox("Enable Stop-Loss", value=True)
+                stop_loss_percentage = st.number_input("Stop-Loss Percentage (%)", min_value=0.0, max_value=100.0, value=st.session_state.stop_loss_percentage * 100 or 100.00, step=0.1, disabled=not stop_loss_enabled)
+                profit_lock_threshold = st.number_input("Profit Lock Threshold (% of Initial Bankroll)", min_value=100.0, max_value=1000.0, value=st.session_state.win_limit * 100 or 600.00, step=1.0)
+                smart_skip_enabled = st.checkbox("Enable Smart Skip", value=False)
+                st.markdown('</div>', unsafe_allow_html=True)
 
-            if st.form_submit_button("Start Session"):
-                min_bankroll_requirements = {
-                    'FourTier': FOUR_TIER_MINIMUM_BANKROLL_MULTIPLIER,
-                    'FlatbetLevelUp': FLATBET_LEVELUP_MINIMUM_BANKROLL_MULTIPLIER,
-                    'Grid': GRID_MINIMUM_BANKROLL_MULTIPLIER,
-                    'OscarGrind': 10,
-                    'T3': 5,
-                    'Parlay16': 95,
-                    'Moon': 10,
-                    'Flatbet': 1
-                }
-                min_bankroll = base_bet * min_bankroll_requirements[money_management]
-                if bankroll <= 0:
-                    st.error("Bankroll must be positive.")
-                elif base_bet <= 0:
-                    st.error("Base bet must be positive.")
-                elif bankroll < min_bankroll:
-                    st.error(f"Bankroll must be at least ${min_bankroll:.2f} for {money_management} strategy with base bet ${base_bet:.2f}.")
-                elif stop_loss_percentage < 0 or stop_loss_percentage > 100:
-                    st.error("Stop-loss percentage must be between 0% and 100%.")
-                elif safety_net_percentage < 0 or safety_net_percentage >= 100:
-                    st.error("Safety net percentage must be between 0% and 100%.")
-                elif profit_lock_threshold <= 100:
-                    st.error("Profit lock threshold must be greater than 100%.")
-                else:
-                    st.session_state.update({
-                        'bankroll': bankroll,
-                        'base_bet': base_bet,
-                        'initial_bankroll': bankroll,
-                        'sequence': [],
-                        'bet_history': [],
-                        'pending_bet': None,
-                        'bets_placed': 0,
-                        'bets_won': 0,
-                        't3_level': 1,
-                        't3_results': [],
-                        'money_management': money_management,
-                        'stop_loss_percentage': stop_loss_percentage / 100,
-                        'stop_loss_enabled': stop_loss_enabled,
-                        'win_limit': profit_lock_threshold / 100,
-                        'shoe_completed': False,
-                        'safety_net_enabled': safety_net_enabled,
-                        'safety_net_percentage': safety_net_percentage / 100,
-                        'smart_skip_enabled': smart_skip_enabled,
-                        'advice': "Enter a result to start AI betting",
-                        'parlay_step': 1,
-                        'parlay_wins': 0,
-                        'parlay_using_base': True,
-                        'parlay_step_changes': 0,
-                        'parlay_peak_step': 1,
-                        'moon_level': 1,
-                        'moon_level_changes': 0,
-                        'moon_peak_level': 1,
-                        'target_profit_option': 'Profit %',
-                        'target_profit_percentage': 0.0,
-                        'target_profit_units': 0.0,
-                        'four_tier_level': 1,
-                        'four_tier_step': 1,
-                        'four_tier_losses': 0,
-                        'flatbet_levelup_level': 1,
-                        'flatbet_levelup_net_loss': 0.0,
-                        'grid_pos': [0, 0],
-                        'oscar_cycle_profit': 0.0,
-                        'oscar_current_bet_level': 1
-                    })
-                    st.success(f"AI-driven session started with {money_management} strategy and base bet ${base_bet:.2f}!")
+                if st.form_submit_button("Start Session"):
+                    min_bankroll_requirements = {
+                        'FourTier': FOUR_TIER_MINIMUM_BANKROLL_MULTIPLIER,
+                        'FlatbetLevelUp': FLATBET_LEVELUP_MINIMUM_BANKROLL_MULTIPLIER,
+                        'Grid': GRID_MINIMUM_BANKROLL_MULTIPLIER,
+                        'OscarGrind': 10,
+                        'T3': 5,
+                        'Parlay16': 95,
+                        'Moon': 10,
+                        'Flatbet': 1
+                    }
+                    min_bankroll = base_bet * min_bankroll_requirements[money_management]
+                    if bankroll <= 0:
+                        st.error("Bankroll must be positive.")
+                    elif base_bet <= 0:
+                        st.error("Base bet must be positive.")
+                    elif bankroll < min_bankroll:
+                        st.error(f"Bankroll must be at least ${min_bankroll:.2f} for {money_management} strategy with base bet ${base_bet:.2f}.")
+                    elif stop_loss_percentage < 0 or stop_loss_percentage > 100:
+                        st.error("Stop-loss percentage must be between 0% and 100%.")
+                    elif safety_net_percentage < 0 or safety_net_percentage >= 100:
+                        st.error("Safety net percentage must be between 0% and 100%.")
+                    elif profit_lock_threshold <= 100:
+                        st.error("Profit lock threshold must be greater than 100%.")
+                    else:
+                        st.session_state.update({
+                            'bankroll': bankroll,
+                            'base_bet': base_bet,
+                            'initial_bankroll': bankroll,
+                            'sequence': [],
+                            'bet_history': [],
+                            'pending_bet': None,
+                            'bets_placed': 0,
+                            'bets_won': 0,
+                            't3_level': 1,
+                            't3_results': [],
+                            'money_management': money_management,
+                            'stop_loss_percentage': stop_loss_percentage / 100,
+                            'stop_loss_enabled': stop_loss_enabled,
+                            'win_limit': profit_lock_threshold / 100,
+                            'shoe_completed': False,
+                            'safety_net_enabled': safety_net_enabled,
+                            'safety_net_percentage': safety_net_percentage / 100,
+                            'smart_skip_enabled': smart_skip_enabled,
+                            'advice': "Enter a result to start AI betting",
+                            'parlay_step': 1,
+                            'parlay_wins': 0,
+                            'parlay_using_base': True,
+                            'parlay_step_changes': 0,
+                            'parlay_peak_step': 1,
+                            'moon_level': 1,
+                            'moon_level_changes': 0,
+                            'moon_peak_level': 1,
+                            'target_profit_option': 'Profit %',
+                            'target_profit_percentage': 0.0,
+                            'target_profit_units': 0.0,
+                            'four_tier_level': 1,
+                            'four_tier_step': 1,
+                            'four_tier_losses': 0,
+                            'flatbet_levelup_level': 1,
+                            'flatbet_levelup_net_loss': 0.0,
+                            'grid_pos': [0, 0],
+                            'oscar_cycle_profit': 0.0,
+                            'oscar_current_bet_level': 1
+                        })
+                        st.success(f"AI-driven session started with {money_management} strategy and base bet ${base_bet:.2f}!")
 
 def render_result_input():
     with st.expander("Enter Result", expanded=True):
@@ -810,7 +811,7 @@ def render_status():
 def render_bead_plate():
     with st.expander("Bead Plate", expanded=True):
         st.markdown("**Bead Plate**")
-        sequence = st.session_state.sequence[-(GRID_ROWS * GRID_COLS):]  # Limit to last 96 results
+        sequence = st.session_state.sequence[-(GRID_ROWS * GRID_COLS):]
         grid = [['' for _ in range(GRID_COLS)] for _ in range(GRID_ROWS)]
         for i, result in enumerate(sequence):
             if result in ['P', 'B', 'T']:
@@ -830,12 +831,12 @@ def track_user_session():
 def main():
     st.title("AI-Driven Baccarat Simulation")
     initialize_session_state()
-    render_setup_form()
+    render_setup_form()  # Now in sidebar
     render_prediction()
     render_result_input()
-    render_history()
-    render_status()
     render_bead_plate()
+    render_status()
+    render_history()
 
 if __name__ == "__main__":
     main()
