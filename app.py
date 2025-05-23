@@ -284,7 +284,7 @@ def place_result(result: str):
                 st.success(f"Target profit reached: ${current_profit:.2f} (Target: ${st.session_state.target_profit_units:.2f}). Game reset.")
                 return
 
-        # AI-driven base bet adjustment
+        # Check bankroll against strategy requirements
         min_bankroll_requirements = {
             'FourTier': FOUR_TIER_MINIMUM_BANKROLL_MULTIPLIER,
             'FlatbetLevelUp': FLATBET_LEVELUP_MINIMUM_BANKROLL_MULTIPLIER,
@@ -295,7 +295,6 @@ def place_result(result: str):
             'Moon': 10,
             'Flatbet': 1
         }
-        st.session_state.base_bet = max(0.10, min(st.session_state.bankroll * 0.05, st.session_state.bankroll * 0.01))
         if st.session_state.bankroll < st.session_state.base_bet * min_bankroll_requirements[st.session_state.money_management]:
             st.session_state.money_management = 'Flatbet'
             st.warning(f"Bankroll too low for {st.session_state.money_management}. Switched to Flatbet.")
@@ -540,6 +539,7 @@ def render_setup_form():
     with st.expander("Session Setup", expanded=st.session_state.bankroll == 0):
         with st.form("setup_form"):
             bankroll = st.number_input("Bankroll ($)", min_value=0.0, value=st.session_state.bankroll or 1233.00, step=10.0)
+            base_bet = st.number_input("Base Bet ($)", min_value=0.10, value=st.session_state.base_bet or 5.00, step=0.10)
             money_management = st.selectbox("Money Management Strategy", MONEY_MANAGEMENT_STRATEGIES, index=MONEY_MANAGEMENT_STRATEGIES.index(st.session_state.money_management))
             st.markdown('<div class="target-profit-section">', unsafe_allow_html=True)
             st.markdown('<h3><span class="icon">ðŸ›¡</span>Safety & Limits</h3>', unsafe_allow_html=True)
@@ -552,7 +552,6 @@ def render_setup_form():
             st.markdown('</div>', unsafe_allow_html=True)
 
             if st.form_submit_button("Start Session"):
-                base_bet = max(0.10, min(bankroll * 0.05, bankroll * 0.01))
                 min_bankroll_requirements = {
                     'FourTier': FOUR_TIER_MINIMUM_BANKROLL_MULTIPLIER,
                     'FlatbetLevelUp': FLATBET_LEVELUP_MINIMUM_BANKROLL_MULTIPLIER,
@@ -566,8 +565,10 @@ def render_setup_form():
                 min_bankroll = base_bet * min_bankroll_requirements[money_management]
                 if bankroll <= 0:
                     st.error("Bankroll must be positive.")
+                elif base_bet <= 0:
+                    st.error("Base bet must be positive.")
                 elif bankroll < min_bankroll:
-                    st.error(f"Bankroll must be at least ${min_bankroll:.2f} for {money_management} strategy.")
+                    st.error(f"Bankroll must be at least ${min_bankroll:.2f} for {money_management} strategy with base bet ${base_bet:.2f}.")
                 elif stop_loss_percentage < 0 or stop_loss_percentage > 100:
                     st.error("Stop-loss percentage must be between 0% and 100%.")
                 elif safety_net_percentage < 0 or safety_net_percentage >= 100:
@@ -615,7 +616,7 @@ def render_setup_form():
                         'oscar_cycle_profit': 0.0,
                         'oscar_current_bet_level': 1
                     })
-                    st.success(f"AI-driven session started with {money_management} strategy!")
+                    st.success(f"AI-driven session started with {money_management} strategy and base bet ${base_bet:.2f}!")
 
 def render_result_input():
     with st.expander("Enter Result", expanded=True):
@@ -672,7 +673,6 @@ def render_result_input():
                     rationale = f"AI Probability: P {p_prob*100:.0f}%, B {b_prob*100:.0f}%"
                     if len(valid_sequence) >= 3 and len(set(valid_sequence[-3:])) == 1:
                         rationale += f", Streak of {valid_sequence[-1]}"
-                    st.session_state.base_bet = max(0.10, min(st.session_state.bankroll * 0.05, st.session_state.bankroll * 0.01))
                     min_bankroll_requirements = {
                         'FourTier': FOUR_TIER_MINIMUM_BANKROLL_MULTIPLIER,
                         'FlatbetLevelUp': FLATBET_LEVELUP_MINIMUM_BANKROLL_MULTIPLIER,
