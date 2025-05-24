@@ -6,4 +6,4 @@ scikit-learn==1.5.2
 plotly
 joblib
 pandas
-xgboost
+xgboost==2.0.3
