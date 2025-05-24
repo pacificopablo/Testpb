@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import os
 import tempfile
+import joblib
 from datetime import datetime, timedelta
 import time
 import random
@@ -11,6 +12,8 @@ from xgboost import XGBClassifier
 
 # --- Constants ---
 SESSION_FILE = os.path.join(tempfile.gettempdir(), "online_users.txt")
+MODEL_FILE = os.path.join(tempfile.gettempdir(), "baccarat_xgb_model.joblib")
+SCALER_FILE = os.path.join(tempfile.gettempdir(), "baccarat_scaler.joblib")
 SHOE_SIZE = 100
 HISTORY_LIMIT = 100
 STOP_LOSS_DEFAULT = 1.0
@@ -82,7 +85,20 @@ def train_ml_model(sequence):
     X_scaled = scaler.fit_transform(X)
     model = XGBClassifier(n_estimators=50, max_depth=3, learning_rate=0.1, random_state=42)
     model.fit(X_scaled, y)
+    # Save model and scaler
+    joblib.dump(model, MODEL_FILE)
+    joblib.dump(scaler, SCALER_FILE)
     return model, scaler
+
+def load_ml_model():
+    if os.path.exists(MODEL_FILE) and os.path.exists(SCALER_FILE):
+        try:
+            model = joblib.load(MODEL_FILE)
+            scaler = joblib.load(SCALER_FILE)
+            return model, scaler
+        except:
+            return None, None
+    return None, None
 
 def predict_next_outcome(sequence, model, scaler):
     if len(sequence) < 4 or model is None:
@@ -125,6 +141,9 @@ def initialize_session_state():
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+    # Load model if available
+    if st.session_state.ml_model is None and st.session_state.ml_scaler is None:
+        st.session_state.ml_model, st.session_state.ml_scaler = load_ml_model()
 
 def reset_session():
     setup_values = {k: st.session_state[k] for k in [
@@ -146,6 +165,8 @@ def reset_session():
         'current_streak': 0, 'current_streak_type': None, 'longest_streak': 0, 'longest_streak_type': None,
         'current_chop_count': 0, 'longest_chop': 0
     })
+    # Load model if available
+    st.session_state.ml_model, st.session_state.ml_scaler = load_ml_model()
 
 # --- Betting Logic ---
 def calculate_bet_amount(bet_selection: str) -> float:
@@ -362,9 +383,9 @@ def place_result(result: str):
         if result in ['P', 'B', 'T']:
             st.session_state.sequence.append(result)
 
-        # Train model
+        # Train or load model
         valid_sequence = [r for r in st.session_state.sequence if r in ['P', 'B', 'T']]
-        if len(valid_sequence) >= 5 and (len(valid_sequence) % 5 == 0 or st.session_state.ml_model is None):
+        if len(valid_sequence) >= 5 and (len(valid_sequence) % 30 == 0 or st.session_state.ml_model is None):
             st.session_state.ml_model, st.session_state.ml_scaler = train_ml_model(valid_sequence)
 
         # Increment sequence index
@@ -550,7 +571,7 @@ def render_result_input():
                         st.session_state.pending_bet = None
                         st.session_state.advice = "Need 4 more Player or Banker results"
                     else:
-                        if len(valid_sequence) % 5 == 0 or st.session_state.ml_model is None:
+                        if len(valid_sequence) % 30 == 0 or st.session_state.ml_model is None:
                             st.session_state.ml_model, st.session_state.ml_scaler = train_ml_model(valid_sequence)
                         total_from_p = st.session_state.transition_counts['PP'] + st.session_state.transition_counts['PB']
                         total_from_b = st.session_state.transition_counts['BP'] + st.session_state.transition_counts['BB']
