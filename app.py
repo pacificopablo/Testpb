@@ -222,7 +222,7 @@ def place_result(result: str):
             'parlay_step': st.session_state.parlay_step, 'parlay_wins': st.session_state.parlay_wins, 'parlay_using_base': st.session_state.parlay_using_base,
             'parlay_step_changes': st.session_state.parlay_step_changes, 'parlay_peak_step': st.session_state.parlay_peak_step,
             'moon_level': st.session_state.moon_level, 'moon_level_changes': st.session_state.moon_level_changes, 'moon_peak_level': st.session_state.moon_peak_level,
-            'four_tier_level': st.session_state.four_tier_level, 'four_tier_step': st.session_state.four_tier_step, 'four_tier_losses': st.session_state.four_tier_losses,
+            'four_tier_level': - ': st.session_state.four_tier_level, 'four_tier_step': st.session_state.four_tier_step, 'four_tier_losses': st.session_state.four_tier_losses,
             'flatbet_levelup_level': st.session_state.flatbet_levelup_level, 'flatbet_levelup_net_loss': st.session_state.flatbet_levelup_net_loss,
             'bets_placed': st.session_state.bets_placed, 'bets_won': st.session_state.bets_won, 'transition_counts': st.session_state.transition_counts.copy(),
             'pending_bet': st.session_state.pending_bet, 'shoe_completed': st.session_state.shoe_completed, 'grid_pos': st.session_state.grid_pos.copy(),
@@ -417,7 +417,81 @@ def place_result(result: str):
                 bet_amount = calculate_bet_amount(bet_selection)
                 if bet_amount <= st.session_state.bankroll:
                     st.session_state.pending_bet = (bet_amount, bet_selection)
-                    strategy_info tric', 'target_profit_percentage': target_value / 100 if target_mode == "Profit %" else 0.0,
+                    strategy_info = f"{st.session_state.money_management}"
+                    if st.session_state.shoe_completed and st.session_state.safety_net_enabled:
+                        strategy_info = "Safety Net (Flatbet)"
+                    elif st.session_state.money_management == 'T3':
+                        strategy_info += f" Level {st.session_state.t3_level}"
+                    elif st.session_state.money_management == 'Parlay16':
+                        strategy_info += f" Step {st.session_state.parlay_step}/16"
+                    elif st.session_state.money_management == 'Moon':
+                        strategy_info += f" Level {st.session_state.moon_level}"
+                    elif st.session_state.money_management == 'FourTier':
+                        strategy_info += f" Level {st.session_state.four_tier_level} Step {st.session_state.four_tier_step}"
+                    elif st.session_state.money_management == 'FlatbetLevelUp':
+                        strategy_info += f" Level {st.session_state.flatbet_levelup_level}"
+                    elif st.session_state.money_management == 'Grid':
+                        strategy_info += f" Grid ({st.session_state.grid_pos[0]},{st.session_state.grid_pos[1]})"
+                    elif st.session_state.money_management == 'OscarGrind':
+                        strategy_info += f" Bet Level {st.session_state.oscar_current_bet_level}"
+                    st.session_state.advice = f"Bet ${bet_amount:.2f} on {bet_selection} ({strategy_info}, {strategy_used}: {confidence:.1f}%)"
+                else:
+                    st.session_state.pending_bet = None
+                    st.session_state.advice = f"Skip betting (bet ${bet_amount:.2f} exceeds bankroll)"
+            else:
+                st.session_state.pending_bet = None
+                st.session_state.advice = f"Skip betting (low confidence: {confidence:.1f}% or Tie)"
+    except Exception as e:
+        st.error(f"Error in place_result: {str(e)}")
+
+def run_simulation():
+    for _ in range(SHOE_SIZE):
+        if st.session_state.shoe_completed:
+            break
+        result = simulate_shoe_result()
+        place_result(result)
+        time.sleep(0.01)  # Prevent UI freeze
+    st.session_state.shoe_completed = True
+    st.rerun()
+
+def render_setup_form():
+    with st.expander("Setup Session", expanded=not st.session_state.initial_bankroll):
+        with st.form("setup_form"):
+            bankroll = st.number_input("Bankroll ($)", min_value=0.0, value=1000.0, step=100.0)
+            base_bet = st.number_input("Base Bet ($)", min_value=0.0, value=10.0, step=1.0)
+            money_management = st.selectbox("Money Management Strategy", STRATEGIES)
+            stop_loss_enabled = st.checkbox("Enable Stop Loss", value=True)
+            stop_loss_percentage = st.number_input("Stop Loss Percentage", min_value=0.0, max_value=100.0, value=STOP_LOSS_DEFAULT * 100, step=5.0) / 100
+            safety_net_enabled = st.checkbox("Enable Safety Net", value=True)
+            safety_net_percentage = st.number_input("Safety Net Percentage", min_value=0.0, max_value=100.0, value=2.0, step=1.0) / 100
+            win_limit = st.number_input("Win Limit (Multiple of Bankroll)", min_value=1.0, value=WIN_LIMIT, step=0.5)
+            target_mode = st.selectbox("Target Profit Mode", ["None", "Profit %", "Units"])
+            target_value = 0.0
+            if target_mode == "Profit %":
+                target_value = st.number_input("Target Profit (%)", min_value=0.0, value=10.0, step=5.0)
+            elif target_mode == "Units":
+                target_value = st.number_input("Target Profit (Units)", min_value=0.0, value=100.0, step=10.0)
+            ai_mode = st.checkbox("Enable AI Auto-Play", value=False)
+            min_bankroll = {
+                "T3": base_bet * 3, "Flatbet": base_bet * 5, "Parlay16": base_bet * 190,
+                "Moon": base_bet * 10, "FourTier": base_bet * FOUR_TIER_MIN_BANKROLL,
+                "FlatbetLevelUp": base_bet * FLATBET_LEVELUP_MIN_BANKROLL, "Grid": base_bet * GRID_MIN_BANKROLL,
+                "OscarGrind": base_bet * 10
+            }
+            submitted = st.form_submit_button("Start Session")
+            if submitted:
+                if bankroll < min_bankroll[money_management]:
+                    st.error(f"Bankroll must be at least ${min_bankroll[money_management]:.2f} for {money_management}.")
+                elif base_bet <= 0:
+                    st.error("Base bet must be greater than 0.")
+                else:
+                    reset_session()
+                    st.session_state.update({
+                        'bankroll': bankroll, 'base_bet': base_bet, 'initial_bankroll': bankroll,
+                        'money_management': money_management, 'stop_loss_enabled': stop_loss_enabled,
+                        'stop_loss_percentage': stop_loss_percentage, 'safety_net_enabled': safety_net_enabled,
+                        'safety_net_percentage': safety_net_percentage, 'win_limit': win_limit,
+                        'target_profit_option': target_mode, 'target_profit_percentage': target_value / 100 if target_mode == "Profit %" else 0.0,
                         'target_profit_units': target_value if target_mode == "Units" else 0.0, 'ai_mode': ai_mode
                     })
                     st.success(f"Session started with {money_management}! AI Auto-Play: {'On' if ai_mode else 'Off'}")
