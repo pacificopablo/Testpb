@@ -8,11 +8,11 @@ from datetime import datetime, timedelta
 import time
 import random
 from sklearn.preprocessing import StandardScaler
-from xgboost import XGBClassifier
+from sklearn.ensemble import RandomForestClassifier
 
 # --- Constants ---
 SESSION_FILE = os.path.join(tempfile.gettempdir(), "online_users.txt")
-MODEL_FILE = os.path.join(tempfile.gettempdir(), "baccarat_xgb_model.joblib")
+MODEL_FILE = os.path.join(tempfile.gettempdir(), "baccarat_rf_model.joblib")
 SCALER_FILE = os.path.join(tempfile.gettempdir(), "baccarat_scaler.joblib")
 SHOE_SIZE = 100
 HISTORY_LIMIT = 100
@@ -83,7 +83,7 @@ def train_ml_model(sequence):
         y.append(OUTCOME_MAPPING[next_outcome])
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
-    model = XGBClassifier(n_estimators=50, max_depth=3, learning_rate=0.1, random_state=42)
+    model = RandomForestClassifier(n_estimators=50, max_depth=3, random_state=42)
     model.fit(X_scaled, y)
     # Save model and scaler
     joblib.dump(model, MODEL_FILE)
