@@ -1,3 +1,4 @@
+
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -476,27 +477,24 @@ def place_result(result: str):
             tbl_confidence = tbl_weights[tbl_predicted_outcome]
             gs_predicted_outcome, gs_confidence = predict_golden_secret(valid_sequence)
 
-            # Weighted voting
-            votes = {'P': 0.0, 'B': 0.0, 'T': 0.0}
-            if ml_predicted_outcome in votes:
-                votes[ml_predicted_outcome] += 0.4 * ml_confidence
-            if tbl_predicted_outcome in votes:
-                votes[tbl_predicted_outcome] += 0.3 * tbl_confidence
-            if gs_predicted_outcome in votes:
-                votes[gs_predicted_outcome] += 0.3 * gs_confidence
+            # Select prediction with highest confidence
+            predictions = [
+                ('AI', ml_predicted_outcome, ml_confidence),
+                ('TimeBeforeLast', tbl_predicted_outcome, tbl_confidence),
+                ('GoldenSecret', gs_predicted_outcome, gs_confidence)
+            ]
+            valid_predictions = [(method, pred, conf) for method, pred, conf in predictions if pred in ['P', 'B']]
+            if not valid_predictions:
+                st.session_state.pending_bet = None
+                st.session_state.advice = "Skip betting (no valid predictions for P or B)"
+                return
 
-            bet_selection = max(votes, key=votes.get)
-            confidence = votes[bet_selection] * 100
-            strategy_used = []
-            if ml_predicted_outcome == bet_selection:
-                strategy_used.append('AI')
-            if tbl_predicted_outcome == bet_selection:
-                strategy_used.append('TimeBeforeLast')
-            if gs_predicted_outcome == bet_selection:
-                strategy_used.append('GoldenSecret')
-            strategy_used = '+'.join(strategy_used)
+            # Choose the prediction with the highest confidence
+            method, bet_selection, confidence = max(valid_predictions, key=lambda x: x[2])
+            confidence *= 100  # Convert to percentage
+            strategy_used = method
 
-            if votes[bet_selection] >= 0.5 and bet_selection in ['P', 'B'] and confidence >= 60.0:
+            if confidence >= 60.0 and bet_selection in ['P', 'B']:
                 bet_amount = calculate_bet_amount(bet_selection)
                 if bet_amount <= st.session_state.bankroll:
                     st.session_state.pending_bet = (bet_amount, bet_selection)
@@ -525,7 +523,7 @@ def place_result(result: str):
                     st.session_state.advice = f"Skip betting (bet ${bet_amount:.2f} exceeds bankroll)"
             else:
                 st.session_state.pending_bet = None
-                st.session_state.advice = f"Skip betting (low confidence: {confidence:.1f}% or Tie)"
+                st.session_state.advice = f"Skip betting (low confidence: {confidence:.1f}% or invalid prediction)"
     except Exception as e:
         st.error(f"Error in place_result: {str(e)}")
 
@@ -643,27 +641,24 @@ def render_result_input():
                         tbl_confidence = tbl_weights[tbl_predicted_outcome]
                         gs_predicted_outcome, gs_confidence = predict_golden_secret(valid_sequence)
 
-                        # Weighted voting
-                        votes = {'P': 0.0, 'B': 0.0, 'T': 0.0}
-                        if ml_predicted_outcome in votes:
-                            votes[ml_predicted_outcome] += 0.4 * ml_confidence
-                        if tbl_predicted_outcome in votes:
-                            votes[tbl_predicted_outcome] += 0.3 * tbl_confidence
-                        if gs_predicted_outcome in votes:
-                            votes[gs_predicted_outcome] += 0.3 * gs_confidence
+                        # Select prediction with highest confidence
+                        predictions = [
+                            ('AI', ml_predicted_outcome, ml_confidence),
+                            ('TimeBeforeLast', tbl_predicted_outcome, tbl_confidence),
+                            ('GoldenSecret', gs_predicted_outcome, gs_confidence)
+                        ]
+                        valid_predictions = [(method, pred, conf) for method, pred, conf in predictions if pred in ['P', 'B']]
+                        if not valid_predictions:
+                            st.session_state.pending_bet = None
+                            st.session_state.advice = "Skip betting (no valid predictions for P or B)"
+                            return
 
-                        bet_selection = max(votes, key=votes.get)
-                        confidence = votes[bet_selection] * 100
-                        strategy_used = []
-                        if ml_predicted_outcome == bet_selection:
-                            strategy_used.append('AI')
-                        if tbl_predicted_outcome == bet_selection:
-                            strategy_used.append('TimeBeforeLast')
-                        if gs_predicted_outcome == bet_selection:
-                            strategy_used.append('GoldenSecret')
-                        strategy_used = '+'.join(strategy_used)
+                        # Choose the prediction with the highest confidence
+                        method, bet_selection, confidence = max(valid_predictions, key=lambda x: x[2])
+                        confidence *= 100  # Convert to percentage
+                        strategy_used = method
 
-                        if votes[bet_selection] >= 0.5 and bet_selection in ['P', 'B'] and confidence >= 60.0:
+                        if confidence >= 60.0 and bet_selection in ['P', 'B']:
                             bet_amount = calculate_bet_amount(bet_selection)
                             if bet_amount <= st.session_state.bankroll:
                                 st.session_state.pending_bet = (bet_amount, bet_selection)
@@ -692,7 +687,7 @@ def render_result_input():
                                 st.session_state.advice = f"Skip betting (bet ${bet_amount:.2f} exceeds bankroll)"
                         else:
                             st.session_state.pending_bet = None
-                            st.session_state.advice = f"Skip betting (low confidence: {confidence:.1f}% or Tie)"
+                            st.session_state.advice = f"Skip betting (low confidence: {confidence:.1f}% or invalid prediction)"
                     st.success("Undone last action.")
                     st.rerun()
         if st.session_state.shoe_completed and st.button("Reset and Start New Shoe", key="new_shoe_btn"):
@@ -804,4 +799,4 @@ def main():
     render_history()
 
 if __name__ == "__main__":
-    main()
+    main() 
