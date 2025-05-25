@@ -765,7 +765,7 @@ def render_history():
                     "Amount": f"${h['Bet_Amount']:.2f}" if h["Bet_Amount"] > 0 else "-",
                     "Outcome": h["Bet_Outcome"] if h["Bet_Outcome"] else "-", "AI_Prediction": h["AI_Prediction"],
                     "Confidence": h["Confidence"]
-                ]
+                
                 for h in st.session_state.bet_history[-n:]
             ], use_container_width=True)
 
