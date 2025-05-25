@@ -1,3 +1,4 @@
+
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -43,6 +44,7 @@ OUTCOME_MAPPING = {'P': 0, 'B': 1, 'T': 2}
 REVERSE_MAPPING = {0: 'P', 1: 'B', 2: 'T'}
 _1222_MIN_BANKROLL = 10
 START_BETTING_HAND = 6  # Start betting on the 6th hand
+CONFIDENCE_THRESHOLD = 60.0  # Minimum confidence for betting
 
 # --- CSS Styling ---
 def apply_css():
@@ -77,7 +79,7 @@ def extract_ngrams(sequence, n):
 
 def get_shoe_features(sequence):
     if not sequence:
-        return [0] * 28  # Return zeros if sequence is empty
+        return [0] * 21  # Adjusted for optimized feature set
     valid_sequence = [r for r in sequence if r in ['P', 'B', 'T']]
     total_hands = len(valid_sequence)
     
@@ -87,23 +89,23 @@ def get_shoe_features(sequence):
     b_ratio = counts.get('B', 0) / total_hands if total_hands > 0 else 0
     t_ratio = counts.get('T', 0) / total_hands if total_hands > 0 else 0
     
-    # Bigram frequencies
+    # Bigram frequencies (key patterns only)
     bigrams = extract_ngrams(valid_sequence, 2)
     bigram_counts = Counter(bigrams)
-    bigram_features = [bigram_counts.get(''.join(combo), 0) / len(bigrams) if bigrams else 0 
-                       for combo in product(['P', 'B', 'T'], repeat=2)]
+    bigram_features = [bigram_counts.get(combo, 0) / len(bigrams) if bigrams else 0 
+                       for combo in ['PP', 'BB', 'PB', 'BP', 'PT', 'BT']]
     
-    # Trigram frequencies
+    # Trigram frequencies (key patterns)
     trigrams = extract_ngrams(valid_sequence, 3)
     trigram_counts = Counter(trigrams)
-    trigram_features = [trigram_counts.get(''.join(combo), 0) / len(trigrams) if trigrams else 0 
-                        for combo in [('P', 'P', 'P'), ('B', 'B', 'B'), ('P', 'B', 'P'), ('B', 'P', 'B')]]
+    trigram_features = [trigram_counts.get(combo, 0) / len(trigrams) if trigrams else 0 
+                        for combo in ['PPP', 'BBB', 'PBP', 'BPB']]
     
-    # Fourgram frequencies (limited to common patterns)
+    # Fourgram frequencies (key patterns)
     fourgrams = extract_ngrams(valid_sequence, 4)
     fourgram_counts = Counter(fourgrams)
-    fourgram_features = [fourgram_counts.get(''.join(combo), 0) / len(fourgrams) if fourgrams else 0 
-                         for combo in [('P', 'P', 'P', 'P'), ('B', 'B', 'B', 'B'), ('P', 'B', 'P', 'B'), ('B', 'P', 'B', 'P')]]
+    fourgram_features = [fourgram_counts.get(combo, 0) / len(fourgrams) if fourgrams else 0 
+                         for combo in ['PPPP', 'BBBB', 'PBPB', 'BPBP']]
     
     # Streak and chop features
     streak_length = 0
@@ -135,7 +137,7 @@ def train_ml_model(sequence):
         y.append(OUTCOME_MAPPING[next_outcome])
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
-    model = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
+    model = RandomForestClassifier(n_estimators=80, max_depth=4, random_state=42)
     model.fit(X_scaled, y)
     joblib.dump(model, MODEL_FILE)
     joblib.dump(scaler, SCALER_FILE)
@@ -471,11 +473,12 @@ def place_result(result: str):
             actual = result
             if predicted == actual:
                 total_preds = sum(1 for h in st.session_state.bet_history if h.get('Bet_Selection') == predicted)
-                correct_preds = sum(1 for h in st.session_state.bet_history if h.get('Bet_Selection') == predicted and h['Result'] == predicted)
+                correct_preds = sum(1 for h in st.session_state.bet_history if h.get('Bet_Selection', 'P') == predicted and h['Result'] == predicted)
                 st.session_state.prediction_accuracy[predicted] = (correct_preds / total_preds * 100) if total_preds > 0 else 0.0
                 total_bets = sum(1 for h in st.session_state.bet_history if h.get('Bet_Selection'))
                 total_correct = sum(1 for h in st.session_state.bet_history if h.get('Bet_Selection') and h['Result'] == h['Bet_Selection'])
                 st.session_state.prediction_accuracy['total'] = (total_correct / total_bets * 100) if total_bets > 0 else 0.0
+                st.session_state.success(f"Prediction accuracy updated for {predicted} and increased overall.")
 
         # Log history
         st.session_state.bet_history.append({
@@ -486,7 +489,7 @@ def place_result(result: str):
         if len(st.session_state.bet_history) > HISTORY_LIMIT:
             st.session_state.bet_history = st.session_state.bet_history[-HISTORY_LIMIT:]
 
-        # Predict next using only AI
+        # Predict next bet using AI only
         if len(valid_sequence) < START_BETTING_HAND:
             st.session_state.pending_bet = None
             st.session_state.advice = f"Need {START_BETTING_HAND - len(valid_sequence)} more results to start betting"
@@ -495,14 +498,14 @@ def place_result(result: str):
                 st.session_state.shoe_completed = True
             if st.session_state.shoe_completed and not st.session_state.safety_net_enabled:
                 st.session_state.pending_bet = None
-                st.session_state.advice = "Shoe completed. Start a new shoe."
+                st.session_state.advice = "Shoe completed. AI-only betting stopped."
                 return
-            # Get AI prediction
+            # AI-only prediction
             bet_selection, confidence = predict_next_outcome(valid_sequence, st.session_state.ml_model, st.session_state.ml_scaler)
-            confidence *= 100
+            confidence *= 100  # Convert to percentage
             strategy_used = 'AI'
 
-            if confidence >= 60.0 and bet_selection in ['P', 'B']:
+            if confidence >= CONFIDENCE_THRESHOLD and bet_selection in ['P', 'B']:
                 bet_amount = calculate_bet_amount(bet_selection)
                 if bet_amount <= st.session_state.bankroll:
                     st.session_state.pending_bet = (bet_amount, bet_selection)
@@ -579,44 +582,45 @@ def render_setup_form():
                     reset_session()
                     st.session_state.update({
                         'bankroll': bankroll, 'base_bet': base_bet, 'initial_bankroll': bankroll,
-                        'peak_bankroll': bankroll, 'money_management': money_management, 'stop_loss_enabled': stop_loss_enabled,
+                        'peak_bankroll': bankroll, 'money_management': money_management, 'stop_loss_enabled': True,
                         'stop_loss_percentage': stop_loss_percentage, 'safety_net_enabled': safety_net_enabled,
                         'safety_net_percentage': safety_net_percentage, 'win_limit': win_limit,
                         'target_profit_option': target_mode, 'target_profit_percentage': target_value / 100 if target_mode == "Profit %" else 0.0,
-                        'target_profit_units': target_value if target_mode == "Units" else 0.0, 'ai_mode': ai_mode,
+                        'target_profit_units': target_value if target_mode == 'Units' else 0.0, 'ai_mode': ai_mode,
                         'level_start_bankroll_1222': bankroll
                     })
-                    st.success(f"Session started with {money_management}! AI Auto-Play: {'On' if ai_mode else 'Off'}")
+                    st.session_state(f"{'Session started with {money_management}! AI Auto-Play: {'Enabled' if ai_mode else 'Off'}")
                     if ai_mode:
                         run_simulation()
 
 def render_result_input():
     with st.expander("Enter Result", expanded=True):
         if st.session_state.shoe_completed and not st.session_state.safety_net_enabled:
-            st.success(f"Shoe of {SHOE_SIZE} hands completed!")
+            st.success(f"{'Shoe of {SHOE_SIZE} hands completed!'}}")
         elif st.session_state.shoe_completed:
             st.info("Continuing with safety net.")
         cols = st.columns(4)
         with cols[0]:
-            if st.button("Player", key="player_btn", disabled=(st.session_state.shoe_completed and not st.session_state.safety_net_enabled) or st.session_state.bankroll == 0 or st.session_state.ai_mode):
+            if st.button("Player", key="player_btn", disabled=(st.session_state.shoe_completed and not st.session_state.safety_net_enabled) or st.session_state.bankroll == 0 or st.session_state.ai_mode)):
                 place_result("P")
                 st.rerun()
         with cols[1]:
-            if st.button("Banker", key="banker_btn", disabled=(st.session_state.shoe_completed and not st.session_state.safety_net_enabled) or st.session_state.bankroll == 0 or st.session_state.ai_mode):
+            if st.button("Banker", key="banker_btn", disabled=(st.session_state.shoe_completed and not st.session_state.safety_net_enabled) or st.session_state.banking_roll == 0 or st.session_state.ai_mode)):
                 place_result("B")
                 st.rerun()
         with cols[2]:
-            if st.button("Tie", key="tie_btn", disabled=(st.session_state.shoe_completed and not st.session_state.safety_net_enabled) or st.session_state.bankroll == 0 or st.session_state.ai_mode):
+            if st.button("Tie", key="tie_btn", disabled=(st.session_state.shoe_completed and not st.session_state.safety_net_enabled) or st.session_state.bankroll == 0 or st.session_state.ai_mode)):
                 place_result("T")
                 st.rerun()
         with cols[3]:
-            if st.button("Undo Last", key="undo_btn", disabled=not st.session_state.bet_history or (st.session_state.shoe_completed and not st.session_state.safety_net_enabled) or st.session_state.bankroll == 0 or st.session_state.ai_mode):
+            if st.button("Undo Last", key="undo_btn", disabled=not st.session_state.bet_history or (st.session_state.shoe_completed and not st.session_state.safety_net_enabled) or st.session_state.bankroll == 0 or st.session_state.ai_mode)):
                 if not st.session_state.sequence:
                     st.warning("No results to undo.")
                 else:
                     last_bet = st.session_state.bet_history.pop()
                     st.session_state.sequence.pop()
-                    for key, value in last_bet["Previous_State"].items():
+                    for key in key:
+ value in last_bet["Previous_State"].items():
                         st.session_state[key] = value
                     if last_bet["Bet_Amount"] > 0:
                         st.session_state.bets_placed -= 1
@@ -643,12 +647,12 @@ def render_result_input():
                             st.session_state.shoe_completed = True
                         if st.session_state.shoe_completed and not st.session_state.safety_net_enabled:
                             st.session_state.pending_bet = None
-                            st.session_state.advice = "Shoe completed. Start a new shoe."
+                            st.session_state.advice = "Shoe completed. AI-only betting paused."
                             st.rerun()
                         bet_selection, confidence = predict_next_outcome(valid_sequence, st.session_state.ml_model, st.session_state.ml_scaler)
                         confidence *= 100
                         strategy_used = 'AI'
-                        if confidence >= 60.0 and bet_selection in ['P', 'B']:
+                        if confidence >= CONFIDENCE_THRESHOLD and bet_selection in ['P', 'B']:
                             bet_amount = calculate_bet_amount(bet_selection)
                             if bet_amount <= st.session_state.bankroll:
                                 st.session_state.pending_bet = (bet_amount, bet_selection)
@@ -819,3 +823,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
