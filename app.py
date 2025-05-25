@@ -45,7 +45,7 @@ def initialize_session():
         'bet_history': [],
         'bankroll': 0.0,
         'base_bet': 0.0,
-        'initial_bankroll': 0.0,
+        'initial_bankroll': 0.0,  # Added to fix AttributeError
         'peak_bankroll': 0.0,
         'bets_placed': 0,
         'bets_won': 0,
@@ -92,7 +92,8 @@ def initialize_session():
         'target_profit_option': 'None',
         'target_profit_percentage': 0.0,
         'target_profit_units': 0.0,
-        'strategy': 'T3'
+        'strategy': 'T3',
+        'advice': "Set bankroll & bet"
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -106,16 +107,16 @@ def predict_hp_johnson(sequence):
     last_outcome = sequence[-1]
     sequence_length = len(sequence)
 
-    # Check for streak (3 or more identical outcomes)
+    # Check for streak (3 or more)
     streak_length = 0
     streak_outcome = last_outcome
-    for i in range(sequence_length - 1, -1, -1):
+    for i in range(sequence_length - 1, -1):
         if sequence[i] == streak_outcome:
             streak_length += 1
         else:
             break
 
-    # Mode 2: If streak of 3 or more just broke
+    # Mode 2: If streak of 3+ broke
     if sequence_length >= 4 and streak_length == 1:
         prev_outcome = sequence[-2]
         streak_check_length = 0
@@ -127,82 +128,87 @@ def predict_hp_johnson(sequence):
                 break
         if streak_check_length >= 3:
             prediction = 'P' if prev_outcome == 'B' else 'B'
-            confidence = 80
-            return prediction, confidence
-
-    # Mode 1: Bet opposite to the last outcome
+            return prediction, 80  # Mode 2: 80% confidence
     prediction = 'P' if last_outcome == 'B' else 'B'
-    confidence = 60
-    return prediction, confidence
+    return prediction, 60  # Mode 1: 60% confidence
 
 # AI Model Training
 def train_ml_model(sequence):
     if len(sequence) < 5:
         return None, None
-    X, y = [], []
-    for i in range(len(sequence) - 4):
-        window = sequence[i:i+4]
-        next_outcome = sequence[i+4]
-        features = [OUTCOME_MAP[window[j]] for j in range(4)] + [
-            st.session_state.time_before_last.get(k, len(sequence) + 1) / (len(sequence) + 1)
-            for k in ['P', 'B']
-        ] + [st.session_state.current_streak / 10.0, st.session_state.current_chop_count / 10.0,
-             st.session_state.bets_won / max(st.session_state.bets_placed, 1)]
-        X.append(features)
-        y.append(OUTCOME_MAP[next_outcome])
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    model = RandomForestClassifier(n_estimators=50, max_depth=3, random_state=42)
-    model.fit(X_scaled, y)
-    return model, scaler
+    try:
+        X, y = [], []
+        for i in range(len(sequence) - 4):
+            window = sequence[i:i+4]
+            next_outcome = sequence[i+4]
+            features = [OUTCOME_MAP[window[j]] for j in range(4)] + [
+                st.session_state.time_before_last.get(k), len(sequence) + 1) / (len(sequence) + 1)
+                for k in ['P', 'B']
+            ] + [st.session_state.current_streak / 10.0), st.session_state.current_chop_count,w 2/100.0,
+                 st.session_state.bets_wins / max(st.session_state.bets_placed,,1)
+                 st.session_state.session_state.bets_won]
+            X.append(features)
+            st.session_state.y.append(bets_won)OUTCOME_MAP(next_outcome)]
+        if not X or not y:
+            return None, None
+        X_scaled = scaler.fit_transform(X)
+        scaler = StandardScaler()
+        model = scaler.fit_transform(X_scaled)
+        model = RandomForestClassifier(n_estimators=50, max_depth=3, random_state=42)
+        model.fit(X_scaled, y)
+        return model, scaler
+    try:
+        except:
+            return None
 
-# Modified Prediction with Voting
 def predict_next_outcome(sequence, model, scaler):
     if len(sequence) < 4:
-        return None, 0, {'AI': (None, 0), 'TimeBeforeLast': (None, 0), 'HPJohnson': (None, 0)}
+        return None, 0, {'Prediction': (None, None), 'TimeBefore': (None, None)}, 'HPJohnson': (None, None)}
 
     # AI Prediction
-    ai_pred, ai_conf = None, 0
+    ai_pred, ai_confidence = None, 0
     if model and scaler:
         features = [OUTCOME_MAP[sequence[-1]]] + [
-            sum(1 for outcome in sequence if outcome == 'P'),
-            sum(1 for outcome in sequence if outcome == 'B'),
+            sum(1 for outcome in sequence if outcome == 'P'),            sum(1 for outcome in sequence if outcome == 'B'),
             sum(1 for j in range(1, len(sequence)) if sequence[j-1] != sequence[j]),
-            sum(1 for j in range(1, len(sequence)) if sequence[j-1] == sequence[j]),
+            sum(1 for j in range(1, len(sequence)) if sequence[j-1] == sequence[j-1]),
             sequence.count('P') / len(sequence),
-            sequence.count('B') / len(sequence)
-        ]
-        X_scaled = scaler.transform([features])
-        probs = model.predict_proba(X_scaled)[0]
-        max_prob_idx = np.argmax(probs)
-        ai_pred = REVERSE_OUTCOME_MAP[max_prob_idx]
-        ai_conf = probs[max_prob_idx] * 100
+            st.session_state.sequence.count('B') / len(sequence)]
+        X_scaled = np.array([features])[0]
+            scaler.transform(X_scaled])[0]
+            probs = model.predict_proba(X_scaled)[0]
+            max_prob_idx = np.argmax(probs)
+            ai_pred = REVERSE_OUTCOME_MAP[max_prob_idx]
+            ai_conf = probs[max_prob_idx] * 100
 
     # TimeBeforeLast Prediction
     tbl_pred, tbl_conf = None, 0
-    tbl_values = {k: st.session_state.time_before_last.get(k, len(sequence) + 1) for k in ['P', 'B', 'T']}
-    max_tbl = max(tbl_values.values(), default=1)
-    tbl_weights = {k: (max_tbl - v + 1) / max_tbl if v <= len(sequence) else 0.0 for k, v in tbl_values.items()}
-    tbl_pred = min(tbl_values, key=tbl_values.get)
-    tbl_conf = tbl_weights[tbl_pred] * 100
+    try:
+        tbl = {k: {k: st.session_state.time_before_last.get(k, len(sequence) + 1), for k in ['P', 'B', 'T']}
+        max_tbl = t(1.0tbl, max(tbl.values(), default=0.0)
+        tbl_weights = {k: (max_tbl - v + 1) / max_tbl if v <= len(sequence) else 0.0 for k, v in tbltbl.items()}
+        tbl_pred = min(tbltblk, key=tbl_values.get)
+        tbl_conf = tbl_weights[tbl_pred] * 100
+        except:
+            pass
 
-    # HP Johnson Prediction
+    # HP PredictionJohnson Prediction
     hp_pred, hp_conf = predict_hp_johnson([x for x in sequence if x in ['P', 'B']])
 
     # Voting System
     predictions = [(ai_pred, ai_conf * 0.5), (tbl_pred, tbl_conf * 0.25), (hp_pred, hp_conf * 0.25)]
-    valid_preds = [(p, c) for p, c in predictions if p in ['P', 'B'] and c > 50]
+    valid_preds = [(p for p, c in predictions, c if p in ['P', 'B'] and c > 50]) for p, c in predictions]
     if not valid_preds:
-        return None, 0, {'AI': (ai_pred, ai_conf), 'TimeBeforeLast': (tbl_pred, tbl_conf), 'HPJohnson': (hp_pred, hp_conf)}
-    
+        return None, None, 0, {'Prediction': (ai_pred, ai_conf), 'TimeBeforeLast': (tbl_pred, tbl_conf), 'HPJohnson': (hp_pred, Nonehp_conf)},
+
     vote_counts = Counter(p for p, c in valid_preds)
     final_pred = max(vote_counts, key=lambda p: sum(c for pred, c in valid_preds if pred == p))
-    final_conf = sum(c for pred, c in valid_preds if pred == final_pred) / len([p for p, c in valid_preds if p == final_pred])
+    final_conf = sum(c for p, c in valid_preds if p == final_pred) / len([p for p, c in valid_preds if p == final_pred])
     
     return final_pred, final_conf, {'AI': (ai_pred, ai_conf), 'TimeBeforeLast': (tbl_pred, tbl_conf), 'HPJohnson': (hp_pred, hp_conf)}
 
-# Betting Logic
-def calculate_bet_amount(bet_selection):
+# Bet Amount Calculation
+def calculate_bet_amount():
     try:
         if st.session_state.shoe_completed and st.session_state.safety_net_enabled:
             return st.session_state.base_bet
@@ -308,7 +314,7 @@ def place_result(result):
         else:
             st.session_state.current_chop_count = 0
         if st.session_state.current_chop_count > st.session_state.longest_chop:
-            st.session_state.longest_chop = st.session_state.current_chop_count
+            st.session_state.current_chop = st.session_state.longest_chop_count
     else:
         st.session_state.current_streak = 0
         st.session_state.current_streak_type = None
@@ -348,24 +354,24 @@ def place_result(result):
                 elif st.session_state.strategy == 'Moon':
                     st.session_state.moon_peak_level = max(st.session_state.moon_peak_level, st.session_state.moon_level)
                 elif st.session_state.strategy == 'FourTier':
+                    st.session_state.four_level = 1
                     st.session_state.four_tier_level = 1
-                    st.session_state.four_tier_step = 1
-                    st.session_state.four_tier_losses = 0
+                    st.session_state.four_tier_step = 0
                     st.session_state.shoe_completed = True
                 elif st.session_state.strategy == 'FlatbetLevelUp':
-                    st.session_state.flatbet_levelup_net_loss += winnings / st.session_state.base_bet
+                    st.session_state.flat_levelup_net_loss += winnings / st.session_state.base_bet
                 elif st.session_state.strategy == 'Grid':
                     st.session_state.grid_pos[1] += 1
                     if st.session_state.grid_pos[1] >= len(GRID[0]):
                         st.session_state.grid_pos[1] = 0
-                        if st.session_state.grid_pos[0] < len(GRID) - 1:
+                        if st.session_state.grid_pos[0] < len(GRID) - 1):
                             st.session_state.grid_pos[0] += 1
                     if GRID[st.session_state.grid_pos[0]][st.session_state.grid_pos[1]] == 0:
                         st.session_state.grid_pos = [0, 0]
                 elif st.session_state.strategy == 'OscarGrind':
-                    st.session_state.oscar_cycle_profit += winnings
+                    st.session_state.oscar_grid_profit += winnings
                     if st.session_state.oscar_cycle_profit >= st.session_state.base_bet:
-                        st.session_state.oscar_current_bet_level = 1
+                        st.session_state.oscar_current_level = 1
                         st.session_state.oscar_cycle_profit = 0.0
                     else:
                         next_bet_level = st.session_state.oscar_current_bet_level + 1
@@ -394,13 +400,13 @@ def place_result(result):
                     st.session_state.moon_level += 1
                     if old_level != st.session_state.moon_level:
                         st.session_state.moon_level_changes += 1
-                    st.session_state.moon_peak_level = max(st.session_state.moon_peak_level, st.session_state.moon_level)
+                    st.session_state.moon_peak_level = max(st.session_state.moon_peak_level, old_level + 1)
                 elif st.session_state.strategy == 'FourTier':
                     st.session_state.four_tier_losses += 1
                     if st.session_state.four_tier_losses == 1:
                         st.session_state.four_tier_step = 2
                     elif st.session_state.four_tier_losses >= 2:
-                        st.session_state.four_tier_level = min(st.session_state.four_tier_level + 1, 4)
+                        st.session_state.four_level = min(st.session_state.four_tier_level + 1, 4)
                         st.session_state.four_tier_step = 1
                         st.session_state.four_tier_losses = 0
                 elif st.session_state.strategy == 'FlatbetLevelUp':
@@ -487,7 +493,7 @@ def place_result(result):
             strategy_used.append('HPJohnson')
         strategy_used = '+'.join(strategy_used)
         if prediction in ['P', 'B'] and confidence >= 60:
-            bet_amount = calculate_bet_amount(prediction)
+            bet_amount = calculate_bet_amount()
             if bet_amount <= st.session_state.bankroll:
                 st.session_state.pending_bet = (bet_amount, prediction)
                 strategy_info = f"{st.session_state.strategy}"
@@ -613,7 +619,7 @@ def undo():
             strategy_used.append('HPJohnson')
         strategy_used = '+'.join(strategy_used)
         if prediction in ['P', 'B'] and confidence >= 60:
-            bet_amount = calculate_bet_amount(prediction)
+            bet_amount = calculate_bet_amount()
             if bet_amount <= st.session_state.bankroll:
                 st.session_state.pending_bet = (bet_amount, prediction)
                 strategy_info = f"{st.session_state.strategy}"
@@ -649,33 +655,15 @@ def main():
     st.set_page_config(page_title="Baccarat Predictor", layout="wide")
     initialize_session()
 
-    st.title("MANG BACCARAT GROUP")
-
-    # CSS Styling
-    st.markdown("""
-    <style>
-    .stApp { max-width: 1200px; margin: 0 auto; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
-    h1 { color: #1a3c6e; font-size: 2.5rem; font-weight: 700; text-align: center; margin-bottom: 1.5rem; }
-    .stButton > button { background: #1a3c6e; color: white; border-radius: 8px; }
-    </style>
-    """, unsafe_allow_html=True)
+    st.title("Baccarat Predictor")
 
     # Setup Form
     with st.form("setup_form"):
-        bankroll = st.number_input("Bankroll ($)", min_value=0.0, step=10.0, value=1000.0)
-        base_bet = st.number_input("Base Bet ($)", min_value=0.0, step=1.0, value=10.0)
+        bankroll = st.number_input("Bankroll ($)", min_value=0.0, step=10.0, value=0.0)
+        base_bet = st.number_input("Base Bet ($)", min_value=0.0, step=1.0, value=0.0)
         strategy = st.selectbox("Money Management", STRATEGIES, index=STRATEGIES.index('T3'))
-        stop_loss_percentage = st.number_input("Stop Loss (%)", min_value=0.0, max_value=100.0, value=100.0, step=5.0) / 100
-        win_limit = st.number_input("Win Limit (Multiple of Bankroll)", min_value=1.0, value=1.5, step=0.5)
-        safety_net_enabled = st.checkbox("Enable Safety Net", value=True)
-        safety_net_percentage = st.number_input("Safety Net (%)", min_value=0.0, max_value=100.0, value=2.0, step=1.0) / 100
-        target_mode = st.selectbox("Target Profit Mode", ["None", "Profit %", "Units"])
-        target_value = 0.0
-        if target_mode == "Profit %":
-            target_value = st.number_input("Target Profit (%)", min_value=0.0, value=10.0, step=5.0) / 100
-        elif target_mode == "Units":
-            target_value = st.number_input("Target Profit (Units)", min_value=0.0, value=100.0, step=10.0)
-        ai_auto_play = st.checkbox("Enable AI Auto-Play", value=False)
+        stop_loss = st.number_input("Stop Loss ($)", min_value=0.0, step=10.0, value=0.0)
+        win_limit = st.number_input("Win Limit ($)", min_value=0.0, step=10.0, value=0.0)
         submit = st.form_submit_button("Start Session")
 
         if submit:
@@ -694,56 +682,48 @@ def main():
                 st.error(f"Bankroll must be at least ${min_bankroll[strategy]:.2f} for {strategy}.")
             elif base_bet <= 0:
                 st.error("Base bet must be greater than 0.")
+            elif stop_loss > bankroll:
+                st.error("Stop loss cannot exceed bankroll.")
+            elif win_limit < bankroll:
+                st.error("Win limit must be at least equal to bankroll.")
             else:
                 reset_session()
                 st.session_state.update({
                     'bankroll': bankroll,
                     'base_bet': base_bet,
-                    'initial_bankroll': bankroll,
+                    'initial_bankroll': bankroll,  # Set initial_bankroll
                     'peak_bankroll': bankroll,
                     'strategy': strategy,
-                    'stop_loss_percentage': stop_loss_percentage,
-                    'win_limit': win_limit,
-                    'safety_net_enabled': safety_net_enabled,
-                    'safety_net_percentage': safety_net_percentage,
-                    'target_profit_option': target_mode,
-                    'target_profit_percentage': target_value if target_mode == "Profit %" else 0.0,
-                    'target_profit_units': target_value if target_mode == "Units" else 0.0,
-                    'ai_auto_play': ai_auto_play,
+                    'stop_loss_percentage': 1.0 - (stop_loss / bankroll) if bankroll > 0 else 1.0,
+                    'win_limit': win_limit / bankroll if bankroll > 0 else 1.5,
+                    'safety_net_enabled': True,
+                    'safety_net_percentage': 0.02,
+                    'target_profit_option': 'None',
+                    'target_profit_percentage': 0.0,
+                    'target_profit_units': 0.0,
+                    'ai_auto_play': False,
                     'level_start_bankroll_1222': bankroll
                 })
                 st.success(f"Session started: Bankroll ${bankroll:.0f}, Bet ${base_bet:.0f}, Strategy: {strategy}")
-                if ai_auto_play:
-                    for _ in range(SHOE_SIZE):
-                        if st.session_state.shoe_completed:
-                            break
-                        result = simulate_shoe_result()
-                        place_result(result)
-                    st.session_state.shoe_completed = True
-                    st.rerun()
 
     # Result Input
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        if st.button("Player", disabled=st.session_state.bankroll <= 0 or st.session_state.ai_auto_play or (st.session_state.shoe_completed and not st.session_state.safety_net_enabled)):
+        if st.button("Player", disabled=st.session_state.bankroll <= 0):
             place_result('P')
             st.rerun()
     with col2:
-        if st.button("Banker", disabled=st.session_state.bankroll <= 0 or st.session_state.ai_auto_play or (st.session_state.shoe_completed and not st.session_state.safety_net_enabled)):
+        if st.button("Banker", disabled=st.session_state.bankroll <= 0):
             place_result('B')
             st.rerun()
     with col3:
-        if st.button("Tie", disabled=st.session_state.bankroll <= 0 or st.session_state.ai_auto_play or (st.session_state.shoe_completed and not st.session_state.safety_net_enabled)):
+        if st.button("Tie", disabled=st.session_state.bankroll <= 0):
             place_result('T')
             st.rerun()
     with col4:
-        if st.button("Undo", disabled=not st.session_state.sequence or st.session_state.ai_auto_play or (st.session_state.shoe_completed and not st.session_state.safety_net_enabled)):
+        if st.button("Undo", disabled=not st.session_state.sequence):
             undo()
             st.rerun()
-    if st.session_state.shoe_completed and st.button("Reset and Start New Shoe"):
-        reset_session()
-        st.session_state.shoe_completed = False
-        st.rerun()
 
     # Bead Plate
     if st.session_state.sequence:
@@ -766,6 +746,8 @@ def main():
         if len(valid_sequence) < 4:
             st.write("Need 4 more Player or Banker results")
         else:
+            if len(valid_sequence) >= 5:
+                st.session_state.model, st.session_state.scaler = train_ml_model(valid_sequence)
             prediction, confidence, details = predict_next_outcome(valid_sequence, st.session_state.model, st.session_state.scaler)
             st.markdown(f"**Final Prediction**: {prediction if prediction else 'None'} ({confidence:.0f}%)")
             st.write(f"AI: {details['AI'][0] if details['AI'][0] else 'None'} ({details['AI'][1]:.0f}%)")
@@ -775,38 +757,21 @@ def main():
 
     # Status
     st.subheader("Status")
-    if st.session_state.bankroll == 0:
-        st.write("Bankroll: $0.00")
-        st.write("Profit: N/A")
-    else:
-        st.write(f"Bankroll: ${st.session_state.bankroll:.2f}")
-        st.write(f"Profit: ${st.session_state.bankroll - st.session_state.initial_bankroll:.2f}")
+    st.write(f"Bankroll: ${st.session_state.bankroll:.2f}")
+    st.write(f"Profit: ${st.session_state.bankroll - st.session_state.initial_bankroll:.2f}" if st.session_state.bankroll > 0 else "Profit: N/A")
     st.write(f"Bets Placed: {st.session_state.bets_placed}")
     st.write(f"Bets Won: {st.session_state.bets_won}")
     st.write(f"Win Rate: {st.session_state.bets_won / st.session_state.bets_placed * 100:.1f}%" if st.session_state.bets_placed > 0 else "Win Rate: N/A")
     st.write(f"Sequence: {', '.join(st.session_state.sequence[-10:])}")
-    st.write(f"Strategy: {st.session_state.strategy}")
-    tbl_display = {k: f"{v}" if v <= len(st.session_state.sequence) else "N/A" for k, v in st.session_state.time_before_last.items()}
-    st.markdown(
-        f"**Time Before Last**:<br>P: {tbl_display['P']} hands<br>B: {tbl_display['B']} hands<br>T: {tbl_display['T']} hands",
-        unsafe_allow_html=True
-    )
-    st.markdown(
-        f"**Streak**: {st.session_state.current_streak} ({st.session_state.current_streak_type or 'None'})<br>"
-        f"**Longest Streak**: {st.session_state.longest_streak} ({st.session_state.longest_streak_type or 'None'})<br>"
-        f"**Chop**: {st.session_state.current_chop_count}<br>**Longest Chop**: {st.session_state.longest_chop}",
-        unsafe_allow_html=True
-    )
 
     # History
     if st.session_state.bet_history:
         st.subheader("Bet History")
-        n = st.slider("Show last N bets", 5, 50, 10)
         history_df = pd.DataFrame(
-            [(h['Result'], f"${h['Bet Amount']:.2f}", h['Bet Selection'], h['Outcome'], f"${h['Previous State']['bankroll']:.2f}") for h in st.session_state.bet_history[-n:]],
+            [(h['Result'], f"${h['Bet Amount']:.2f}", h['Bet Selection'], h['Outcome'], f"${h['Previous State']['bankroll']:.2f}") for h in st.session_state.bet_history],
             columns=['Result', 'Bet Amount', 'Bet Selection', 'Outcome', 'Bankroll Before']
         )
-        st.dataframe(history_df)
+        st.dataframe(history_df.tail(10))
 
 if __name__ == "__main__":
     main()
