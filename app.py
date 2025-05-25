@@ -1,4 +1,3 @@
-
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -470,7 +469,7 @@ def place_result(result: str):
         st.session_state.bet_history.append({
             "Result": result, "Bet_Amount": bet_amount, "Bet_Selection": bet_selection, "Bet_Outcome": bet_outcome,
             "Money_Management": st.session_state.money_management, "AI_Prediction": st.session_state.advice,
-            "Confidence": f"{confidence:.1f}%" if 'confidence' in locals() else "-", "Previous_State": previous_state
+            "Confidence": f"{locals().get('confidence', 0.0):.1f}%" if 'confidence' in locals() else "-", "Previous_State": previous_state
         })
         if len(st.session_state.bet_history) > HISTORY_LIMIT:
             st.session_state.bet_history = st.session_state.bet_history[-HISTORY_LIMIT:]
@@ -696,7 +695,7 @@ def render_prediction():
         else:
             advice = st.session_state.advice
             text_color = '#3182ce' if ' on P ' in advice else '#e53e3e' if ' on B ' in advice else '#2d3748'
-            st.markdown(f"<p style='font-size:1.2rem; font-weight:bold; color:{text_color};">{advice}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size:1.2rem; font-weight:bold; color:{text_color};'>{advice}</p>", unsafe_allow_html=True)
 
 def render_status():
     with st.expander("Session Status", expanded=True):
@@ -706,11 +705,11 @@ def render_status():
             st.markdown(f"**Profit**: ${st.session_state.bankroll - st.session_state.initial_bankroll:.2f}")
             st.markdown(f"**Base Bet**: ${st.session_state.base_bet:.2f}")
             st.markdown(f"**Stop Loss**: {'On' if st.session_state.stop_loss_enabled else 'Off'}, {st.session_state.stop_loss_percentage*100:.0f}%")
-            target = f"{st.session_state.target_profit_percentage*100:.0f}% {st.session_state.target_profit_percentage}" if st.session_state.target_profit_option == 'Profit %' and st.session_state.target_profit_percentage > 0 else f"${st.session_state.target_profit_units:.2f}" if st.session_state.target_profit_option == 'Units' and st.session_state.target_profit_units > 0 else "None"
+            target = f"{st.session_state.target_profit_percentage*100:.0f}%" if st.session_state.target_profit_option == 'Profit %' and st.session_state.target_profit_percentage > 0 else f"${st.session_state.target_profit_units:.2f}" if st.session_state.target_profit_option == 'Units' and st.session_state.target_profit_units > 0 else "None"
             st.markdown(f"**Target Profit**: {target}")
         with col2:
             st.markdown(f"**Safety Net**: {'On' if st.session_state.safety_net_enabled else 'Off'}")
-            st.markdown(f"**Hands Played**: {st.session_state.len_sequence()}")
+            st.markdown(f"**Hands Played**: {len(st.session_state.sequence)}")
             st.markdown(f"**AI Mode**: {'On' if st.session_state.ai_mode else 'Off'}")
             strategy_info = f"{st.session_state.money_management}"
             if st.session_state.shoe_completed and st.session_state.safety_net_enabled:
@@ -724,7 +723,7 @@ def render_status():
             elif st.session_state.money_management == 'FourTier':
                 strategy_info += f" (Level {st.session_state.four_tier_level}, Step {st.session_state.four_tier_step})"
             elif st.session_state.money_management == 'FlatbetLevelUp':
-                strategy_info += f" (Level {st.session_state.flatten_levelup_level})"
+                strategy_info += f" (Level {st.session_state.flatbet_levelup_level})"
             elif st.session_state.money_management == 'Grid':
                 strategy_info += f" (Grid {st.session_state.grid_pos[0]},{st.session_state.grid_pos[1]})"
             elif st.session_state.money_management == 'OscarGrind':
@@ -733,7 +732,7 @@ def render_status():
                 strategy_info += f" (Level {st.session_state.level_1222}, Rounds {st.session_state.rounds_1222})"
             st.markdown(f"**Strategy**: {strategy_info}")
             st.markdown(f"**Bets Placed**: {st.session_state.bets_placed}")
-            st.markdown(f"**Bets Won**: {st.session_state.won_bets
+            st.markdown(f"**Bets Won**: {st.session_state.bets_won}")
             tbl_display = {k: f"{v}" if v <= len(st.session_state.sequence) else "N/A" for k, v in st.session_state.time_before_last.items()}
             st.markdown(
                 f"**Time Before Last**:<br>P: {tbl_display['P']} hands<br>B: {tbl_display['B']} hands<br>T: {tbl_display['T']} hands",
@@ -779,16 +778,16 @@ def render_insights():
             counts = Counter(valid_sequence)
             total = len(valid_sequence)
             st.markdown(f"**Shoe Composition**:<br>"
-                         f"Player: {counts.get('P', 0)} ({counts.get('P', 0)/total*100:.1f}%)<br>"
-                         f"Banker: {counts.get('B', 0)} ({counts.get('B', 0)/total*100:.1f}%)<br>"
-                         f"Tie: {counts.get('T', 0)} ({counts.get('T', 0)/total*100:.1f}%)",
-                         unsafe_allow_html=True)
+                        f"Player: {counts.get('P', 0)} ({counts.get('P', 0)/total*100:.1f}%)<br>"
+                        f"Banker: {counts.get('B', 0)} ({counts.get('B', 0)/total*100:.1f}%)<br>"
+                        f"Tie: {counts.get('T', 0)} ({counts.get('T', 0)/total*100:.1f}%)",
+                        unsafe_allow_html=True)
             bigrams = Counter(extract_ngrams(valid_sequence, 2))
-            st.markdown("**Top Bigrams**:<br>" + "<br>".join([f"{k}: {v} ({v/len(bigrams)*100:.2f}%)" for k, v in bigrams.most_common(3)]),
-                         unsafe_allow_html=True)
+            st.markdown("**Top Bigrams**:<br>" + "<br>".join([f"{k}: {v} ({v/len(bigrams)*100:.1f}%)" for k, v in bigrams.most_common(3)]),
+                        unsafe_allow_html=True)
             trigrams = Counter(extract_ngrams(valid_sequence, 3))
             st.markdown("**Top Trigrams**:<br>" + "<br>".join([f"{k}: {v} ({v/len(trigrams)*100:.1f}%)" for k, v in trigrams.most_common(3)]),
-                         unsafe_allow_html=True)
+                        unsafe_allow_html=True)
 
 # --- Main ---
 def main():
