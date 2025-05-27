@@ -148,24 +148,39 @@ def advanced_bet_selection(results):
     reason = " ".join(reason_parts)
     return bet_choice, confidence, reason, emotional_tone
 
-def calculate_bet_size(bankroll, base_bet):
+def money_management(bankroll, base_bet, strategy, confidence=None):
     """
-    Money management: Calculate bet size as 5% of current bankroll.
-    - Round to nearest multiple of base_bet.
+    Calculate bet size based on selected money management strategy.
+    - Fixed 5% of Bankroll: 5% of current bankroll, rounded to multiple of base_bet.
+    - Flat Betting: Fixed bet equal to base_bet.
+    - Confidence-Based: 2% + up to 3% based on confidence, rounded to multiple of base_bet.
     - Enforce minimum and maximum bet limits.
     """
     min_bet = max(1.0, base_bet)  # Minimum bet is at least base_bet or $1
     max_bet = bankroll  # Max bet is the entire bankroll to prevent bankruptcy
-    calculated_bet = bankroll * 0.05  # 5% of current bankroll
+
+    if strategy == "Fixed 5% of Bankroll":
+        calculated_bet = bankroll * 0.05
+    elif strategy == "Flat Betting":
+        calculated_bet = base_bet
+    elif strategy == "Confidence-Based":
+        if confidence is None:
+            confidence = 50  # Default confidence if not provided
+        confidence_factor = confidence / 100.0
+        bet_percentage = 0.02 + (confidence_factor * 0.03)  # 2% + up to 3%
+        calculated_bet = bankroll * bet_percentage
+    else:
+        calculated_bet = base_bet  # Fallback to base_bet
+
     # Round to nearest multiple of base_bet
     bet_size = round(calculated_bet / base_bet) * base_bet
     # Ensure bet size is at least base_bet (or $1) and does not exceed bankroll
     bet_size = max(min_bet, min(bet_size, max_bet))
     return round(bet_size, 2)
 
-def calculate_bankroll(history, base_bet):
+def calculate_bankroll(history, base_bet, strategy):
     """
-    Calculate bankroll after each round, using dynamic bet sizing based on 5% of current bankroll.
+    Calculate bankroll after each round, using selected money management strategy.
     """
     bankroll = st.session_state.initial_bankroll if 'initial_bankroll' in st.session_state else 1000.0
     current_bankroll = bankroll
@@ -174,14 +189,14 @@ def calculate_bankroll(history, base_bet):
     for i in range(len(history)):
         current_rounds = history[:i + 1]
         # Use advanced bet selection to predict before current round
-        bet, _, _, _ = advanced_bet_selection(current_rounds[:-1]) if i != 0 else ('Pass', 0, '', 'Neutral')
+        bet, confidence, _, _ = advanced_bet_selection(current_rounds[:-1]) if i != 0 else ('Pass', 0, '', 'Neutral')
         actual_result = history[i]
         if bet in (None, 'Pass', 'Tie'):
             bankroll_progress.append(current_bankroll)
             bet_sizes.append(0.0)
             continue
-        # Calculate bet size as 5% of current bankroll
-        bet_size = calculate_bet_size(current_bankroll, base_bet)
+        # Calculate bet size based on selected strategy
+        bet_size = money_management(current_bankroll, base_bet, strategy, confidence)
         bet_sizes.append(bet_size)
         if actual_result == bet:
             if bet == 'Banker':
@@ -206,16 +221,23 @@ def main():
         st.session_state.history = []
         st.session_state.initial_bankroll = 1000.0
         st.session_state.base_bet = 10.0
+        st.session_state.money_management_strategy = "Fixed 5% of Bankroll"
 
-    col_init, col_base = st.columns(2)
+    # Input fields
+    col_init, col_base, col_strategy = st.columns(3)
     with col_init:
         initial_bankroll = st.number_input("Initial Bankroll", min_value=1.0, value=st.session_state.initial_bankroll, step=10.0, format="%.2f")
     with col_base:
         base_bet = st.number_input("Base Bet (Unit Size)", min_value=1.0, max_value=initial_bankroll, value=st.session_state.base_bet, step=1.0, format="%.2f")
+    with col_strategy:
+        strategy_options = ["Fixed 5% of Bankroll", "Flat Betting", "Confidence-Based"]
+        money_management_strategy = st.selectbox("Money Management Strategy", strategy_options, index=strategy_options.index(st.session_state.money_management_strategy))
 
     st.session_state.initial_bankroll = initial_bankroll
     st.session_state.base_bet = base_bet
+    st.session_state.money_management_strategy = money_management_strategy
 
+    # Game input buttons
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("Banker"):
@@ -236,6 +258,10 @@ def main():
 
     st.markdown("---")
 
+    # Display selected money management strategy
+    st.markdown(f"**Selected Money Management Strategy:** {money_management_strategy}")
+
+    # Bet prediction
     bet, confidence, reason, emotional_tone = advanced_bet_selection(st.session_state.history)
     st.markdown("### Prediction for Next Bet")
     if bet == 'Pass':
@@ -243,12 +269,13 @@ def main():
         st.info(reason)
         recommended_bet_size = 0.0
     else:
-        current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet)[0][-1] if st.session_state.history else initial_bankroll
-        recommended_bet_size = calculate_bet_size(current_bankroll, st.session_state.base_bet)
+        current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else initial_bankroll
+        recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy, confidence)
         st.success(f"Predicted Bet: **{bet}**    Confidence: **{confidence}%**    Recommended Bet Size: **${recommended_bet_size:.2f}**    Emotion: **{emotional_tone}**")
         st.write(reason)
 
-    bankroll_progress, bet_sizes = calculate_bankroll(st.session_state.history, st.session_state.base_bet)
+    # Bankroll progression
+    bankroll_progress, bet_sizes = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)
     if bankroll_progress:
         st.markdown("### Bankroll and Bet Size Progression")
         for i, (val, bet_size) in enumerate(zip(bankroll_progress, bet_sizes), 1):
@@ -262,6 +289,7 @@ def main():
         st.session_state.history = []
         st.session_state.initial_bankroll = 1000.0
         st.session_state.base_bet = 10.0
+        st.session_state.money_management_strategy = "Fixed 5% of Bankroll"
         st.experimental_rerun()
 
 if __name__ == "__main__":
