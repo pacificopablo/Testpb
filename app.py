@@ -69,10 +69,9 @@ def advanced_bet_selection(results):
         return alternate_bet, 70, reason
 
     # Weighted frequency scoring
-    # Tie is rare but can disrupt pattern, give it a small penalty but not ignore entirely
     total = len(recent)
     scores = {}
-    scores['Banker'] = freq['Banker'] / total * 0.9  # Slightly penalize because of commission in real game
+    scores['Banker'] = freq['Banker'] / total * 0.9  # Slightly penalize because of commission
     scores['Player'] = freq['Player'] / total * 1.0
     scores['Tie'] = freq['Tie'] / total * 0.6  # Least weight given to Tie
 
@@ -95,40 +94,65 @@ def advanced_bet_selection(results):
 
     return bet_choice, confidence, reason
 
-# Calculate bankroll after each round assuming user bets predicted bet with base bet
+def calculate_bet_size(bankroll, confidence, base_bet):
+    """
+    Money management: Calculate bet size based on bankroll and confidence.
+    - Bet a percentage of bankroll scaled by confidence (simplified Kelly-inspired).
+    - Round to nearest multiple of base_bet.
+    - Enforce minimum and maximum bet limits.
+    """
+    min_bet = max(1.0, base_bet)  # Minimum bet is at least base_bet or $1
+    max_bet = bankroll * 0.1  # Max bet is 10% of current bankroll
+    confidence_factor = confidence / 100.0  # Convert to 0-1 scale
+    bet_percentage = 0.02 + (confidence_factor * 0.03)  # Base 2% + up to 3% based on confidence
+    calculated_bet = bankroll * bet_percentage
+    # Round to nearest multiple of base_bet
+    bet_size = round(calculated_bet / base_bet) * base_bet
+    bet_size = max(min_bet, min(bet_size, max_bet))  # Enforce min/max
+    return round(bet_size, 2)
+
 def calculate_bankroll(history, base_bet):
+    """
+    Calculate bankroll after each round, using dynamic bet sizing based on confidence.
+    """
     bankroll = st.session_state.initial_bankroll if 'initial_bankroll' in st.session_state else 1000.0
     current_bankroll = bankroll
     bankroll_progress = []
+    bet_sizes = []  # Track bet sizes for display
     for i in range(len(history)):
         current_rounds = history[:i + 1]
-        # Use improved bet selection to predict before current round
-        bet, _, _ = advanced_bet_selection(current_rounds[:-1]) if i != 0 else (None, 0, '')
+        # Use advanced bet selection to predict before current round
+        bet, confidence, _ = advanced_bet_selection(current_rounds[:-1]) if i != 0 else (None, 0, '')
         actual_result = history[i]
         if bet is None:
             bankroll_progress.append(current_bankroll)
+            bet_sizes.append(0.0)
             continue
         if bet == 'Tie':
             bankroll_progress.append(current_bankroll)
+            bet_sizes.append(0.0)
             continue
+        # Calculate dynamic bet size based on current bankroll and confidence
+        bet_size = calculate_bet_size(current_bankroll, confidence, base_bet)
+        bet_sizes.append(bet_size)
         if actual_result == bet:
             if bet == 'Banker':
                 # Win with 5% commission
-                win_amount = base_bet * 0.95
+                win_amount = bet_size * 0.95
                 current_bankroll += win_amount
             else:
-                current_bankroll += base_bet
+                current_bankroll += bet_size
         elif actual_result == 'Tie':
             bankroll_progress.append(current_bankroll)
             continue
         else:
-            current_bankroll -= base_bet
+            current_bankroll -= bet_size
         bankroll_progress.append(current_bankroll)
-    return bankroll_progress
+    return bankroll_progress, bet_sizes
 
 def main():
-    st.set_page_config(page_title="Baccarat Interactive Predictor with Bankroll", page_icon="🎲", layout="centered")
-    st.title("Baccarat Interactive Predictor with Bankroll")
+    st.set_page_config(page_title="Baccarat Interactive Predictor with Money Management", page_icon="🎲", layout="centered")
+    st.title("Baccarat Interactive Predictor with Money Management")
 
     if 'history' not in st.session_state:
         st.session_state.history = []
@@ -139,7 +163,7 @@ def main():
     with col_init:
         initial_bankroll = st.number_input("Initial Bankroll", min_value=1.0, value=st.session_state.initial_bankroll, step=10.0, format="%.2f")
     with col_base:
-        base_bet = st.number_input("Base Bet", min_value=1.0, max_value=initial_bankroll, value=st.session_state.base_bet, step=1.0, format="%.2f")
+        base_bet = st.number_input("Base Bet (Unit Size)", min_value=1.0, max_value=initial_bankroll, value=st.session_state.base_bet, step=1.0, format="%.2f")
 
     st.session_state.initial_bankroll = initial_bankroll
     st.session_state.base_bet = base_bet
@@ -169,15 +193,19 @@ def main():
     if bet is None:
         st.warning("No confident prediction available yet.")
         st.info(reason)
+        recommended_bet_size = 0.0
     else:
-        st.success(f"Predicted Bet: **{bet}**    Confidence: **{confidence}%**")
+        current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet)[0][-1] if st.session_state.history else initial_bankroll
+        recommended_bet_size = calculate_bet_size(current_bankroll, confidence, st.session_state.base_bet)
+        st.success(f"Predicted Bet: **{bet}**    Confidence: **{confidence}%**    Recommended Bet Size: **${recommended_bet_size:.2f}**")
         st.write(reason.replace('\n', '  \n'))
 
-    bankroll_progress = calculate_bankroll(st.session_state.history, st.session_state.base_bet)
+    bankroll_progress, bet_sizes = calculate_bankroll(st.session_state.history, st.session_state.base_bet)
     if bankroll_progress:
-        st.markdown("### Bankroll Progression")
-        for i, val in enumerate(bankroll_progress, 1):
-            st.write(f"After hand {i}: ${val:.2f}")
+        st.markdown("### Bankroll and Bet Size Progression")
+        for i, (val, bet_size) in enumerate(zip(bankroll_progress, bet_sizes), 1):
+            bet_display = f"Bet: ${bet_size:.2f}" if bet_size > 0 else "Bet: None (No prediction or Tie)"
+            st.write(f"After hand {i}: Bankroll ${val:.2f}, {bet_display}")
         st.markdown(f"**Current Bankroll:** ${bankroll_progress[-1]:.2f}")
     else:
         st.markdown(f"**Current Bankroll:** ${initial_bankroll:.2f}")
@@ -190,4 +218,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
