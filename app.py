@@ -1,5 +1,6 @@
 import streamlit as st
 
+# Normalize input tokens
 def normalize_result(s):
     s = s.strip().lower()
     if s == 'banker' or s == 'b':
@@ -88,37 +89,45 @@ def predict_next(results):
     return bet, base_confidence, reason
 
 def main():
-    st.set_page_config(page_title="Baccarat Predictor", page_icon="🎲", layout="centered")
-    st.title("Baccarat Predictor")
+    st.set_page_config(page_title="Baccarat Interactive Predictor", page_icon="🎲", layout="centered")
+    st.title("Baccarat Interactive Predictor")
 
-    st.markdown(
-        """
-        Enter past Baccarat results separated by commas (e.g., Banker, Player, Tie, Banker).
-        The predictor will analyze recent trends and suggest which side to bet on with a confidence level.
-        """
-    )
+    if 'history' not in st.session_state:
+        st.session_state.history = []
 
-    history_input = st.text_area("Past Results (comma separated):", 
-                                value="Banker, Player, Player, Tie, Banker, Banker, Banker, Player, Player, Banker, Banker",
-                                height=130)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("Banker"):
+            st.session_state.history.append("Banker")
+    with col2:
+        if st.button("Player"):
+            st.session_state.history.append("Player")
+    with col3:
+        if st.button("Tie"):
+            st.session_state.history.append("Tie")
 
-    if st.button("Predict Next Bet"):
-        inputs = [normalize_result(x) for x in history_input.split(",")]
-        inputs = [r for r in inputs if r is not None]
+    st.markdown("### Game History")
+    if st.session_state.history:
+        # Show history reversed with latest on top for better UX
+        for i, result in enumerate(reversed(st.session_state.history), 1):
+            st.write(f"{len(st.session_state.history) - i + 1}. {result}")
+    else:
+        st.write("_No results yet. Click the buttons above to enter results._")
 
-        if not inputs:
-            st.error("Please enter valid past results (Banker, Player, or Tie).")
-            return
+    st.markdown("---")
+    bet, confidence, reason = predict_next(st.session_state.history)
 
-        bet, confidence, reason = predict_next(inputs)
+    st.markdown("### Prediction for Next Bet")
+    if bet is None:
+        st.warning("No confident prediction available yet.")
+        st.info(reason)
+    else:
+        st.success(f"Predicted Bet: **{bet}**    Confidence: **{confidence}%**")
+        st.write(reason.replace('\n', '  \n'))
 
-        if bet is None:
-            st.warning("No confident prediction.")
-            st.info(reason)
-        else:
-            st.success(f"Predicted Bet: {bet}  |  Confidence: {confidence}%")
-            st.code(reason)
+    if st.button("Reset History"):
+        st.session_state.history = []
+        st.experimental_rerun()
 
 if __name__ == "__main__":
     main()
-
