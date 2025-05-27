@@ -225,6 +225,7 @@ def main():
 
     # Input fields
     col_init, col_base, col_strategy = st.columns(3)
+    with ascended
     with col_init:
         initial_bankroll = st.number_input("Initial Bankroll", min_value=1.0, value=st.session_state.initial_bankroll, step=10.0, format="%.2f")
     with col_base:
@@ -249,59 +250,21 @@ def main():
         if st.button("Tie"):
             st.session_state.history.append("Tie")
 
-    # Bead Plate History
-    st.markdown("### Bead Plate History")
-    st.markdown("**Legend**: <span style='color:red'>●</span> Banker, <span style='color:blue'>●</span> Player, <span style='color:green'>●</span> Tie", unsafe_allow_html=True)
-    if st.session_state.history:
-        # Limit history to 84 results (6x14 grid)
-        history = st.session_state.history[-84:]
-        # Initialize 6x14 grid
-        grid = [['' for _ in range(14)] for _ in range(6)]
-        # Fill grid left-to-right, top-to-bottom
-        for i, result in enumerate(history):
-            row = i // 14
-            col = i % 14
-            if row < 6:  # Ensure we stay within grid
-                grid[row][col] = result
-
-        # Generate HTML for bead plate
-        html = """
-        <style>
-        .bead-plate {
-            display: table;
-            border-collapse: collapse;
-            margin: 10px 0;
-        }
-        .bead-plate-cell {
-            width: 20px;
-            height: 20px;
-            border: 1px solid #ddd;
-            text-align: center;
-            vertical-align: middle;
-            font-size: 16px;
-        }
-        .banker { color: red; }
-        .player { color: blue; }
-        .tie { color: green; }
-        </style>
-        <div class="bead-plate">
-        """
-        for row in grid:
-            html += "<div style='display: table-row;'>"
-            for cell in row:
-                if cell == 'Banker':
-                    html += '<div class="bead-plate-cell banker">●</div>'
-                elif cell == 'Player':
-                    html += '<div class="bead-plate-cell player">●</div>'
-                elif cell == 'Tie':
-                    html += '<div class="bead-plate-cell tie">●</div>'
-                else:
-                    html += '<div class="bead-plate-cell"></div>'
-            html += "</div>"
-        html += "</div>"
-
-        st.markdown(html, unsafe_allow_html=True)
-    else:
+    # Bead Plate History (Adapted from origmangbacc)
+    st.markdown("### Bead Plate")
+    sequence = [r for r in st.session_state.history]  # Copy history
+    sequence = ['P' if r == 'Player' else 'B' if r == 'Banker' else 'T' for r in sequence][-84:]  # Map to P/B/T and limit to 84
+    grid = [['' for _ in range(14)] for _ in range(6)]
+    for i, result in enumerate(sequence):
+        if result in ['P', 'B', 'T']:
+            col = i // 6
+            row = i % 6
+            if col < 14:
+                color = '#3182ce' if result == 'P' else '#e53e3e' if result == 'B' else '#38a169'
+                grid[row][col] = f'<div style="width: 20px; height: 20px; background-color: {color}; border-radius: 50%; display: inline-block;"></div>'
+    for row in grid:
+        st.markdown(' '.join(row), unsafe_allow_html=True)
+    if not st.session_state.history:
         st.write("_No results yet. Click the buttons above to add results._")
 
     st.markdown("---")
