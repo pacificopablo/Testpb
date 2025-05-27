@@ -71,7 +71,7 @@ def advanced_bet_selection(results):
     max_recent_count = 30
     recent = results[-max_recent_count:]
     if not recent:
-        return 'Pass', 0, "Kailangan ng past results para magbigay ng taya. Maghintay muna tayo!", "Cautious"
+        return 'Pass', 0, "I need some past results to make a bet. Let’s wait for now!", "Cautious"
 
     streak_value, streak_length = detect_streak(recent)
     freq = frequency_count(recent)
@@ -87,7 +87,7 @@ def advanced_bet_selection(results):
     if streak_length >= 3 and streak_value != "Tie":
         confidence = min(75 + (streak_length - 3) * 10, 95)
         scores[streak_value] += confidence
-        reason_parts.append(f"Malakas na streak: {streak_length} sunod-sunod na {streak_value}! Siguradong-sigurado ako dito!")
+        reason_parts.append(f"Strong streak detected: {streak_length} {streak_value} wins in a row! I’m super confident about this one!")
         emotional_tone = "Very Confident" if confidence > 85 else "Confident"
 
     # Alternating pattern detection
@@ -96,14 +96,14 @@ def advanced_bet_selection(results):
         alternate_bet = 'Player' if last == 'Banker' else 'Banker'
         confidence = 70
         scores[alternate_bet] += confidence
-        reason_parts.append(f"May alternating pattern sa huling 4 na kamay. Kaya taya ko sa {alternate_bet}! Ang saya nito!")
+        reason_parts.append(f"Alternating pattern in the last 4 hands. I’m betting on {alternate_bet}! This is exciting!")
         emotional_tone = "Excited"
 
     # Short-term trend analysis
     elif trend_bet:
         confidence = round(trend_score)
         scores[trend_bet] += confidence
-        reason_parts.append(f"Sa huling 10 kamay, mas malakas ang {trend_bet}. Mukhang maganda ang laban natin dito!")
+        reason_parts.append(f"In the last 10 hands, {trend_bet} is dominating. This looks like a good bet!")
         emotional_tone = "Hopeful"
 
     # Long-term frequency analysis as fallback
@@ -113,9 +113,9 @@ def advanced_bet_selection(results):
         scores['Player'] += (freq['Player'] / total * 1.0) * 50
         scores['Tie'] += (freq['Tie'] / total * 0.5) * 50  # Lower weight for Tie
         reason_parts.append(
-            f"Base sa {total} kamay: Banker {freq['Banker']} ({scores['Banker']:.1f} puntos), "
-            f"Player {freq['Player']} ({scores['Player']:.1f} puntos), "
-            f"Tie {freq['Tie']} ({scores['Tie']:.1f} puntos). Walang klarong pattern, kaya maingat tayo."
+            f"Based on {total} hands: Banker {freq['Banker']} ({scores['Banker']:.1f} points), "
+            f"Player {freq['Player']} ({scores['Player']:.1f} points), "
+            f"Tie {freq['Tie']} ({scores['Tie']:.1f} points). No clear pattern, so I’m playing it safe."
         )
         confidence = round(max(scores['Banker'], scores['Player'], scores['Tie']))
 
@@ -126,23 +126,23 @@ def advanced_bet_selection(results):
     if confidence < 50:
         bet_choice = 'Pass'
         emotional_tone = "Hesitant"
-        reason_parts.append("Masyadong mababa ang kumpiyansa ko. Pass muna para ligtas!")
+        reason_parts.append("My confidence is too low. I’m passing to stay safe!")
     elif confidence < 60 and emotional_tone == "Neutral":
         emotional_tone = "Cautious"
-        reason_parts.append("Medyo nag-aalangan ako, pero subukan natin ito.")
+        reason_parts.append("I’m a bit unsure, but let’s try this bet anyway.")
 
     # Avoid Tie unless very confident
     if bet_choice == 'Tie' and confidence < 80:
         scores['Tie'] = 0
         bet_choice = max(scores, key=scores.get)
         confidence = min(round(scores[bet_choice]), 95)
-        reason_parts.append("Masyadong risky ang Tie maliban kung sigurado. Nagpalit sa mas ligtas na taya.")
+        reason_parts.append("Ties are too risky unless I’m really sure. Switching to a safer bet.")
         emotional_tone = "Cautious" if emotional_tone != "Hesitant" else "Hesitant"
 
     # Adjust confidence for conflicting signals
     if streak_length >= 3 and is_alternating_pattern(recent[-4:]):
         confidence = max(confidence - 10, 40)
-        reason_parts.append("May conflict sa streak at alternating pattern, kaya medyo binabaan ko ang kumpiyansa.")
+        reason_parts.append("There’s a conflict between a streak and an alternating pattern, so I’m lowering my confidence.")
         emotional_tone = "Cautious" if emotional_tone != "Hesitant" else "Hesitant"
 
     reason = " ".join(reason_parts)
@@ -199,8 +199,8 @@ def calculate_bankroll(history, base_bet):
     return bankroll_progress, bet_sizes
 
 def main():
-    st.set_page_config(page_title="Matalinong Baccarat Predictor na May Emosyon", page_icon="🎲", layout="centered")
-    st.title("Matalinong Baccarat Predictor na May Emosyon")
+    st.set_page_config(page_title="Smart Baccarat Predictor with Emotions", page_icon="🎲", layout="centered")
+    st.title("Smart Baccarat Predictor with Emotions")
 
     if 'history' not in st.session_state:
         st.session_state.history = []
@@ -227,38 +227,38 @@ def main():
         if st.button("Tie"):
             st.session_state.history.append("Tie")
 
-    st.markdown("### Kasaysayan ng Laro")
+    st.markdown("### Game History")
     if st.session_state.history:
         for i, result in enumerate(reversed(st.session_state.history), 1):
             st.write(f"{len(st.session_state.history) - i + 1}. {result}")
     else:
-        st.write("_Wala pang results. Pindutin ang mga button sa itaas para magdagdag._")
+        st.write("_No results yet. Click the buttons above to add results._")
 
     st.markdown("---")
 
     bet, confidence, reason, emotional_tone = advanced_bet_selection(st.session_state.history)
-    st.markdown("### Hula para sa Susunod na Taya")
+    st.markdown("### Prediction for Next Bet")
     if bet == 'Pass':
-        st.warning("Wala akong taya ngayon! Masyadong magulo ang pattern.")
+        st.warning("I’m not betting this time! The pattern is too unclear.")
         st.info(reason)
         recommended_bet_size = 0.0
     else:
         current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet)[0][-1] if st.session_state.history else initial_bankroll
         recommended_bet_size = calculate_bet_size(current_bankroll, st.session_state.base_bet)
-        st.success(f"Hinulaang Taya: **{bet}**    Kumpiyansa: **{confidence}%**    Inirerekomendang Halaga ng Taya: **${recommended_bet_size:.2f}**    Emosyon: **{emotional_tone}**")
+        st.success(f"Predicted Bet: **{bet}**    Confidence: **{confidence}%**    Recommended Bet Size: **${recommended_bet_size:.2f}**    Emotion: **{emotional_tone}**")
         st.write(reason)
 
     bankroll_progress, bet_sizes = calculate_bankroll(st.session_state.history, st.session_state.base_bet)
     if bankroll_progress:
-        st.markdown("### Progresyon ng Bankroll at Halaga ng Taya")
+        st.markdown("### Bankroll and Bet Size Progression")
         for i, (val, bet_size) in enumerate(zip(bankroll_progress, bet_sizes), 1):
-            bet_display = f"Taya: ${bet_size:.2f}" if bet_size > 0 else "Taya: Wala (Walang hula, Tie, o Pass)"
-            st.write(f"Pagkatapos ng kamay {i}: Bankroll ${val:.2f}, {bet_display}")
-        st.markdown(f"**Kasalukuyang Bankroll:** ${bankroll_progress[-1]:.2f}")
+            bet_display = f"Bet: ${bet_size:.2f}" if bet_size > 0 else "Bet: None (No prediction, Tie, or Pass)"
+            st.write(f"After hand {i}: Bankroll ${val:.2f}, {bet_display}")
+        st.markdown(f"**Current Bankroll:** ${bankroll_progress[-1]:.2f}")
     else:
-        st.markdown(f"**Kasalukuyang Bankroll:** ${initial_bankroll:.2f}")
+        st.markdown(f"**Current Bankroll:** ${initial_bankroll:.2f}")
 
-    if st.button("I-reset ang Kasaysayan at Bankroll"):
+    if st.button("Reset History and Bankroll"):
         st.session_state.history = []
         st.session_state.initial_bankroll = 1000.0
         st.session_state.base_bet = 10.0
