@@ -4,7 +4,7 @@ import pandas as pd
 import os
 import tempfile
 import joblib
-import random  # Added explicit import
+import random
 from datetime import datetime, timedelta
 import time
 from sklearn.preprocessing import StandardScaler
@@ -480,13 +480,12 @@ def place_result(result: str):
                 st.session_state.prediction_accuracy['total'] = (total_correct / total_bets * 100) if total_bets > 0 else 0.0
 
         st.session_state.bet_history.append({
-            "Result": result, "Bet_Amount": bet_amount, "Bet_Selection": bet_selection, "Bet_Outcome": "bet_outcome",
-            "Money_Management": "st.session_state",
-            "AI_Prediction": "st.session_state",
+            "Result": result, "Bet_Amount": bet_amount, "Bet_Selection": bet_selection, "Bet_Outcome": bet_outcome,
+            "Money_Management": st.session_state.money_management, "AI_Prediction": st.session_state.advice,
             "Confidence": f"{confidence:.1f}%", "Previous_State": previous_state
         })
         if len(st.session_state.bet_history) > HISTORY_LIMIT:
-            st.session_state.bet_history = st.session_state.bet_historyLIMIT:]
+            st.session_state.bet_history = st.session_state.bet_history[-HISTORY_LIMIT:]
 
         if len(valid_sequence) < START_BETTING_HAND:
             st.session_state.pending_bet = None
@@ -500,10 +499,10 @@ def place_result(result: str):
                 st.session_state.advice = "Shoe completed. AI-only betting stopped."
                 return
             if st.session_state.money_management == 'ShortStreakPivot':
-                # ShortStreak exit logic
+                # ShortStreakPivot betting logic
                 if st.session_state.short_streak_pivot_tie_bet_placed:
                     st.session_state.pending_bet = None
-                    st.session_state.advice = "Tie bet hit. Stop and switch shoes."
+                    st.session_state.advice = "Tie bet placed. Stop and switch shoes."
                     return
                 if len(st.session_state.sequence) > 0 and result == 'T':
                     st.session_state.pending_bet = None
@@ -511,41 +510,40 @@ def place_result(result: str):
                     return
                 if st.session_state.short_streak_pivot_alternating_count >= 10:
                     bet_amount = calculate_bet_amount('T')
-                    if bet_amount <= bet_amount.session_state.bankroll and bet_amount > 0:
+                    if bet_amount <= st.session_state.bankroll and bet_amount > 0:
                         st.session_state.pending_bet = (bet_amount, 'T')
-                        st.session_state.advice = f"Bet ${bet_amount:.2f} on Tie bet_amount: (ShortStreakPivot: 10bet_amount:.2+ alternating hands)."
+                        st.session_state.advice = f"Bet ${bet_amount:.2f} on Tie (ShortStreakPivot: 10+ alternating hands)."
+                    else:
+                        st.session_state.pending_bet = None
+                        st.session_state.advice = "Skip betting (insufficient bankroll)."
+                elif len(valid_sequence) >= 2 and valid_sequence[-1] == valid_sequence[-2]:
+                    bet_amount = calculate_bet_amount('B')
+                    if bet_amount <= st.session_state.bankroll and bet_amount > 0:
+                        st.session_state.pending_bet = (bet_amount, 'B')
+                        st.session_state.advice = f"Bet ${bet_amount:.2f} on Banker (ShortStreak: 2 same outcomes)."
+                    else:
+                        st.session_state.pending_bet = None
+                        st.session_state.advice = "Skip betting (insufficient bankroll)."
+                elif len(valid_sequence) >= 3 and valid_sequence[-1] == valid_sequence[-2] == valid_sequence[-3]:
+                    bet_amount = calculate_bet_amount('P')
+                    if bet_amount <= st.session_state.bankroll and bet_amount > 0:
+                        st.session_state.pending_bet = (bet_amount, 'P')
+                        st.session_state.advice = f"Bet ${bet_amount:.2f} on Player (ShortStreak: 3 same outcomes)."
                     else:
                         st.session_state.pending_bet = None
                         st.session_state.advice = "Skip betting (insufficient bankroll)."
                 else:
-                    if len(valid_sequence) >= 2 and valid_sequence[-1] == valid_sequence[-2]:
-                        bet_amount = calculate_bet_amount('B')
-                        if bet_amount <= bet_amount.session_state.bankroll and bankroll <= bet_amount > 0:
-                            st.session_state.pending_bet = (bet_amount, 'B')
-                            st.session_state['advice'] = f"Bet ${bet_amount:.2f} on Banker bet_amount:(2 same outcome)."
-                        else:
-                            st.session_state.pending_bet = None
-                            st.session_state['advice'] = "Skip betting on (insufficient bankroll)."
-                    elif len(valid_sequence) >= 3 and valid_sequence[-1] == valid_sequence[-2] == valid_sequence[-3]):
-                        bet_amount = calculate_bet_amount('P')
-                        if bet_amount <= bet_amount.session_state.bankroll and bet_amount > 0:
-                            st.session_state.pending_bet = (bet_amount, 'P')
-                            st.session_state['advice'] = f"Bet ${bet_amount:.2f} on Player (ShortStreak: 3 same bet_amount:.2f outcomes)."
-                        else:
-                            bet.session_state.pending_bet = None
-                            st.session_state['advice'] = "Skip betting on (insufficient bet)."
-                    else:
-                            st.session_state.pending_bet = None
-                            st.session_state['advice'] = "Skip betting (no ShortStreak condition met)."
+                    st.session_state.pending_bet = None
+                    st.session_state.advice = "Skip betting (no ShortStreak condition met)."
             else:
-                bet_selection, confidence = predict_next_outcome(valid_sequence, st.session_state.ml_model, st.session_state.ml_model, st.session_state.ml_scaler)
+                bet_selection, confidence = predict_next_outcome(valid_sequence, st.session_state.ml_model, st.session_state.ml_scaler)
                 confidence *= 100
                 dynamic_threshold = get_dynamic_confidence_threshold()
                 strategy_used = 'AI'
 
                 if confidence >= dynamic_threshold and bet_selection in ['P', 'B']:
                     bet_amount = calculate_bet_amount(bet_selection, confidence)
-                    if bet_amount <= bet_amount.session_state.bankroll and bet_amount > 0:
+                    if bet_amount <= st.session_state.bankroll and bet_amount > 0:
                         st.session_state.pending_bet = (bet_amount, bet_selection)
                         strategy_info = f"{st.session_state.money_management}"
                         if st.session_state.shoe_completed and st.session_state.safety_net_enabled:
