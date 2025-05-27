@@ -249,10 +249,58 @@ def main():
         if st.button("Tie"):
             st.session_state.history.append("Tie")
 
-    st.markdown("### Game History")
+    # Bead Plate History
+    st.markdown("### Bead Plate History")
+    st.markdown("**Legend**: <span style='color:red'>●</span> Banker, <span style='color:blue'>●</span> Player, <span style='color:green'>●</span> Tie", unsafe_allow_html=True)
     if st.session_state.history:
-        for i, result in enumerate(reversed(st.session_state.history), 1):
-            st.write(f"{len(st.session_state.history) - i + 1}. {result}")
+        # Limit history to 84 results (6x14 grid)
+        history = st.session_state.history[-84:]
+        # Initialize 6x14 grid
+        grid = [['' for _ in range(14)] for _ in range(6)]
+        # Fill grid left-to-right, top-to-bottom
+        for i, result in enumerate(history):
+            row = i // 14
+            col = i % 14
+            if row < 6:  # Ensure we stay within grid
+                grid[row][col] = result
+
+        # Generate HTML for bead plate
+        html = """
+        <style>
+        .bead-plate {
+            display: table;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        .bead-plate-cell {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #ddd;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 16px;
+        }
+        .banker { color: red; }
+        .player { color: blue; }
+        .tie { color: green; }
+        </style>
+        <div class="bead-plate">
+        """
+        for row in grid:
+            html += "<div style='display: table-row;'>"
+            for cell in row:
+                if cell == 'Banker':
+                    html += '<div class="bead-plate-cell banker">●</div>'
+                elif cell == 'Player':
+                    html += '<div class="bead-plate-cell player">●</div>'
+                elif cell == 'Tie':
+                    html += '<div class="bead-plate-cell tie">●</div>'
+                else:
+                    html += '<div class="bead-plate-cell"></div>'
+            html += "</div>"
+        html += "</div>"
+
+        st.markdown(html, unsafe_allow_html=True)
     else:
         st.write("_No results yet. Click the buttons above to add results._")
 
