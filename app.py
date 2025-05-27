@@ -94,45 +94,33 @@ def advanced_bet_selection(results):
 
     return bet_choice, confidence, reason
 
-def calculate_bet_size(bankroll, confidence, base_bet, initial_bankroll):
+def calculate_bet_size(bankroll, base_bet):
     """
-    Money management: Calculate bet size based on bankroll and confidence.
-    - Bet size increases with bankroll growth, stays at base_bet or higher if bankroll decreases.
+    Money management: Calculate bet size as 5% of current bankroll.
     - Round to nearest multiple of base_bet.
     - Enforce minimum and maximum bet limits.
     """
     min_bet = max(1.0, base_bet)  # Minimum bet is at least base_bet or $1
-    max_bet = bankroll * 0.1  # Max bet is 10% of current bankroll
-    confidence_factor = confidence / 100.0  # Convert to 0-1 scale
-
-    # Calculate bet size based on bankroll growth
-    bankroll_ratio = bankroll / initial_bankroll
-    if bankroll_ratio > 1:
-        # Increase bet size proportional to bankroll growth
-        bet_percentage = (0.02 + (confidence_factor * 0.03)) * bankroll_ratio
-    else:
-        # Maintain at least base bet when bankroll is at or below initial
-        bet_percentage = 0.02 + (confidence_factor * 0.03)  # Base 2% + up to 3%
-
-    calculated_bet = bankroll * bet_percentage
+    max_bet = bankroll  # Max bet is the entire bankroll to prevent bankruptcy
+    calculated_bet = bankroll * 0.05  # 5% of current bankroll
     # Round to nearest multiple of base_bet
     bet_size = round(calculated_bet / base_bet) * base_bet
-    # Ensure bet size is at least base_bet (or $1) and does not exceed max_bet or bankroll
-    bet_size = max(min_bet, min(bet_size, max_bet, bankroll))
+    # Ensure bet size is at least base_bet (or $1) and does not exceed bankroll
+    bet_size = max(min_bet, min(bet_size, max_bet))
     return round(bet_size, 2)
 
-def calculate_bankroll(history, base_bet, initial_bankroll):
+def calculate_bankroll(history, base_bet):
     """
-    Calculate bankroll after each round, using dynamic bet sizing based on confidence.
+    Calculate bankroll after each round, using dynamic bet sizing based on 5% of current bankroll.
     """
-    bankroll = initial_bankroll
+    bankroll = st.session_state.initial_bankroll if 'initial_bankroll' in st.session_state else 1000.0
     current_bankroll = bankroll
     bankroll_progress = []
     bet_sizes = []  # Track bet sizes for display
     for i in range(len(history)):
         current_rounds = history[:i + 1]
         # Use advanced bet selection to predict before current round
-        bet, confidence, _ = advanced_bet_selection(current_rounds[:-1]) if i != 0 else (None, 0, '')
+        bet, _, _ = advanced_bet_selection(current_rounds[:-1]) if i != 0 else (None, 0, '')
         actual_result = history[i]
         if bet is None:
             bankroll_progress.append(current_bankroll)
@@ -142,8 +130,8 @@ def calculate_bankroll(history, base_bet, initial_bankroll):
             bankroll_progress.append(current_bankroll)
             bet_sizes.append(0.0)
             continue
-        # Calculate dynamic bet size based on current bankroll, confidence, and initial bankroll
-        bet_size = calculate_bet_size(current_bankroll, confidence, base_bet, initial_bankroll)
+        # Calculate bet size as 5% of current bankroll
+        bet_size = calculate_bet_size(current_bankroll, base_bet)
         bet_sizes.append(bet_size)
         if actual_result == bet:
             if bet == 'Banker':
@@ -205,12 +193,12 @@ def main():
         st.info(reason)
         recommended_bet_size = 0.0
     else:
-        current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.initial_bankroll)[0][-1] if st.session_state.history else initial_bankroll
-        recommended_bet_size = calculate_bet_size(current_bankroll, confidence, st.session_state.base_bet, st.session_state.initial_bankroll)
+        current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet)[0][-1] if st.session_state.history else initial_bankroll
+        recommended_bet_size = calculate_bet_size(current_bankroll, st.session_state.base_bet)
         st.success(f"Predicted Bet: **{bet}**    Confidence: **{confidence}%**    Recommended Bet Size: **${recommended_bet_size:.2f}**")
         st.write(reason.replace('\n', '  \n'))
 
-    bankroll_progress, bet_sizes = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.initial_bankroll)
+    bankroll_progress, bet_sizes = calculate_bankroll(st.session_state.history, st.session_state.base_bet)
     if bankroll_progress:
         st.markdown("### Bankroll and Bet Size Progression")
         for i, (val, bet_size) in enumerate(zip(bankroll_progress, bet_sizes), 1):
