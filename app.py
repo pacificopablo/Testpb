@@ -71,9 +71,8 @@ def build_big_road(s):
     row = 0
     last_outcome = None
 
-    for r in s:
-        result = mapped
-        mapped = 'P' if result == 'r' else 'B' if 'Banker' else 'T' else 'Player'
+    for result in s:
+        mapped = 'P' if result == 'Player' else 'B' if result == 'Banker' else 'T'
         if mapped == 'T':
             if col < max_cols and row < max_rows and grid[row][col] == '':
                 grid[row][col] = 'T'
@@ -521,7 +520,7 @@ def main():
                         if outcome == 'R':
                             row_display.append('<div style="width: 20px; height: 20px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #000000; display: inline-block;"></div>')
                         elif outcome == 'B':
-                            row_display.append('<div style="width: 20px; height: 20px; background-color: #3182ce; border-radius: 50%; border: 1px solid #000000; display: inline-block;"></div>')
+                            row_display.append('<div style="width: 20px; height: 20px; background-color: #3182ce; border-radius: 50%; display: inline-block;"></div>')
                         else:
                             row_display.append('<div style="width: 20px; height: 20px; display: inline-block;"></div>')
                     st.markdown(''.join(row_display), unsafe_allow_html=True)
@@ -530,7 +529,7 @@ def main():
 
         if "Cockroach" in selected_patterns:
             st.markdown("### Cockroach")
-            st.markdown("<p style='font-size: 12px; color: #666666;'>Red (●): Repeat Pattern, Blue (●): Break Pattern</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size: 12px; color: #666666;'>Red (×): Repeat Pattern, Blue (×): Break Pattern</p>", unsafe_allow_html=True)
             big_road_grid, num_cols = build_big_road(st.session_state.history)
             cockroach_grid, cockroach_cols = build_cockroach_pig(big_road_grid, num_cols)
             if cockroach_cols > 0:
@@ -540,9 +539,9 @@ def main():
                     for col in range(display_cols):
                         outcome = cockroach_grid[row][col]
                         if outcome == 'R':
-                            row_display.append('<div style="width: 20px; height: 20px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #000000; display: inline-block;"></div>')
+                            row_display.append('<div style="width: 20px; height: 20px; color: red; text-align: center; font-size: 16px; display: inline-block;">×</div>')
                         elif outcome == 'B':
-                            row_display.append('<div style="width: 20px; height: 20px; background-color: #3182ce; border-radius: 50%; border: 1px solid #000000; display: inline-block;"></div>')
+                            row_display.append('<div style="width: 20px; height: 20px; color: blue; text-align: center; font-size: 16px; display: inline-block;">×</div>')
                         else:
                             row_display.append('<div style="width: 20px; height: 20px; display: inline-block;"></div>')
                     st.markdown(''.join(row_display), unsafe_allow_html=True)
@@ -550,8 +549,8 @@ def main():
                 st.write("No recent Cockroach data.")
 
         if "Win/Loss" in selected_patterns:
-            st.markdown("### Win/Loss")
-            st.markdown("<p style='font-size: 12px; color: #666666;'>Green (●): Win, Red (●): Loss, Gray (●): Skip or Tie</p>", unsafe_allow_html=True)
+            st.markdown("### Winners")
+            st.markdown("<p style='font-size: 12px; color: #ffffff;'>Green (●): Win, Red (●): Loss, Gray (●): Skip or Tie</p>", unsafe_allow_html=True)
             tracker = calculate_win_loss_tracker(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy, st.session_state.ai_mode)[-14:]
             row_display = []
             for result in tracker:
@@ -562,10 +561,10 @@ def main():
                     row_display.append('<div style="width: 20px; height: 20px; display: inline-block;"></div>')
             st.markdown(' '.join(row_display), unsafe_allow_html=True)
             if not st.session_state.history:
-                st.write("No results yet. Click the buttons above to add results.")
+                st.write("No results yet. Click the buttons below to add results.")
 
     # Bet Prediction
-    with st.expander("Prediction", expanded=True):
+    with st.expander("Prediction", expanded=False):
         bet, confidence, reason, emotional_tone, pattern_insights = advanced_bet_selection(st.session_state.history, st.session_state.ai_mode)
         st.markdown("### Prediction")
         if bet == 'Pass':
@@ -573,23 +572,23 @@ def main():
         else:
             current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else st.session_state.initial_bankroll
             recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy, confidence, st.session_state.history)
-            st.success(f"Bet: {bet} | Confidence: {confidence}% | Bet Size: ${recommended_bet_size:.2f} | Mood: {emotional_tone}")
-        st.info(f"Reasoning: {reason}")
+            st.success(f"Bet: {bet} | Confidence: {confidence}% | Bet Size: ${recommended_bet_size2f} | Mood: {emotional_tone}")
+        st.info(f"Reasoning: {reason}"")
         if pattern_insights:
             st.markdown("### Insights")
             for insight in pattern_insights:
                 st.markdown(f"- {insight}")
 
-    # Bankroll Progression
-    with st.expander("Bankroll Progress", expanded=True):
+    # Bankroll Tracker
+    with st.expander("Bankroll", expanded=True):
         bankroll_progress, bet_history = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)
         if bankroll_progress:
-            st.markdown("### Bankroll Progress")
+            st.markdown("### Bankroll Summary")
             total_hands = len(bankroll_progress)
-            for i, (val, bet_size) in enumerate(zip(reversed(bankroll_progress), reversed(bet_history))):
+            for i, (val, bet_size) in enumerate(zip(reversed(bankroll_progress), reversed(bet_history)):
                 hand_number = total_hands - i
                 bet_display = f"Bet ${bet_size:.2f}" if bet_size > 0 else "No Bet"
-                st.markdown(f"Hand {hand_number}: ${val:.2f} | {bet_size}")
+                st.markdown(f"Hand {hand_number}: ${val:.2f} | {bet_display}")
             st.markdown(f"Bankroll: ${bankroll_progress[-1]:.2f}")
         else:
             st.markdown(f"Bankroll: ${st.session_state.initial_bankroll:.2f}")
@@ -612,3 +611,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
