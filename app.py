@@ -1,10 +1,9 @@
-
 import streamlit as st
 import numpy as np
 import time
 
 # Normalize input
-def normalize_input(s):
+def normalize_result(s):
     s = s.strip().lower()
     return {'banker': 'Banker', 'b': 'Banker', 'player': 'Player', 'p': 'Player', 'tie': 'Tie', 't': 'Tie'}.get(s, None)
 
@@ -50,7 +49,7 @@ def update_big_road(history, state):
     return grid, col + 1
 
 def update_derived_road(big_road_grid, num_cols, state, road_type):
-    max_rows, max_cols = 6, 15
+    max_rows, max_cols = 6, 8  # Reduced for derived roadmaps
     key, cols_key, last_length_key = f'{road_type}_grid', f'{road_type}_cols', f'{road_type}_last_length'
     if key not in state:
         state[key] = np.full((max_rows, max_cols), '', dtype='U1')
@@ -59,7 +58,7 @@ def update_derived_road(big_road_grid, num_cols, state, road_type):
 
     grid, col = state[key], state[cols_key]
     start_col = state[last_length_key]
-    if start_col > num_cols:  # Undo
+    if start_col > num_cols:
         grid = np.full((max_rows, max_cols), '', dtype='U1')
         col = 0
         start_col = 0
@@ -86,10 +85,12 @@ def update_derived_road(big_road_grid, num_cols, state, road_type):
     return grid, col + 1 if row > 0 else col
 
 def compute_patterns(recent, history_length, state):
+    start_time = time.time()
     if 'patterns' not in state or state.patterns_last_length != len(recent):
         freq = {'Banker': 0, 'Player': 0, 'Tie': 0}
-        for r in recent:
-            freq[r] += 1
+        recent_array = np.array(recent)
+        for r in ['Banker', 'Player', 'Tie']:
+            freq[r] = np.sum(recent_array == r)
         total = len(recent)
 
         streak_value, streak_length = None, 0
@@ -103,14 +104,15 @@ def compute_patterns(recent, history_length, state):
                     break
             streak_value = last
 
-        chop_4 = len(recent) >= 4 and all(recent[i] != recent[i + 1] for i in range(-4, -1))
-        chop_5 = len(recent) >= 5 and all(recent[i] != recent[i + 1] for i in range(-5, -1))
+        chop_4 = len(recent) >= 4 and np.all(recent_array[-4:] != recent_array[-3:-1])
+        chop_5 = len(recent) >= 5 and np.all(recent_array[-5:] != recent_array[-4:-1])
 
         window = min(15, 10 if history_length <= 20 else 6 if history_length < 10 else history_length)
         recent_window = recent[-window:] if len(recent) >= window else recent
+        window_array = np.array(recent_window)
         trend_total = len(recent_window)
-        banker_ratio = sum(1 for r in recent_window if r == 'Banker') / trend_total if trend_total else 0
-        player_ratio = sum(1 for r in recent_window if r == 'Player') / trend_total if trend_total else 0
+        banker_ratio = np.sum(window_array == 'Banker') / trend_total if trend_total else 0
+        player_ratio = np.sum(window_array == 'Player') / trend_total if trend_total else 0
         trend_bet = 'Banker' if banker_ratio > player_ratio + 0.2 else 'Player' if player_ratio > banker_ratio + 0.2 else None
         trend_score = (banker_ratio if trend_bet == 'Banker' else player_ratio) * 60 if trend_bet else 0
 
@@ -121,35 +123,32 @@ def compute_patterns(recent, history_length, state):
             'trend_bet': trend_bet, 'trend_score': trend_score
         }
         state.patterns_last_length = len(recent)
+    print(f"Patterns time: {time.time() - start_time:.3f}s")
     return state.patterns
 
 def compute_win_loss(history, ai_mode, strategy, state):
     start_time = time.time()
-    history = history[-60:]  # Limit for display
+    history = history[-48:]  # Reduced for display
     if 'win_loss' not in state or state.win_loss_last_length != len(history):
         if not history:
             state.win_loss = []
             state.win_loss_last_length = 0
+            state.bets_cache = []
             return state.win_loss
 
-        outcomes = ['N'] * len(history)
-        bets = ['Pass'] * len(history)
-        if len(history) > 1:
-            # Compute bets in batch
-            for i in range(1, len(history)):
+        if 'bets_cache' not in state or len(state.bets_cache) != len(history):
+            state.bets_cache = ['Pass'] * len(history)
+            for i in range(2, len(history)):  # Start at 2 to skip short histories
                 prior_history = history[:i]
-                if len(prior_history) < 2:  # Skip very short histories
-                    continue
                 bet, _, _, _ = advanced_bet_selection(prior_history, ai_mode, strategy)
-                bets[i] = bet
+                state.bets_cache[i] = bet
 
-            # Vectorized outcome computation
-            actual_results = np.array(history)
-            bets_array = np.array(bets)
-            outcomes = np.where(
-                (bets_array == 'Pass') | (actual_results == 'Tie'), 'N',
-                np.where(bets_array == actual_results, 'W', 'L')
-            ).tolist()
+        actual_results = np.array(history)
+        bets_array = np.array(state.bets_cache[:len(history)])
+        outcomes = np.where(
+            (bets_array == 'Pass') | (actual_results == 'Tie'), 'N',
+            np.where(bets_array == actual_results, 'W', 'L')
+        ).tolist()
 
         state.win_loss = outcomes
         state.win_loss_last_length = len(history)
@@ -162,19 +161,18 @@ def compute_recent_accuracy(outcomes):
     total = sum(1 for o in recent_outcomes if o in ['W', 'L'])
     return wins / total if total else 1.0
 
-@st.cache_data
+@st.cache_data(hash_funcs={list: lambda x: hash(tuple(x))})
 def advanced_bet_selection(results, mode, strategy):
     start_time = time.time()
     if not results or len(results) < 2:
         return 'Pass', 0, "Too few results.", "Cautious", []
 
-    max_results = 100
     recent = results[-30:] if len(results) > 30 else results
     scores = {'Banker': 0, 'Player': 0, 'Tie': 0}
     reason_parts = []
     pattern_insights = []
     emotional_tone = "Neutral"
-    history_length = min(len(results), max_results)
+    history_length = min(len(results), 100)
 
     patterns = compute_patterns(recent, history_length, st.session_state)
     freq, total = patterns['freq'], patterns['total']
@@ -222,7 +220,7 @@ def advanced_bet_selection(results, mode, strategy):
         pattern_insights.append(f"Trend: {patterns['trend_bet']}")
         emotional_tone = "Hopeful"
 
-    if len(recent) >= 5:  # Roadmaps need sufficient data
+    if len(recent) >= 15:  # Increased threshold
         big_road_grid, num_cols = update_big_road(recent, st.session_state)
         if num_cols > 0:
             last_col = big_road_grid[:, num_cols - 1]
@@ -348,7 +346,7 @@ def update_bankroll(history, base_bet, strategy, state):
         state.current_bankroll = state.initial_bankroll
 
     start_idx = state.bankroll_last_length
-    if start_idx > len(history):  # Undo
+    if start_idx > len(history):
         start_idx = 0
         state.current_bankroll = state.initial_bankroll
         state.bankroll_progress = []
@@ -375,6 +373,7 @@ def update_bankroll(history, base_bet, strategy, state):
     return state.bankroll_progress, state.bet_sizes
 
 def render_grid(grid, num_cols, grid_type, state):
+    start_time = time.time()
     key = f'{grid_type}_html'
     if key not in state or state.get(f'{grid_type}_last_length', 0) != num_cols:
         html_rows = []
@@ -402,6 +401,7 @@ def render_grid(grid, num_cols, grid_type, state):
             html_rows.append(' '.join(row_display))
         state[key] = html_rows
         state[f'{grid_type}_last_length'] = num_cols
+    print(f"Render grid time: {time.time() - start_time:.3f}s")
     return state[key]
 
 def main():
@@ -471,13 +471,13 @@ def main():
 
         if "Bead Plate" in selected_patterns:
             st.markdown("### Bead Plate")
-            sequence = st.session_state.history[-60:]
+            sequence = st.session_state.history[-48:]  # Reduced to 6x8
             sequence = ['P' if r == 'Player' else 'B' if r == 'Banker' else 'T' for r in sequence]
-            grid = [['' for _ in range(10)] for _ in range(6)]
+            grid = [['' for _ in range(8)] for _ in range(6)]
             for i, result in enumerate(sequence):
                 col = i // 6
                 row = i % 6
-                if col < 10:
+                if col < 8:
                     grid[row][col] = result
             html_rows = render_grid(grid, len(sequence) // 6 + 1 if sequence else 0, 'bead_plate', st.session_state)
             for row in html_rows:
@@ -487,31 +487,31 @@ def main():
 
             st.markdown("#### Win/Loss Tracker")
             st.markdown("<p style='font-size: 12px; color: #666666;'>Green (●): Win, Red (●): Loss, Gray (●): Pass/Tie</p>", unsafe_allow_html=True)
-            outcomes = compute_win_loss(st.session_state.history[-100:], st.session_state.ai_mode, st.session_state.money_management_strategy, st.session_state)[-60:]
+            outcomes = compute_win_loss(st.session_state.history[-100:], st.session_state.ai_mode, st.session_state.money_management_strategy, st.session_state)[-48:]
             if 'tracker_html' not in st.session_state or st.session_state.get('tracker_last_length', 0) != len(outcomes):
                 tracker_row = [
-                    '<div style="width: 22px; height: 22px; background-color: #38a169; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>' if o == 'W'
-                    else '<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>' if o == 'L'
-                    else '<div style="width: 22px; height: 22px; background-color: #666666; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>'
-                    for o in outcomes
+                    '<td style="width: 22px; height: 22px; background-color: #38a169; border-radius: 50%; border: 1px solid #000; display: inline-block;"></td>' if r == 'W'
+                    else '<td style="width: 22px; height: 22px; background-color: red; border-radius: 50%; border: 1px solid #000; display: inline-block;"></td>' if r == 'L'
+                    else '<td style="width: 22px; height: 22px; background-color: grey; border-radius: 50%; border: 1px solid #000; display: inline-block;"></td>'
+                    for r in outcomes
                 ]
-                st.session_state.tracker_html = ' '.join(tracker_row)
+                st.session_state.tracker_html = ''.join(tracker_row)
                 st.session_state.tracker_last_length = len(outcomes)
-            st.markdown(st.session_state.tracker_html, unsafe_allow_html=True)
+            st.markdown(f"<table><tr>{st.session_state.tracker_html}</tr></table>", unsafe_allow_html=True)
 
-        for pattern, road_type in [("Big Road", "big_road"), ("Big Eye Boy", "big_eye_boy"), ("Small Road", "small_road"), ("Cockroach Pig", "cockroach_pig")]:
+        for pattern, road_type in [('Big Road', 'big_road'), ('Big Eye Boy', 'big_eye_boy'), ('Small Road', 'small_road'), ('Cockroach Pig', 'cockroach_pig')]:
             if pattern in selected_patterns:
                 st.markdown(f"### {pattern}")
-                if pattern != "Big Road":
-                    st.markdown("<p style='font-size: 12px; color: #666666;'>Red (●): Repeat Pattern, Blue (●): Break Pattern</p>", unsafe_allow_html=True)
+                if pattern != 'Big Road':
+                    st.markdown("<p style='font-size: 12px; color: #666666;'>Red (●): Repeat Pattern, Blue (●): Break</p>", unsafe_allow_html=True)
                 big_road_grid, num_cols = update_big_road(st.session_state.history[-100:], st.session_state)
-                grid, num_cols = (big_road_grid, num_cols) if road_type == "big_road" else update_derived_road(big_road_grid, num_cols, st.session_state, road_type)
+                grid, _ = (big_road_grid, num_cols) if road_type == 'big_road' else update_derived_road(big_road_grid, num_cols, st.session_state, road_type)
                 if num_cols > 0:
                     html_rows = render_grid(grid, num_cols, road_type, st.session_state)
                     for row in html_rows:
                         st.markdown(row, unsafe_allow_html=True)
                 else:
-                    st.write(f"_No {pattern} data yet._")
+                    st.markdown(f"_No {pattern} data yet._")
 
     with st.container():
         st.markdown("### Prediction for Next Bet")
@@ -521,8 +521,8 @@ def main():
         else:
             bankroll_progress, _ = update_bankroll(st.session_state.history[-100:], st.session_state.base_bet, st.session_state.money_management_strategy, st.session_state)
             current_bankroll = bankroll_progress[-1] if bankroll_progress else st.session_state.initial_bankroll
-            bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy, confidence, st.session_state.history[-100:])
-            st.success(f"Bet: **{bet}**  Confidence: **{confidence}%**  Bet Size: **${bet_size:.2f}**  Emotion: **{emotional_tone}**")
+            bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy, confidence)
+            st.success(f"Bet: **{bet}**  Confidence: **{confidence}%**  Bet Size: ${bet_size:.2f}  Emotion: {emotional_tone}")
         st.info(reason)
         if pattern_insights:
             st.markdown("#### Patterns")
@@ -535,22 +535,21 @@ def main():
             html_output = [
                 f"{len(bankroll_progress) - i}: Bankroll ${val:.2f}, Bet: ${bet_size:.2f}" if bet_size > 0
                 else f"{len(bankroll_progress) - i}: Bankroll ${val:.2f}, Bet: None"
-                for i, (val, bet_size) in enumerate(zip(reversed(bankroll_progress), reversed(bet_sizes)))
-            ]
+                for i, (val, bet_size) in enumerate(zip(reversed(bankroll_progress[-20:]), reversed(bet_sizes[-20:])))]
             st.session_state.bankroll_html = html_output
             st.session_state.bankroll_last_length = len(bankroll_progress)
 
         st.markdown("### Progression (Newest to Oldest)")
-        for line in st.session_state.bankroll_html[:50]:
-            st.write(f"Hand {line}")
+        for line in st.session_state.bankroll_html:
+            st.write(line)
         st.markdown(f"**Current Bankroll:** ${bankroll_progress[-1]:.2f}" if bankroll_progress else f"**Current Bankroll:** ${st.session_state.initial_bankroll:.2f}")
 
     with st.expander("Reset Game", expanded=False):
-        if st.button("Reset History and Bankroll"):
+        if st.button("Reset History and Bet"):
             st.session_state.clear()
             st.rerun()
 
     print(f"Total render time: {time.time() - start_time:.3f}s")
+
 if __name__ == "__main__":
     main()
-```
