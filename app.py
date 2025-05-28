@@ -1,4 +1,3 @@
-
 import streamlit as st
 import time
 
@@ -13,18 +12,26 @@ def normalize_result(s):
         return 'Tie'
     return None
 
-# Cache helper for roadmaps
-@st.cache_data
-def build_big_road(results_tuple):
-    results = list(results_tuple)
+# Incremental roadmap updates
+def update_big_road(history, state):
     max_rows = 6
-    max_cols = 30  # Reduced from 50
-    grid = [['' for _ in range(max_cols)] for _ in range(max_rows)]
-    col = 0
-    row = 0
-    last_outcome = None
+    max_cols = 20  # Reduced from 30
+    if 'big_road_grid' not in state:
+        state.big_road_grid = [['' for _ in range(max_cols)] for _ in range(max_rows)]
+        state.big_road_cols = 0
+        state.big_road_row = 0
+        state.big_road_last_outcome = None
+        state.big_road_last_length = 0
 
-    for result in results:
+    grid, col, row, last_outcome = state.big_road_grid, state.big_road_cols, state.big_road_row, state.big_road_last_outcome
+    start_idx = state.big_road_last_length
+    if start_idx > len(history):  # Handle undo
+        grid = [['' for _ in range(max_cols)] for _ in range(max_rows)]
+        col, row, last_outcome = 0, 0, None
+        start_idx = 0
+
+    for i in range(start_idx, len(history)):
+        result = history[i]
         mapped = 'P' if result == 'Player' else 'B' if result == 'Banker' else 'T'
         if mapped == 'T':
             if col < max_cols and row < max_rows and grid[row][col] == '':
@@ -42,55 +49,41 @@ def build_big_road(results_tuple):
                 grid[row][col] = mapped
                 row += 1
         last_outcome = mapped if mapped != 'T' else last_outcome
+
+    state.big_road_grid, state.big_road_cols, state.big_road_row, state.big_road_last_outcome = grid, col + 1, row, last_outcome
+    state.big_road_last_length = len(history)
     return grid, col + 1
 
-@st.cache_data
-def build_big_eye_boy(big_road_grid_tuple, num_cols):
-    big_road_grid = [list(row) for row in big_road_grid_tuple]
+def update_derived_road(big_road_grid, num_cols, state, road_type):
     max_rows = 6
-    max_cols = 30
-    grid = [['' for _ in range(max_cols)] for _ in range(max_rows)]
-    col = 0
-    row = 0
+    max_cols = 20
+    key = f'{road_type}_grid'
+    cols_key = f'{road_type}_cols'
+    last_length_key = f'{road_type}_last_length'
 
-    for c in range(3, num_cols):
+    if key not in state:
+        state[key] = [['' for _ in range(max_cols)] for _ in range(max_rows)]
+        state[cols_key] = 0
+        state[last_length_key] = 0
+
+    grid, col = state[key], state[cols_key]
+    start_col = state[last_length_key]
+    if start_col > num_cols:  # Reset on undo
+        grid = [['' for _ in range(max_cols)] for _ in range(max_rows)]
+        col = 0
+        start_col = 0
+
+    offset = {'big_eye_boy': 3, 'small_road': 4, 'cockroach_pig': 5}[road_type]
+    row = 0
+    for c in range(max(start_col + offset, offset), num_cols):
         if col >= max_cols:
             break
         last_col = [big_road_grid[r][c - 1] for r in range(max_rows)]
-        third_last = [big_road_grid[r][c - 3] for r in range(max_rows)]
+        compare_col = [big_road_grid[r][c - offset] for r in range(max_rows)]
         last_non_empty = next((i for i, x in enumerate(last_col) if x in ['P', 'B']), None)
-        third_non_empty = next((i for i, x in enumerate(third_last) if x in ['P', 'B']), None)
-        if last_non_empty is not None and third_non_empty is not None:
-            if last_col[last_non_empty] == third_last[third_non_empty]:
-                grid[row][col] = 'R'
-            else:
-                grid[row][col] = 'B'
-            row += 1
-            if row >= max_rows:
-                col += 1
-                row = 0
-        else:
-            break  # Exit early if no valid comparison
-    return grid, col + 1 if row > 0 else col
-
-@st.cache_data
-def build_small_road(big_road_grid_tuple, num_cols):
-    big_road_grid = [list(row) for row in big_road_grid_tuple]
-    max_rows = 6
-    max_cols = 30
-    grid = [['' for _ in range(max_cols)] for _ in range(max_rows)]
-    col = 0
-    row = 0
-
-    for c in range(4, num_cols):
-        if col >= max_cols:
-            break
-        last_col = [big_road_grid[r][c - 1] for r in range(max_rows)]
-        fourth_last = [big_road_grid[r][c - 4] for r in range(max_rows)]
-        last_non_empty = next((i for i, x in enumerate(last_col) if x in ['P', 'B']), None)
-        fourth_non_empty = next((i for i, x in enumerate(fourth_last) if x in ['P', 'B']), None)
-        if last_non_empty is not None and fourth_non_empty is not None:
-            if last_col[last_non_empty] == fourth_last[fourth_non_empty]:
+        compare_non_empty = next((i for i, x in enumerate(compare_col) if x in ['P', 'B']), None)
+        if last_non_empty is not None and compare_non_empty is not None:
+            if last_col[last_non_empty] == compare_col[compare_non_empty]:
                 grid[row][col] = 'R'
             else:
                 grid[row][col] = 'B'
@@ -100,71 +93,38 @@ def build_small_road(big_road_grid_tuple, num_cols):
                 row = 0
         else:
             break
+
+    state[key], state[cols_key], state[last_length_key] = grid, col + 1 if row > 0 else col, num_cols
     return grid, col + 1 if row > 0 else col
 
-@st.cache_data
-def build_cockroach_pig(big_road_grid_tuple, num_cols):
-    big_road_grid = [list(row) for row in big_road_grid_tuple]
-    max_rows = 6
-    max_cols = 30
-    grid = [['' for _ in range(max_cols)] for _ in range(max_rows)]
-    col = 0
-    row = 0
-
-    for c in range(5, num_cols):
-        if col >= max_cols:
-            break
-        last_col = [big_road_grid[r][c - 1] for r in range(max_rows)]
-        fifth_last = [big_road_grid[r][c - 5] for r in range(max_rows)]
-        last_non_empty = next((i for i, x in enumerate(last_col) if x in ['P', 'B']), None)
-        fifth_non_empty = next((i for i, x in enumerate(fifth_last) if x in ['P', 'B']), None)
-        if last_non_empty is not None and fifth_non_empty is not None:
-            if last_col[last_non_empty] == fifth_last[fifth_non_empty]:
-                grid[row][col] = 'R'
-            else:
-                grid[row][col] = 'B'
-            row += 1
-            if row >= max_rows:
-                col += 1
-                row = 0
-        else:
-            break
-    return grid, col + 1 if row > 0 else col
-
-def detect_streak(results):
-    if not results:
+def detect_streak(recent, freq):
+    if not recent:
         return None, 0
-    last = results[-1]
+    last = recent[-1]
     count = 1
-    for i in range(len(results) - 2, -1, -1):
-        if results[i] == last:
+    for r in recent[-2::-1]:
+        if r == last:
             count += 1
         else:
             break
     return last, count
 
-def is_alternating_pattern(arr):
-    if len(arr) < 4:
+def is_alternating_pattern(recent):
+    if len(recent) < 4:
         return False
-    for i in range(len(arr) - 1):
-        if arr[i] == arr[i + 1]:
+    for i in range(len(recent) - 1):
+        if recent[i] == recent[i + 1]:
             return False
     return True
 
-def recent_trend_analysis(recent, history_length):
+def recent_trend_analysis(recent, history_length, freq):
     window = 6 if history_length < 10 else 10 if history_length <= 20 else 15
-    recent = recent[-window:] if len(recent) >= window else recent
-    if not recent:
+    recent_window = recent[-window:] if len(recent) >= window else recent
+    if not recent_window:
         return None, 0
-    freq = {'Banker': 0, 'Player': 0, 'Tie': 0}
-    for r in recent:
-        if r in freq:
-            freq[r] += 1
-    total = len(recent)
-    if total == 0:
-        return None, 0
-    banker_ratio = freq['Banker'] / total
-    player_ratio = freq['Player'] / total
+    total = len(recent_window)
+    banker_ratio = sum(1 for r in recent_window if r == 'Banker') / total
+    player_ratio = sum(1 for r in recent_window if r == 'Player') / total
     if banker_ratio > player_ratio + 0.2:
         return 'Banker', banker_ratio * 60
     elif player_ratio > banker_ratio + 0.2:
@@ -172,7 +132,7 @@ def recent_trend_analysis(recent, history_length):
     return None, 0
 
 @st.cache_data
-def compute_win_loss(history_tuple, ai_mode):
+def compute_win_loss(history_tuple, ai_mode, strategy):
     history = list(history_tuple)
     outcomes = []
     for i in range(len(history)):
@@ -180,7 +140,7 @@ def compute_win_loss(history_tuple, ai_mode):
             outcomes.append('N')
             continue
         prior_history = history[:i]
-        bet, _, _, _, _ = advanced_bet_selection(prior_history, ai_mode, st.session_state.money_management_strategy)
+        bet, _, _, _, _ = advanced_bet_selection(prior_history, ai_mode, strategy)
         actual_result = history[i]
         if bet in ('Pass', None) or actual_result == 'Tie':
             outcomes.append('N')
@@ -190,8 +150,8 @@ def compute_win_loss(history_tuple, ai_mode):
             outcomes.append('L')
     return outcomes
 
-def compute_recent_accuracy(history, ai_mode):
-    outcomes = compute_win_loss(tuple(history), ai_mode)[-10:]
+def compute_recent_accuracy(history, ai_mode, strategy):
+    outcomes = compute_win_loss(tuple(history), ai_mode, strategy)[-10:]
     if not outcomes:
         return 1.0
     wins = outcomes.count('W')
@@ -199,10 +159,10 @@ def compute_recent_accuracy(history, ai_mode):
     return wins / total if total > 0 else 1.0
 
 @st.cache_data
-def advanced_bet_selection(results_tuple, mode, money_management_strategy):
-    results = list(results_tuple)
+def advanced_bet_selection(results, mode, money_management_strategy):
+    start_time = time.time()
     max_recent_count = 30
-    recent = results[-max_recent_count:]
+    recent = results[-max_recent_count:] if len(results) > max_recent_count else results
     if not recent:
         return 'Pass', 0, "No results yet. Let’s wait for the shoe to develop!", "Cautious", []
 
@@ -211,6 +171,13 @@ def advanced_bet_selection(results_tuple, mode, money_management_strategy):
     pattern_insights = []
     emotional_tone = "Neutral"
     history_length = len(results)
+
+    # Precompute frequency
+    freq = {'Banker': 0, 'Player': 0, 'Tie': 0}
+    for r in recent:
+        if r in freq:
+            freq[r] += 1
+    total = len(recent)
 
     # Flat betting bias
     is_flat_betting = money_management_strategy == "Flat Betting"
@@ -230,7 +197,7 @@ def advanced_bet_selection(results_tuple, mode, money_management_strategy):
             emotional_tone = "Excited"
 
     # Streak detection
-    streak_value, streak_length = detect_streak(recent)
+    streak_value, streak_length = detect_streak(recent, freq)
     if streak_length >= 3 and streak_value != "Tie":
         streak_score = min(80 + (streak_length - 3) * 12, 95)
         scores[streak_value] += streak_score
@@ -255,7 +222,7 @@ def advanced_bet_selection(results_tuple, mode, money_management_strategy):
         emotional_tone = "Excited"
 
     # Trend analysis
-    trend_bet, trend_score = recent_trend_analysis(recent, history_length)
+    trend_bet, trend_score = recent_trend_analysis(recent, history_length, freq)
     if trend_bet:
         scores[trend_bet] += trend_score
         reason_parts.append(f"Recent trend favors {trend_bet} in last {6 if history_length < 10 else 10 if history_length <= 20 else 15} hands.")
@@ -263,7 +230,7 @@ def advanced_bet_selection(results_tuple, mode, money_management_strategy):
         emotional_tone = "Hopeful"
 
     # Roadmaps
-    big_road_grid, num_cols = build_big_road(tuple(recent))
+    big_road_grid, num_cols = update_big_road(recent, st.session_state)
     if num_cols > 0:
         last_col = [big_road_grid[row][num_cols - 1] for row in range(6)]
         col_length = sum(1 for x in last_col if x in ['P', 'B'])
@@ -275,7 +242,7 @@ def advanced_bet_selection(results_tuple, mode, money_management_strategy):
 
     roadmap_weight = 0.8 if is_flat_betting else 1.0
     if num_cols >= 3:
-        big_eye_grid, big_eye_cols = build_big_eye_boy(tuple(big_road_grid), num_cols)
+        big_eye_grid, big_eye_cols = update_derived_road(big_road_grid, num_cols, st.session_state, 'big_eye_boy')
         if big_eye_cols > 0:
             last_col = [big_eye_grid[row][big_eye_cols - 1] for row in range(6)]
             last_signal = next((x for x in last_col if x in ['R', 'B']), None)
@@ -292,7 +259,7 @@ def advanced_bet_selection(results_tuple, mode, money_management_strategy):
                     pattern_insights.append("Big Eye Boy: Break pattern")
 
     if num_cols >= 4:
-        small_road_grid, small_road_cols = build_small_road(tuple(big_road_grid), num_cols)
+        small_road_grid, small_road_cols = update_derived_road(big_road_grid, num_cols, st.session_state, 'small_road')
         if small_road_cols > 0:
             last_col = [small_road_grid[row][small_road_cols - 1] for row in range(6)]
             last_signal = next((x for x in last_col if x in ['R', 'B']), None)
@@ -309,7 +276,7 @@ def advanced_bet_selection(results_tuple, mode, money_management_strategy):
                     pattern_insights.append("Small Road: Break pattern")
 
     if num_cols >= 5:
-        cockroach_grid, cockroach_cols = build_cockroach_pig(tuple(big_road_grid), num_cols)
+        cockroach_grid, cockroach_cols = update_derived_road(big_road_grid, num_cols, st.session_state, 'cockroach_pig')
         if cockroach_cols > 0:
             last_col = [cockroach_grid[row][cockroach_cols - 1] for row in range(6)]
             last_signal = next((x for x in last_col if x in ['R', 'B']), None)
@@ -326,11 +293,6 @@ def advanced_bet_selection(results_tuple, mode, money_management_strategy):
                     pattern_insights.append("Cockroach Pig: Break pattern")
 
     # Frequency with decay
-    freq = {'Banker': 0, 'Player': 0, 'Tie': 0}
-    for r in recent:
-        if r in freq:
-            freq[r] += 1
-    total = len(recent)
     decay_factor = 0.9 ** (total // 10)
     scores['Banker'] += (freq['Banker'] / total * 0.9) * 40 * decay_factor
     scores['Player'] += (freq['Player'] / total * 1.0) * 40 * decay_factor
@@ -343,7 +305,7 @@ def advanced_bet_selection(results_tuple, mode, money_management_strategy):
     confidence = min(round(max(scores['Banker'], scores['Player'], scores['Tie'])), 95)
 
     # Accuracy adjustment
-    accuracy = compute_recent_accuracy(results, mode)
+    accuracy = compute_recent_accuracy(results, mode, money_management_strategy)
     if accuracy < 0.5:
         confidence = max(confidence - 10, 0)
         reason_parts.append("Recent prediction accuracy low; confidence reduced.")
@@ -375,9 +337,11 @@ def advanced_bet_selection(results_tuple, mode, money_management_strategy):
         emotional_tone = "Skeptical"
 
     reason = " ".join(reason_parts)
+    print(f"Bet selection time: {time.time() - start_time:.3f}s")  # Debug timing
     return bet_choice, confidence, reason, emotional_tone, pattern_insights
 
 def money_management(bankroll, base_bet, strategy, confidence=None, history=None):
+    start_time = time.time()
     min_bet = max(1.0, base_bet)
     max_bet = bankroll
 
@@ -385,12 +349,11 @@ def money_management(bankroll, base_bet, strategy, confidence=None, history=None
         if not history or len(history) < 3:
             calculated_bet = base_bet
         else:
-            mapped_history = ['P' if r == 'Player' else 'B' if r == 'Banker' else 'T' for r in history]
-            recent = mapped_history[-3:]
+            recent = history[-3:]
             last_result = recent[-1]
             streak = all(r == last_result for r in recent)
-            if streak and last_result in ['P', 'B']:
-                if len(mapped_history) >= 4 and mapped_history[-4] == last_result:
+            if streak and last_result in ['Player', 'Banker']:
+                if len(history) >= 4 and history[-4] == last_result:
                     calculated_bet = base_bet * 4
                 else:
                     calculated_bet = base_bet * 2
@@ -411,18 +374,20 @@ def money_management(bankroll, base_bet, strategy, confidence=None, history=None
 
     bet_size = round(calculated_bet / base_bet) * base_bet
     bet_size = max(min_bet, min(bet_size, max_bet))
+    print(f"Money management time: {time.time() - start_time:.3f}s")  # Debug timing
     return round(bet_size, 2)
 
 @st.cache_data
 def calculate_bankroll(history_tuple, base_bet, strategy):
+    start_time = time.time()
     history = list(history_tuple)
-    bankroll = st.session_state.initial_bankroll if 'initial_bankroll' in st.session_state else 1000.0
+    bankroll = st.session_state.initial_bankroll
     current_bankroll = bankroll
     bankroll_progress = []
     bet_sizes = []
     for i in range(len(history)):
         current_rounds = history[:i + 1]
-        bet, confidence, _, _, _ = advanced_bet_selection(tuple(current_rounds[:-1]), st.session_state.ai_mode, st.session_state.money_management_strategy) if i != 0 else ('Pass', 0, '', 'Neutral', [])
+        bet, confidence, _, _, _ = advanced_bet_selection(current_rounds[:-1], st.session_state.ai_mode, strategy) if i != 0 else ('Pass', 0, '', 'Neutral', [])
         actual_result = history[i]
         if bet in (None, 'Pass', 'Tie'):
             bankroll_progress.append(current_bankroll)
@@ -442,9 +407,43 @@ def calculate_bankroll(history_tuple, base_bet, strategy):
         else:
             current_bankroll -= bet_size
         bankroll_progress.append(current_bankroll)
+    print(f"Bankroll calc time: {time.time() - start_time:.3f}s")  # Debug timing
     return bankroll_progress, bet_sizes
 
+def render_grid(grid, num_cols, grid_type, state, display_cols=12):
+    key = f'{grid_type}_html'
+    if key not in state or state.get(f'{grid_type}_last_length', 0) != num_cols:
+        html_rows = []
+        for row in range(6):
+            row_display = []
+            for col in range(min(num_cols, display_cols)):
+                outcome = grid[row][col]
+                if grid_type == 'bead_plate':
+                    if outcome in ['P', 'B', 'T']:
+                        color = '#3182ce' if outcome == 'P' else '#e53e3e' if outcome == 'B' else '#38a169'
+                        row_display.append(f'<div style="width: 22px; height: 22px; background-color: {color}; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
+                    else:
+                        row_display.append('<div style="width: 22px; height: 22px; display: inline-block;"></div>')
+                else:
+                    if outcome == 'P':
+                        row_display.append('<div style="width: 22px; height: 22px; background-color: #3182ce; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
+                    elif outcome == 'B':
+                        row_display.append('<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
+                    elif outcome == 'T':
+                        row_display.append('<div style="width: 22px; height: 22px; border: 2px solid #38a169; border-radius: 50%; display: inline-block;"></div>')
+                    elif outcome == 'R':
+                        row_display.append('<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
+                    elif outcome == 'B' and grid_type != 'big_road':
+                        row_display.append('<div style="width: 22px; height: 22px; background-color: #3182ce; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
+                    else:
+                        row_display.append('<div style="width: 22px; height: 22px; display: inline-block;"></div>')
+            html_rows.append(' '.join(row_display))
+        state[key] = html_rows
+        state[f'{grid_type}_last_length'] = num_cols
+    return state[key]
+
 def main():
+    start_time = time.time()
     st.set_page_config(page_title="Mang Baccarat Group", page_icon="🎲", layout="centered")
     st.title("Mang Baccarat Group")
 
@@ -470,15 +469,15 @@ def main():
         with col_mode:
             ai_mode = st.selectbox("AI Mode", ["Conservative", "Aggressive"], index=["Conservative", "Aggressive"].index(st.session_state.ai_mode))
 
-        # Update session state only if changed
-        if st.session_state.initial_bankroll != initial_bankroll:
+        if (st.session_state.initial_bankroll != initial_bankroll or
+            st.session_state.base_bet != base_bet or
+            st.session_state.money_management_strategy != money_management_strategy or
+            st.session_state.ai_mode != ai_mode):
             st.session_state.initial_bankroll = initial_bankroll
-        if st.session_state.base_bet != base_bet:
             st.session_state.base_bet = base_bet
-        if st.session_state.money_management_strategy != money_management_strategy:
             st.session_state.money_management_strategy = money_management_strategy
-        if st.session_state.ai_mode != ai_mode:
             st.session_state.ai_mode = ai_mode
+            st.rerun()
 
         st.markdown(f"**Selected Money Management Strategy:** {money_management_strategy}")
 
@@ -499,14 +498,12 @@ def main():
                 st.rerun()
         with col4:
             if st.button("Undo", disabled=len(st.session_state.history) == 0):
-                if st.session_state.history:
-                    st.session_state.history.pop()
-                    st.rerun()
-                else:
-                    st.warning("Nothing to undo!")
+                st.session_state.history.pop()
+                st.rerun()
 
     # Shoe Patterns
-    with st.expander("Shoe Patterns", expanded=False):
+    patterns_container = st.expander("Shoe Patterns", expanded=False)
+    with patterns_container:
         pattern_options = ["Bead Plate", "Big Road", "Big Eye Boy", "Cockroach Pig"]
         selected_patterns = st.multiselect(
             "Select Patterns to Display",
@@ -516,20 +513,19 @@ def main():
         )
         if st.session_state.selected_patterns != selected_patterns:
             st.session_state.selected_patterns = selected_patterns
+            st.rerun()
 
         if "Bead Plate" in selected_patterns:
             st.markdown("### Bead Plate")
-            sequence = [r for r in st.session_state.history][-84:]
+            sequence = [r for r in st.session_state.history][-72:]  # Reduced from 84
             sequence = ['P' if r == 'Player' else 'B' if r == 'Banker' else 'T' for r in sequence]
-            grid = [['' for _ in range(14)] for _ in range(6)]
+            grid = [['' for _ in range(12)] for _ in range(6)]  # 6x12
             for i, result in enumerate(sequence):
-                if result in ['P', 'B', 'T']:
-                    col = i // 6
-                    row = i % 6
-                    if col < 14:
-                        color = '#3182ce' if result == 'P' else '#e53e3e' if result == 'B' else '#38a169'
-                        grid[row][col] = f'<div style="width: 22px; height: 22px; background-color: {color}; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>'
-            html_rows = [' '.join(row) for row in grid]
+                col = i // 6
+                row = i % 6
+                if col < 12:
+                    grid[row][col] = result
+            html_rows = render_grid(grid, len(sequence) // 6 + 1 if sequence else 0, 'bead_plate', st.session_state)
             for row in html_rows:
                 st.markdown(row, unsafe_allow_html=True)
             if not st.session_state.history:
@@ -538,36 +534,25 @@ def main():
             # Win/Loss Tracker
             st.markdown("#### Win/Loss Tracker")
             st.markdown("<p style='font-size: 12px; color: #666666;'>Green (●): Win, Red (●): Loss, Gray (●): Pass/Tie</p>", unsafe_allow_html=True)
-            outcomes = compute_win_loss(tuple(st.session_state.history), st.session_state.ai_mode)[-84:]
-            tracker_row = []
-            for outcome in outcomes:
-                if outcome == 'W':
-                    tracker_row.append('<div style="width: 22px; height: 22px; background-color: #38a169; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
-                elif outcome == 'L':
-                    tracker_row.append('<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
-                else:
-                    tracker_row.append('<div style="width: 22px; height: 22px; background-color: #666666; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
-            st.markdown(' '.join(tracker_row), unsafe_allow_html=True)
+            outcomes = compute_win_loss(tuple(st.session_state.history), st.session_state.ai_mode, st.session_state.money_management_strategy)[-72:]
+            if 'tracker_html' not in st.session_state or st.session_state.get('tracker_last_length', 0) != len(outcomes):
+                tracker_row = []
+                for outcome in outcomes:
+                    if outcome == 'W':
+                        tracker_row.append('<div style="width: 22px; height: 22px; background-color: #38a169; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
+                    elif outcome == 'L':
+                        tracker_row.append('<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
+                    else:
+                        tracker_row.append('<div style="width: 22px; height: 22px; background-color: #666666; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
+                st.session_state.tracker_html = ' '.join(tracker_row)
+                st.session_state.tracker_last_length = len(outcomes)
+            st.markdown(st.session_state.tracker_html, unsafe_allow_html=True)
 
         if "Big Road" in selected_patterns:
             st.markdown("### Big Road")
-            big_road_grid, num_cols = build_big_road(tuple(st.session_state.history))
+            big_road_grid, num_cols = update_big_road(st.session_state.history, st.session_state)
             if num_cols > 0:
-                display_cols = min(num_cols, 14)
-                html_rows = []
-                for row in range(6):
-                    row_display = []
-                    for col in range(display_cols):
-                        outcome = big_road_grid[row][col]
-                        if outcome == 'P':
-                            row_display.append('<div style="width: 22px; height: 22px; background-color: #3182ce; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
-                        elif outcome == 'B':
-                            row_display.append('<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
-                        elif outcome == 'T':
-                            row_display.append('<div style="width: 22px; height: 22px; border: 2px solid #38a169; border-radius: 50%; display: inline-block;"></div>')
-                        else:
-                            row_display.append('<div style="width: 22px; height: 22px; display: inline-block;"></div>')
-                    html_rows.append(' '.join(row_display))
+                html_rows = render_grid(big_road_grid, num_cols, 'big_road', st.session_state)
                 for row in html_rows:
                     st.markdown(row, unsafe_allow_html=True)
             else:
@@ -576,22 +561,10 @@ def main():
         if "Big Eye Boy" in selected_patterns:
             st.markdown("### Big Eye Boy")
             st.markdown("<p style='font-size: 12px; color: #666666;'>Red (●): Repeat Pattern, Blue (●): Break Pattern</p>", unsafe_allow_html=True)
-            big_road_grid, num_cols = build_big_road(tuple(st.session_state.history))
-            big_eye_grid, big_eye_cols = build_big_eye_boy(tuple(big_road_grid), num_cols)
+            big_road_grid, num_cols = update_big_road(st.session_state.history, st.session_state)
+            big_eye_grid, big_eye_cols = update_derived_road(big_road_grid, num_cols, st.session_state, 'big_eye_boy')
             if big_eye_cols > 0:
-                display_cols = min(big_eye_cols, 14)
-                html_rows = []
-                for row in range(6):
-                    row_display = []
-                    for col in range(display_cols):
-                        outcome = big_eye_grid[row][col]
-                        if outcome == 'R':
-                            row_display.append('<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
-                        elif outcome == 'B':
-                            row_display.append('<div style="width: 22px; height: 22px; background-color: #3182ce; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
-                        else:
-                            row_display.append('<div style="width: 22px; height: 22px; display: inline-block;"></div>')
-                    html_rows.append(' '.join(row_display))
+                html_rows = render_grid(big_eye_grid, big_eye_cols, 'big_eye_boy', st.session_state)
                 for row in html_rows:
                     st.markdown(row, unsafe_allow_html=True)
             else:
@@ -599,32 +572,21 @@ def main():
 
         if "Cockroach Pig" in selected_patterns:
             st.markdown("### Cockroach Pig")
-            st.markdown("<p style='font-size: 12px; color: #666666;'>Red (●): Repeat Pattern, Blue (●): Break Pattern</p>", unsafe_allow_html=True)
-            big_road_grid, num_cols = build_big_road(tuple(st.session_state.history))
-            cockroach_grid, cockroach_cols = build_cockroach_pig(tuple(big_road_grid), num_cols)
+            st.markdown("<p style='font-size: 12px; color: #666666;'>Regular (red), Strong (blue). Represents strong or regular break in pattern.</p>", unsafe_allow_html=True)
+            big_road_grid, num_cols = update_big_road(st.session_state.history, st.session_state)
+            cockroach_grid, cockroach_cols = update_derived_road(big_road_grid, num_cols, st.session_state, 'cockroach_pig')
             if cockroach_cols > 0:
-                display_cols = min(cockroach_cols, 14)
-                html_rows = []
-                for row in range(6):
-                    row_display = []
-                    for col in range(display_cols):
-                        outcome = cockroach_grid[row][col]
-                        if outcome == 'R':
-                            row_display.append('<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
-                        elif outcome == 'B':
-                            row_display.append('<div style="width: 22px; height: 22px; background-color: #3182ce; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
-                        else:
-                            row_display.append('<div style="width: 22px; height: 22px; display: inline-block;"></div>')
-                    html_rows.append(' '.join(row_display))
+                html_rows = render_grid(cockroach_grid, cockroach_cols, 'cockroach_pig', st.session_state)
                 for row in html_rows:
                     st.markdown(row, unsafe_allow_html=True)
             else:
-                st.write("_No Cockroach Pig data yet._")
+                st.write("_Regular_")
 
     # Bet Prediction
-    with st.expander("Prediction for Next Bet", expanded=True):
-        bet, confidence, reason, emotional_tone, pattern_insights = advanced_bet_selection(tuple(st.session_state.history), st.session_state.ai_mode, st.session_state.money_management_strategy)
+    prediction_container = st.container()
+    with prediction_container:
         st.markdown("### Prediction for Next Bet")
+        bet, confidence, reason, emotional_tone, pattern_insights = advanced_bet_selection(st.session_state.history, st.session_state.ai_mode, st.session_state.money_management_strategy)
         if bet == 'Pass':
             st.warning("I’m not betting this time! The pattern is too unclear.")
         else:
@@ -640,30 +602,30 @@ def main():
     # Bankroll Progression
     with st.expander("Bankroll and Bet Size Progression", expanded=False):
         bankroll_progress, bet_sizes = calculate_bankroll(tuple(st.session_state.history), st.session_state.base_bet, st.session_state.money_management_strategy)
-        if bankroll_progress:
-            st.markdown("### Bankroll and Bet Size Progression (Newest to Oldest)")
-            total_hands = len(bankroll_progress)
+        if 'bankroll_html' not in st.session_state or st.session_state.get('bankroll_last_length', 0) != len(bankroll_progress):
             html_output = []
+            total_hands = len(bankroll_progress)
             for i, (val, bet_size) in enumerate(zip(reversed(bankroll_progress), reversed(bet_sizes))):
                 hand_number = total_hands - i
                 bet_display = f"Bet: ${bet_size:.2f}" if bet_size > 0 else "Bet: None (No prediction, Tie, or Pass)"
-                html_output.append(f"Hand {hand_number}: Bankroll ${val:.2f}, {bet_display}")
-            for line in html_output:
-                st.write(line)
-            st.markdown(f"**Current Bankroll:** ${bankroll_progress[-1]:.2f}")
-        else:
-            st.markdown(f"**Current Bankroll:** ${st.session_state.initial_bankroll:.2f}")
+                html_output.append(f"{hand_number}: Bankroll ${val:.2f}, {bet_display}")
+            st.session_state.bankroll_html = html_output
+            st.session_state.bankroll_last_length = len(bankroll_progress)
+            st.session_state.current_bankroll = bankroll_progress[-1] if bankroll_progress else st.session_state.initial_bankroll
+
+        st.markdown("### Progression (Newest to Oldest)")
+        for line in st.session_state.bankroll_html:
+            st.write(f"Hand {line}")
+        st.markdown(f"**Current Bankroll:** ${st.session_state.current_bankroll:.2f}")
 
     # Reset Game
     with st.expander("Reset Game", expanded=False):
         if st.button("Reset History and Bankroll"):
-            st.session_state.history = []
-            st.session_state.initial_bankroll = 1000.0
-            st.session_state.base_bet = 10.0
-            st.session_state.money_management_strategy = "Fixed 5% of Bankroll"
-            st.session_state.ai_mode = "Conservative"
-            st.session_state.selected_patterns = ["Bead Plate", "Big Road"]
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
             st.rerun()
+
+    print(f"Total render time: {time.time() - start_time:.3f}s")  # Debug timing
 
 if __name__ == "__main__":
     main()
