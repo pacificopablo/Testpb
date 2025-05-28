@@ -2,6 +2,7 @@
 import streamlit as st
 import logging
 import plotly.graph_objects as go
+import json
 
 # Set up basic logging
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -391,6 +392,44 @@ def main():
         st.set_page_config(page_title="Mang Baccarat Predictor", page_icon="🎲", layout="wide")
         st.title("Mang Baccarat Predictor")
 
+        # Initialize session state
+        if 'history' not in st.session_state:
+            st.session_state.history = []
+            st.session_state.initial_bankroll = 1000.0
+            st.session_state.base_bet = 10.0
+            st.session_state.money_management_strategy = "Flat Betting"
+            st.session_state.ai_mode = "Conservative"
+            st.session_state.selected_patterns = ["Bead Bin", "Win/Loss"]
+            st.session_state.t3_level = 1
+            st.session_state.t3_results = []
+            st.session_state.screen_width = 1024  # Default width
+
+        # JavaScript to detect screen width
+        screen_width_js = """
+        <script>
+        function updateScreenWidth() {
+            const width = window.innerWidth;
+            localStorage.setItem('screen_width', width);
+            document.getElementById('screen-width-input').value = width;
+        }
+        window.onload = updateScreenWidth;
+        window.onresize = updateScreenWidth;
+        </script>
+        <input type="hidden" id="screen-width-input">
+        """
+        st.markdown(screen_width_js, unsafe_allow_html=True)
+
+        # Retrieve screen width from localStorage
+        screen_width = st.session_state.screen_width
+        if 'screen_width' in st.session_state:
+            try:
+                # Simulate getting width from JavaScript (in practice, use a component like streamlit-js)
+                width = st.text_input("Screen Width", key="screen_width_input", value=str(screen_width), disabled=True)
+                screen_width = int(width) if width.isdigit() else 1024
+            except:
+                screen_width = 1024
+        st.session_state.screen_width = screen_width
+
         # Responsive CSS
         st.markdown("""
             <style>
@@ -430,7 +469,7 @@ def main():
             p, div, span {
                 font-size: 1rem;
             }
-            /* Tablet (768px–1024px) */
+            /* Laptop (>768px) */
             @media (max-width: 1024px) {
                 h1 {
                     font-size: 2rem;
@@ -490,20 +529,10 @@ def main():
             </script>
         """, unsafe_allow_html=True)
 
-        if 'history' not in st.session_state:
-            st.session_state.history = []
-            st.session_state.initial_bankroll = 1000.0
-            st.session_state.base_bet = 10.0
-            st.session_state.money_management_strategy = "Flat Betting"
-            st.session_state.ai_mode = "Conservative"
-            st.session_state.selected_patterns = ["Bead Bin", "Win/Loss"]
-            st.session_state.t3_level = 1
-            st.session_state.t3_results = []
-
         # Game Settings
         with st.expander("Game Settings", expanded=False):
-            # Responsive columns: stack on mobile
-            if st.get_option("client.displayWidth") > 768:
+            # Responsive layout
+            if screen_width > 768:
                 cols = st.columns(4)
             else:
                 cols = [st.container() for _ in range(4)]
@@ -527,8 +556,7 @@ def main():
 
         # Game Input Buttons
         with st.expander("Input Game Results", expanded=True):
-            # Responsive columns: stack on mobile
-            if st.get_option("client.displayWidth") > 768:
+            if screen_width > 768:
                 cols = st.columns(4)
             else:
                 cols = [st.container() for _ in range(4)]
@@ -566,10 +594,9 @@ def main():
             )
             st.session_state.selected_patterns = selected_patterns
 
-            # Determine max columns based on screen width
-            screen_width = st.get_option("client.displayWidth")
-            max_display_cols = 14 if screen_width > 1024 else 12 if screen_width > 768 else 10
-            circle_size = 22 if screen_width > 1024 else 18 if screen_width > 768 else 16
+            # Pattern settings based on screen width
+            max_display_cols = 14 if screen_width > 768 else 10
+            circle_size = 22 if screen_width > 768 else 16
 
             if "Bead Bin" in st.session_state.selected_patterns:
                 st.markdown("### Bead Bin")
@@ -700,9 +727,9 @@ def main():
                 total_hands = len(bankroll_progress)
                 for i, (val, bet_size) in enumerate(zip(reversed(bankroll_progress), reversed(bet_history))):
                     hand_number = total_hands - i
-                    bet_display = f"Bet ${round(bet_size, 2)}" if bet_size > 0 else "No Bet"
-                    st.markdown(f"Hand {hand_number}: ${round(val, 2)} | {bet_display}")
-                st.markdown(f"**Current Bankroll**: ${round(bankroll_progress[-1], 2)}")
+                    bet_display = f"Bet ${bet_size:.2f}" if bet_size > 0 else "No Bet"
+                    st.markdown(f"Hand {hand_number}: ${val:.2f} | {bet_display}")
+                st.markdown(f"**Current Bankroll**: ${bankroll_progress[-1]:.2f}")
 
                 st.markdown("### Bankroll Trend")
                 labels = [f"Hand {i+1}" for i in range(len(bankroll_progress))]
