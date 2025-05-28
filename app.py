@@ -255,16 +255,26 @@ def main():
     st.session_state.money_management_strategy = money_management_strategy
 
     # Game input buttons
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("Banker"):
             st.session_state.history.append("Banker")
+            st.rerun()
     with col2:
         if st.button("Player"):
             st.session_state.history.append("Player")
+            st.rerun()
     with col3:
         if st.button("Tie"):
             st.session_state.history.append("Tie")
+            st.rerun()
+    with col4:
+        if st.button("Undo", disabled=len(st.session_state.history) == 0):
+            if st.session_state.history:
+                st.session_state.history.pop()
+                st.rerun()
+            else:
+                st.warning("Nothing to undo!")
 
     # Bead Plate History (Adapted from origmangbacc)
     st.markdown("### Bead Plate")
