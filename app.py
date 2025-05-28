@@ -1,6 +1,6 @@
 import streamlit as st
 
-# Normalize input tokens
+# Normalize input
 def normalize_result(s):
     s = s.strip().lower()
     if s == 'banker' or s == 'b':
@@ -339,8 +339,8 @@ def calculate_win_loss_tracker(history, base_bet, strategy, ai_mode):
     return tracker
 
 def main():
-    st.set_page_config(page_title="Smart Baccarat Predictor with Emotions", page_icon="🎲", layout="centered")
-    st.title("Smart Baccarat Predictor with Emotions")
+    st.set_page_config(page_title="Smart Mang Baccarat Group Predictor", page_icon="🎲", layout="centered")
+    st.title("Smart Mang Baccarat Group Predictor")
 
     if 'history' not in st.session_state:
         st.session_state.history = []
@@ -348,7 +348,7 @@ def main():
         st.session_state.base_bet = 10.0
         st.session_state.money_management_strategy = "Fixed 5% of Bankroll"
         st.session_state.ai_mode = "Conservative"
-        st.session_state.selected_patterns = ["Bead Plate", "Big Road", "Win/Loss Tracker"]
+        st.session_state.selected_patterns = ["Bead Plate", "Win/Loss Tracker"]
 
     # Game Settings
     with st.expander("Game Settings", expanded=False):
@@ -537,7 +537,7 @@ def main():
             st.session_state.base_bet = 10.0
             st.session_state.money_management_strategy = "Fixed 5% of Bankroll"
             st.session_state.ai_mode = "Conservative"
-            st.session_state.selected_patterns = ["Bead Plate", "Big Road", "Win/Loss Tracker"]
+            st.session_state.selected_patterns = ["Bead Plate", "Win/Loss Tracker"]
             st.rerun()
 
 if __name__ == "__main__":
