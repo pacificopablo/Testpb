@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import logging
 import plotly.graph_objects as go
@@ -305,7 +306,7 @@ def advanced_bet_selection(s, mode='Conservative'):
     reason = " ".join(reason_parts)
     return bet_choice, confidence, reason, emotional_tone, pattern_insights
 
-def money_management(bankroll, base_bet, strategy, confidence=None, history=None, bet_outcome=None):
+def money_management(bankroll, base_bet, strategy, bet_outcome=None):
     min_bet = max(1.0, base_bet)
     max_bet = bankroll
 
@@ -327,10 +328,8 @@ def money_management(bankroll, base_bet, strategy, confidence=None, history=None
             st.session_state.t3_results = []
 
         calculated_bet = base_bet * st.session_state.t3_level
-    elif strategy == "Flat Betting":
-        calculated_bet = base_bet
     else:
-        calculated_bet = base_bet  # Fallback to flat betting
+        calculated_bet = base_bet  # Flat Betting
 
     bet_size = round(calculated_bet / base_bet) * base_bet
     bet_size = max(min_bet, min(bet_size, max_bet))
@@ -349,7 +348,7 @@ def calculate_bankroll(history, base_bet, strategy):
             bankroll_progress.append(current_bankroll)
             bet_sizes.append(0.0)
             continue
-        bet_size = money_management(current_bankroll, base_bet, strategy, confidence, current_rounds, bet_outcome=None)
+        bet_size = money_management(current_bankroll, base_bet, strategy)
         bet_sizes.append(bet_size)
         if actual_result == bet:
             if bet == 'Banker':
@@ -358,14 +357,14 @@ def calculate_bankroll(history, base_bet, strategy):
             else:
                 current_bankroll += bet_size
             if strategy == "T3":
-                money_management(current_bankroll, base_bet, strategy, confidence, current_rounds, bet_outcome='win')
+                money_management(current_bankroll, base_bet, strategy, bet_outcome='win')
         elif actual_result == 'Tie':
             bankroll_progress.append(current_bankroll)
             continue
         else:
             current_bankroll -= bet_size
             if strategy == "T3":
-                money_management(current_bankroll, base_bet, strategy, confidence, current_rounds, bet_outcome='loss')
+                money_management(current_bankroll, base_bet, strategy, bet_outcome='loss')
         bankroll_progress.append(current_bankroll)
     return bankroll_progress, bet_sizes
 
@@ -393,13 +392,42 @@ def main():
         # Initialize session state
         if 'history' not in st.session_state:
             st.session_state.history = []
+        if 'initial_bankroll' not in st.session_state:
             st.session_state.initial_bankroll = 1000.0
+        if 'base_bet' not in st.session_state:
             st.session_state.base_bet = 10.0
+        if 'money_management_strategy' not in st.session_state:
             st.session_state.money_management_strategy = "Flat Betting"
+        if 'ai_mode' not in st.session_state:
             st.session_state.ai_mode = "Conservative"
+        if 'selected_patterns' not in st.session_state:
             st.session_state.selected_patterns = ["Bead Bin", "Win/Loss"]
+        if 't3_level' not in st.session_state:
             st.session_state.t3_level = 1
+        if 't3_results' not in st.session_state:
             st.session_state.t3_results = []
+        if 'screen_width' not in st.session_state:
+            st.session_state.screen_width = 1024
+
+        # JavaScript for screen width detection
+        st.markdown("""
+            <script>
+            function updateScreenWidth() {
+                const width = window.innerWidth;
+                document.getElementById('screen-width-input').value = width;
+            }
+            window.onload = updateScreenWidth;
+            window.onresize = updateScreenWidth;
+            </script>
+            <input type="hidden" id="screen-width-input">
+        """, unsafe_allow_html=True)
+
+        # Retrieve screen width (simulated; in practice, use streamlit-js)
+        screen_width_input = st.text_input("Screen Width", key="screen_width_input", value=str(st.session_state.screen_width), disabled=True)
+        try:
+            st.session_state.screen_width = int(screen_width_input) if screen_width_input.isdigit() else 1024
+        except ValueError:
+            st.session_state.screen_width = 1024
 
         # Responsive CSS
         st.markdown("""
@@ -480,6 +508,9 @@ def main():
                 .stNumberInput input, .stSelectbox div {
                     font-size: 0.9rem;
                 }
+                .st-emotion-cache-1dj3wfg {
+                    flex-wrap: wrap;
+                }
             }
             </style>
             <script>
@@ -539,15 +570,15 @@ def main():
                     st.session_state.history.append("Tie")
                     st.rerun()
             with cols[3]:
-                if st.button("Undo", disabled=len(st.session_state.history) == 0):
-                    if st.session_state.history:
-                        st.session_state.history.pop()
-                        if st.session_state.money_management_strategy == "T3":
-                            st.session_state.t3_results = []
-                            st.session_state.t3_level = 1
-                        st.rerun()
-                    else:
-                        st.warning("No results to undo!")
+                undo_clicked = st.button("Undo", disabled=len(st.session_state.history) == 0)
+                if undo_clicked and len(st.session_state.history) == 0:
+                    st.warning("No results to undo!")
+                elif undo_clicked:
+                    st.session_state.history.pop()
+                    if st.session_state.money_management_strategy == "T3":
+                        st.session_state.t3_results = []
+                        st.session_state.t3_level = 1
+                    st.rerun()
 
         # Shoe Patterns
         with st.expander("Shoe Patterns", expanded=False):
@@ -555,12 +586,12 @@ def main():
             selected_patterns = st.multiselect(
                 "Select Patterns to Display",
                 pattern_options,
-                default=["Bead Bin", "Win/Loss"],
+                default=st.session_state.selected_patterns,
                 key="pattern_select"
             )
             st.session_state.selected_patterns = selected_patterns
 
-            max_display_cols = 10 if st._is_running_with_streamlit and st.get_option("browser.gatherUsageStats") else 14
+            max_display_cols = 10 if st.session_state.screen_width < 768 else 14
 
             if "Bead Bin" in st.session_state.selected_patterns:
                 st.markdown("### Bead Bin")
@@ -576,7 +607,7 @@ def main():
                             grid[row][col] = f'<div class="pattern-circle" style="background-color: {color}; border-radius: 50%; border: 1px solid #ffffff;"></div>'
                 st.markdown('<div id="bead-bin-scroll" class="pattern-scroll">', unsafe_allow_html=True)
                 for row in grid:
-                    st.markdown(''.join(row), unsafe_allow_html=True)
+                    st.markdown(' '.join(row), unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
                 if not st.session_state.history:
                     st.markdown("No results yet. Enter results below.")
@@ -672,12 +703,12 @@ def main():
             bet, confidence, reason, emotional_tone, pattern_insights = advanced_bet_selection(st.session_state.history, st.session_state.ai_mode)
             st.markdown("### Prediction")
             if bet == 'Pass':
-                st.warning("No Bet")
+                st.markdown("**No Bet**: Insufficient confidence to place a bet.")
             else:
                 current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else st.session_state.initial_bankroll
-                recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy, confidence, st.session_state.history)
-                st.success(f"Bet: {bet} | Confidence: {confidence}% | Bet Size: ${recommended_bet_size:.2f} | Mood: {emotional_tone}")
-            st.info(f"Reasoning: {reason}")
+                recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy)
+                st.markdown(f"**Bet**: {bet} | **Confidence**: {confidence}% | **Bet Size**: ${recommended_bet_size:.2f} | **Mood**: {emotional_tone}")
+            st.markdown(f"**Reasoning**: {reason}")
             if pattern_insights:
                 st.markdown("### Insights")
                 for insight in pattern_insights:
@@ -711,11 +742,11 @@ def main():
                     )
                 )
                 fig.update_layout(
-                    title="Bankroll Over Time",
+                    title=dict(text="Bankroll Over Time", x=0.5, xanchor='center'),
                     xaxis_title="Hand",
                     yaxis_title="Bankroll ($)",
                     xaxis=dict(tickangle=45),
-                    yaxis=dict(rangemode="tozero"),
+                    yaxis=dict(autorange=True),
                     template="plotly_white",
                     height=400,
                     margin=dict(l=40, r=40, t=50, b=100)
@@ -738,9 +769,13 @@ def main():
                 st.session_state.t3_level = 1
                 st.session_state.t3_results = []
                 st.rerun()
-    except Exception as e:
+
+    except (KeyError, ValueError, IndexError) as e:
         logging.error(f"Error in main: {str(e)}")
-        st.error(f"Error occurred: {str(e)}")
+        st.error(f"Error occurred: {str(e)}. Please try refreshing the page or resetting the game.")
+    except Exception as e:
+        logging.error(f"Unexpected error in main: {str(e)}")
+        st.error(f"Unexpected error: {str(e)}. Contact support if this persists.")
 
 if __name__ == "__main__":
     main()
