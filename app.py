@@ -550,17 +550,18 @@ def main():
 
         if "Win/Loss" in selected_patterns:
             st.markdown("### Win/Loss")
-            st.markdown("<p style='font-size: 12px; color: #666666;'>Green (●): Win, Red (●): Loss, Orange (●): Skip, Black (✩): Tie</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size: 12px; color: #666666;'>Green (●): Win, Red (●): Loss, Gray (●): Skip or Tie</p>", unsafe_allow_html=True)
             tracker = calculate_win_loss_tracker(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy, st.session_state.ai_mode)[-14:]
             row_display = []
             for result in tracker:
                 if result in ['W', 'L', 'S', 'T']:
-                    color = '#38a169' if result == 'W' else '#e53e3e' if result == 'L' else '#ed8936' if result == 'S' else '#000000'
-                    symbol = '●' if result in ['W', 'L', 'S'] else '★'
-                    row_display.append(f'<div style="width: 20px; height: 20px; background-color: {color}; display: flex; justify-content: center; align-items: center; display: inline-block;"><span style="font-size: 18px;">{symbol}</span></div>')
+                    color = '#38a169' if result == 'W' else '#e53e3e' if result == 'L' else '#A0AEC0'
+                    row_display.append(f'<div style="width: 20px; height: 20px; background-color: {color}; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
                 else:
                     row_display.append('<div style="width: 20px; height: 20px; display: inline-block;"></div>')
-            st.markdown(''.join(row_display), unsafe_allow_html=True)
+            st.markdown(' '.join(row_display), unsafe_allow_html=True)
+            if not st.session_state.history:
+                st.write("No results yet. Click the buttons above to add results.")
 
     # Bet Prediction
     with st.expander("Prediction", expanded=True):
