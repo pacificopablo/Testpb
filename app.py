@@ -461,6 +461,45 @@ def main():
 
         # Shoe Patterns
         with st.expander("Shoe Patterns", expanded=False):
+            # Define CSS and JavaScript for auto-scrolling
+            st.markdown("""
+                <style>
+                .pattern-scroll {
+                    overflow-x: auto;
+                    white-space: nowrap;
+                    max-width: 100%;
+                    padding: 10px;
+                    border: 1px solid #e1e1e1;
+                    background-color: #f9f9f9;
+                }
+                .pattern-scroll::-webkit-scrollbar {
+                    height: 8px;
+                }
+                .pattern-scroll::-webkit-scrollbar-thumb {
+                    background-color: #888;
+                    border-radius: 4px;
+                }
+                </style>
+                <script>
+                function autoScrollPatterns() {
+                    const containers = [
+                        'bead-bin-scroll',
+                        'big-road-scroll',
+                        'big-eye-scroll',
+                        'cockroach-scroll',
+                        'win-loss-scroll'
+                    ];
+                    containers.forEach(id => {
+                        const element = document.getElementById(id);
+                        if (element) {
+                            element.scrollLeft = element.scrollWidth;
+                        }
+                    });
+                }
+                window.onload = autoScrollPatterns;
+                </script>
+            """, unsafe_allow_html=True)
+
             pattern_options = ["Bead Bin", "Big Road", "Big Eye.", "Cockroach", "Win/Loss"]
             selected_patterns = st.multiselect(
                 "Select Patterns to Display",
@@ -482,8 +521,10 @@ def main():
                         if col < 14:
                             color = '#3182ce' if result == 'P' else '#e53e3e' if result == 'B' else '#38a169'
                             grid[row][col] = f'<div style="width: 22px; height: 22px; background-color: {color}; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>'
+                st.markdown('<div id="bead-bin-scroll" class="pattern-scroll">', unsafe_allow_html=True)
                 for row in grid:
                     st.markdown(' '.join(row), unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
                 if not st.session_state.history:
                     st.markdown("No results yet. Enter results below.")
 
@@ -492,6 +533,7 @@ def main():
                 big_road_grid, num_cols = build_big_road(st.session_state.history)
                 if num_cols > 0:
                     display_cols = min(num_cols, 14)
+                    st.markdown('<div id="big-road-scroll" class="pattern-scroll">', unsafe_allow_html=True)
                     for row in range(6):
                         row_display = []
                         for col in range(display_cols):
@@ -505,6 +547,7 @@ def main():
                             else:
                                 row_display.append('<div style="width: 22px; height: 22px; display: inline-block;"></div>')
                         st.markdown(' '.join(row_display), unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
                 else:
                     st.markdown("No Big Road data.")
 
@@ -515,6 +558,7 @@ def main():
                 big_eye_grid, big_eye_cols = build_big_eye_boy(big_road_grid, num_cols)
                 if big_eye_cols > 0:
                     display_cols = min(big_eye_cols, 14)
+                    st.markdown('<div id="big-eye-scroll" class="pattern-scroll">', unsafe_allow_html=True)
                     for row in range(6):
                         row_display = []
                         for col in range(display_cols):
@@ -526,6 +570,7 @@ def main():
                             else:
                                 row_display.append('<div style="width: 20px; height: 20px; display: inline-block;"></div>')
                         st.markdown(''.join(row_display), unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
                 else:
                     st.markdown("No recent Big Eye data.")
 
@@ -536,6 +581,7 @@ def main():
                 cockroach_grid, cockroach_cols = build_cockroach_pig(big_road_grid, num_cols)
                 if cockroach_cols > 0:
                     display_cols = min(cockroach_cols, 14)
+                    st.markdown('<div id="cockroach-scroll" class="pattern-scroll">', unsafe_allow_html=True)
                     for row in range(6):
                         row_display = []
                         for col in range(display_cols):
@@ -547,6 +593,7 @@ def main():
                             else:
                                 row_display.append('<div style="width: 20px; height: 20px; display: inline-block;"></div>')
                         st.markdown(''.join(row_display), unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
                 else:
                     st.markdown("No recent Cockroach data.")
 
@@ -561,7 +608,9 @@ def main():
                         row_display.append(f'<div style="width: 20px; height: 20px; background-color: {color}; border-radius: 50%; border: 1px solid #000000; display: inline-block;"></div>')
                     else:
                         row_display.append('<div style="width: 20px; height: 20px; display: inline-block;"></div>')
+                st.markdown('<div id="win-loss-scroll" class="pattern-scroll">', unsafe_allow_html=True)
                 st.markdown(' '.join(row_display), unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
                 if not st.session_state.history:
                     st.markdown("No results yet. Enter results below.")
 
