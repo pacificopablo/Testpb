@@ -238,7 +238,7 @@ def advanced_bet_selection(results, mode='Conservative'):
     # Cockroach Pig
     cockroach_grid, cockroach_cols = build_cockroach_pig(big_road_grid, num_cols)
     if cockroach_cols > 0:
-        last_col = [cockroach_grid[row][cockroach_cols - 1] for row in range(6)]
+        last_col = [cockroach_grid[row][big_eye_cols - 1] for row in range(6)]
         last_signal = next((x for x in last_col if x in ['R', 'B']), None)
         if last_signal:
             last_side = 'Player' if big_road_grid[0][num_cols - 1] == 'P' else 'Banker'
@@ -311,25 +311,29 @@ def advanced_bet_selection(results, mode='Conservative'):
     reason = " ".join(reason_parts)
     return bet_choice, confidence, reason, emotional_tone, pattern_insights
 
-def money_management(bankroll, base_bet, strategy, confidence=None, history=None):
+def money_management(bankroll, base_bet, strategy, confidence=None, history=None, bet_outcome=None):
     min_bet = max(1.0, base_bet)
     max_bet = bankroll
 
     if strategy == "Reign":
-        if not history or len(history) < 3:
-            calculated_bet = base_bet
-        else:
-            mapped_history = ['P' if r == 'Player' else 'B' if r == 'Banker' else 'T' for r in history]
-            recent = mapped_history[-3:]
-            last_result = recent[-1]
-            streak = all(r == last_result for r in recent)
-            if streak and last_result in ['P', 'B']:
-                if len(mapped_history) >= 4 and mapped_history[-4] == last_result:
-                    calculated_bet = base_bet * 4
-                else:
-                    calculated_bet = base_bet * 2
-            else:
-                calculated_bet = base_bet
+        if bet_outcome == 'win':
+            if not st.session_state.t3_results:
+                st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
+            st.session_state.t3_results.append('W')
+        elif bet_outcome == 'loss':
+            st.session_state.t3_results.append('L')
+
+        if len(st.session_state.t3_results) == 3:
+            wins = st.session_state.t3_results.count('W')
+            losses = st.session_state.t3_results.count('L')
+            if wins > losses:
+                st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
+            elif losses > wins:
+                st.session_state.t3_level += 1
+            # If wins == losses, level remains unchanged
+            st.session_state.t3_results = []
+
+        calculated_bet = base_bet * st.session_state.t3_level
     elif strategy == "Flat Betting":
         calculated_bet = base_bet
     else:
@@ -352,7 +356,7 @@ def calculate_bankroll(history, base_bet, strategy):
             bankroll_progress.append(current_bankroll)
             bet_sizes.append(0.0)
             continue
-        bet_size = money_management(current_bankroll, base_bet, strategy, confidence, current_rounds)
+        bet_size = money_management(current_bankroll, base_bet, strategy, confidence, current_rounds, bet_outcome=None)
         bet_sizes.append(bet_size)
         if actual_result == bet:
             if bet == 'Banker':
@@ -360,11 +364,17 @@ def calculate_bankroll(history, base_bet, strategy):
                 current_bankroll += win_amount
             else:
                 current_bankroll += bet_size
+            # Record win for Reign strategy
+            if strategy == "Reign":
+                money_management(current_bankroll, base_bet, strategy, confidence, current_rounds, bet_outcome='win')
         elif actual_result == 'Tie':
             bankroll_progress.append(current_bankroll)
             continue
         else:
             current_bankroll -= bet_size
+            # Record loss for Reign strategy
+            if strategy == "Reign":
+                money_management(current_bankroll, base_bet, strategy, confidence, current_rounds, bet_outcome='loss')
         bankroll_progress.append(current_bankroll)
     return bankroll_progress, bet_sizes
 
@@ -395,6 +405,8 @@ def main():
         st.session_state.money_management_strategy = "Flat Betting"
         st.session_state.ai_mode = "Conservative"
         st.session_state.selected_patterns = ["Bead Plate", "Win/Loss Tracker"]
+        st.session_state.t3_level = 1
+        st.session_state.t3_results = []
 
     # Game Settings
     with st.expander("Game Settings", expanded=False):
@@ -406,7 +418,7 @@ def main():
         with col_strategy:
             strategy_options = ["Flat Betting", "Reign"]
             money_management_strategy = st.selectbox("Money Management Strategy", strategy_options, index=strategy_options.index(st.session_state.money_management_strategy))
-            st.markdown("*Flat Betting: Fixed bet size. Reign: Doubles bet after 3 identical results, quadruples after 4.*")
+            st.markdown("*Flat Betting: Fixed bet size. Reign: Adjusts bet level based on the last three bet outcomes (increase if more losses, decrease if more wins).*")
         with col_mode:
             ai_mode = st.selectbox("AI Mode", ["Conservative", "Aggressive"], index=["Conservative", "Aggressive"].index(st.session_state.ai_mode))
 
@@ -436,6 +448,10 @@ def main():
             if st.button("Undo", disabled=len(st.session_state.history) == 0):
                 if st.session_state.history:
                     st.session_state.history.pop()
+                    # Reset Reign state if undoing a bet that affected it
+                    if st.session_state.money_management_strategy == "Reign":
+                        st.session_state.t3_results = []
+                        st.session_state.t3_level = 1
                     st.rerun()
                 else:
                     st.warning("Nothing to undo!")
@@ -554,7 +570,7 @@ def main():
             st.warning("⚠️ **No Bet**: Pattern too uncertain.")
         else:
             current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else st.session_state.initial_bankroll
-            recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy, confidence, st.session_state.history)
+            recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy, confidence, st.session_state.history, bet_outcome=None)
             st.success(f"✅ **Bet**: {bet} | **Confidence**: {confidence}% | **Bet Size**: ${recommended_bet_size:.2f} | **Mood**: {emotional_tone}")
         st.info(f"**Reasoning**: {reason}")
         if pattern_insights:
@@ -585,6 +601,8 @@ def main():
             st.session_state.money_management_strategy = "Flat Betting"
             st.session_state.ai_mode = "Conservative"
             st.session_state.selected_patterns = ["Bead Plate", "Win/Loss Tracker"]
+            st.session_state.t3_level = 1
+            st.session_state.t3_results = []
             st.rerun()
 
 if __name__ == "__main__":
