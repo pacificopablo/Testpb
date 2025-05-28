@@ -1,7 +1,8 @@
+```python
 import streamlit as st
 
-# Normalize input
-def normalize_result(s):
+# Normalize_input(s):
+def normalize(s):
     s = s.strip().lower()
     if s == 'banker' or s == 'b':
         return 'Banker'
@@ -11,36 +12,36 @@ def normalize_result(s):
         return 'Tie'
     return None
 
-def detect_streak(results):
-    if not results:
+def detect_streak(s):
+    if not s:
         return None, 0
-    last = results[-1]
+    last = s[-1]
     count = 1
-    for i in range(len(results) - 2, -1, -1):
-        if results[i] == last:
+    for i in range(len(s) - 2, -1, -1):
+        if s[i] == last:
             count += 1
         else:
             break
     return last, count
 
-def is_alternating_pattern(arr, min_length=4):
-    if len(arr) < min_length:
+def is_alternating(s, min_length=4):
+    if len(s) < min_length:
         return False
-    for i in range(len(arr) - 1):
-        if arr[i] == arr[i + 1]:
+    for i in range(len(s) - 1):
+        if s[i] == s[i + 1]:
             return False
     return True
 
-def is_zigzag_pattern(arr):
-    if len(arr) < 3:
+def is_zigzag(s):
+    if len(s) < 3:
         return False
-    for i in range(len(arr) - 2):
-        if arr[i] == arr[i + 2] and arr[i] != arr[i + 1]:
+    for i in range(len(s) - 2):
+        if s[i] == s[i + 2] and s[i] != s[i + 1]:
             return True
     return False
 
-def recent_trend_analysis(results, window=10):
-    recent = results[-window:] if len(results) >= window else results
+def recent_trend(s, window=10):
+    recent = s[-window:] if len(s) >= window else s
     if not recent:
         return None, 0
     freq = frequency_count(recent)
@@ -55,14 +56,14 @@ def recent_trend_analysis(results, window=10):
         return 'Player', min(player_ratio * 50, 80)
     return None, 0
 
-def frequency_count(arr):
+def frequency_count(s):
     count = {'Banker': 0, 'Player': 0, 'Tie': 0}
-    for r in arr:
+    for r in s:
         if r in count:
             count[r] += 1
     return count
 
-def build_big_road(results):
+def build_big_road(s):
     max_rows = 6
     max_cols = 50
     grid = [['' for _ in range(max_cols)] for _ in range(max_rows)]
@@ -70,7 +71,7 @@ def build_big_road(results):
     row = 0
     last_outcome = None
 
-    for result in results:
+    for result in s:
         mapped = 'P' if result == 'Player' else 'B' if result == 'Banker' else 'T'
         if mapped == 'T':
             if col < max_cols and row < max_rows and grid[row][col] == '':
@@ -146,9 +147,9 @@ def build_cockroach_pig(big_road_grid, num_cols):
             row = 0
     return grid, col + 1 if row > 0 else col
 
-def advanced_bet_selection(results, mode='Conservative'):
+def advanced_bet_selection(s, mode='Conservative'):
     max_recent_count = 30
-    recent = results[-max_recent_count:]
+    recent = s[-max_recent_count:]
     if not recent:
         return 'Pass', 0, "No results yet. Let’s wait for the shoe to develop!", "Cautious", []
 
@@ -238,7 +239,7 @@ def advanced_bet_selection(results, mode='Conservative'):
     # Cockroach Pig
     cockroach_grid, cockroach_cols = build_cockroach_pig(big_road_grid, num_cols)
     if cockroach_cols > 0:
-        last_col = [cockroach_grid[row][cockroach_cols - 1] for row in range(6)]
+        last_col = [cockroach_grid[row][big_eye_cols - 1] for row in range(6)]
         last_signal = next((x for x in last_col if x in ['R', 'B']), None)
         if last_signal:
             last_side = 'Player' if big_road_grid[0][num_cols - 1] == 'P' else 'Banker'
@@ -395,8 +396,8 @@ def calculate_win_loss_tracker(history, base_bet, strategy, ai_mode):
     return tracker
 
 def main():
-    st.set_page_config(page_title="Mang Baccarat Group Predictor", page_icon="🎲", layout="centered")
-    st.title("Mang Baccarat Group Predictor")
+    st.set_page_config(page_title="Mang Baccarat Predictor", page_icon="🎲", layout="centered")
+    st.title("Mang Baccarat Predictor")
 
     if 'history' not in st.session_state:
         st.session_state.history = []
@@ -404,7 +405,7 @@ def main():
         st.session_state.base_bet = 10.0
         st.session_state.money_management_strategy = "Flat Betting"
         st.session_state.ai_mode = "Conservative"
-        st.session_state.selected_patterns = ["Bead Plate", "Win/Loss Tracker"]
+        st.session_state.selected_patterns = ["Bead Bin", "Win/Loss"]
         st.session_state.t3_level = 1
         st.session_state.t3_results = []
 
@@ -470,7 +471,7 @@ def main():
         if "Bead Bin" in selected_patterns:
             st.markdown("### Bead Bin")
             sequence = [r for r in st.session_state.history][-84:]
-            sequence = ['P' if r == 'Player' else 'B' if r == 'Banker' else 'T' for r in sequence]
+            sequence = ['P' if r == 'Player' else 'B' if result == 'Banker' else 'T' for result in sequence]
             grid = [['' for _ in range(14)] for _ in range(6)]
             for i, result in enumerate(sequence):
                 if result in ['P', 'B', 'T']:
@@ -550,7 +551,7 @@ def main():
         if "Win/Loss" in selected_patterns:
             st.markdown("### Win/Loss")
             st.markdown("<p style='font-size: 12px; color: #666666;'>Green (●): Win, Red (●): Loss, Orange (●): Skip, Black (✩): Tie</p>", unsafe_allow_html=True)
-            tracker = calculate_win_loss_tracker(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy, st.session_state.ai_mode)[-14:])
+            tracker = calculate_win_loss_tracker(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy, st.session_state.ai_mode)[-14:]
             row_display = []
             for result in tracker:
                 if result in ['W', 'L', 'S', 'T']:
@@ -572,12 +573,12 @@ def main():
         else:
             current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else st.session_state.initial_bankroll
             recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy, confidence, st.session_state.history)
-            st.success(f"Bet: {bet} | Confidence: {confidence}% | Bet Size: ${recommended_bet_size:.2f} | Mood: {emotional_tone}"")
-        st.info(f"Reasoning: {reason}"")
+            st.success(f"Bet: {bet} | Confidence: {confidence}% | Bet Size: ${recommended_bet_size:.2f} | Mood: {emotional_tone}")
+        st.info(f"Reasoning: {reason}")
         if pattern_insights:
             st.markdown("### Insights")
             for insight in pattern_insights:
-                st.markdown(f"### {insight}")
+                st.markdown(f"- {insight}")
 
     # Bankroll Progression
     with st.expander("Bankroll Progress", expanded=True):
@@ -608,3 +609,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
