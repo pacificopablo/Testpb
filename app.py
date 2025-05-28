@@ -315,7 +315,7 @@ def money_management(bankroll, base_bet, strategy, confidence=None, history=None
     min_bet = max(1.0, base_bet)
     max_bet = bankroll
 
-    if strategy == "T3":
+    if strategy == "Reign":
         if not history or len(history) < 3:
             calculated_bet = base_bet
         else:
@@ -404,9 +404,9 @@ def main():
         with col_base:
             base_bet = st.number_input("Base Bet (Unit Size)", min_value=1.0, max_value=initial_bankroll, value=st.session_state.base_bet, step=1.0, format="%.2f")
         with col_strategy:
-            strategy_options = ["Flat Betting", "T3"]
+            strategy_options = ["Flat Betting", "Reign"]
             money_management_strategy = st.selectbox("Money Management Strategy", strategy_options, index=strategy_options.index(st.session_state.money_management_strategy))
-            st.markdown("*Flat Betting: Fixed bet size. T3: Doubles bet after 3 identical results, quadruples after 4.*")
+            st.markdown("*Flat Betting: Fixed bet size. Reign: Doubles bet after 3 identical results, quadruples after 4.*")
         with col_mode:
             ai_mode = st.selectbox("AI Mode", ["Conservative", "Aggressive"], index=["Conservative", "Aggressive"].index(st.session_state.ai_mode))
 
