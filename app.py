@@ -1,4 +1,4 @@
-```python
+
 import streamlit as st
 
 # Normalize input
@@ -612,4 +612,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
