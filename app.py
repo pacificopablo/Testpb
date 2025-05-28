@@ -103,7 +103,7 @@ def build_big_eye_boy(big_road_grid, num_cols):
         last_col = [big_road_grid[r][c - 1] for r in range(max_rows)]
         third_last = [big_road_grid[r][c - 3] for r in range(max_rows)]
         last_non_empty = next((i for i, x in enumerate(last_col) if x in ['P', 'B']), None)
-        third_non_empty = last((i for i, x in enumerate(third_last) if x in ['P', 'B']), None)
+        third_non_empty = next((i for i, x in enumerate(third_last) if x in ['P', 'B']), None)
         if last_non_empty is not None and third_non_empty is not None:
             if last_col[last_non_empty] == third_last[third_non_empty]:
                 grid[row][col] = 'R'  # Repeat (red)
@@ -131,7 +131,7 @@ def build_cockroach_pig(big_road_grid, num_cols):
         last_col = [big_road_grid[r][c - 1] for r in range(max_rows)]
         fourth_last = [big_road_grid[r][c - 4] for r in range(max_rows)]
         last_non_empty = next((i for i, x in enumerate(last_col) if x in ['P', 'B']), None)
-        fourth_non_empty = last((i for i, x in enumerate(fourth_last) if x in ['P', 'B']), None)
+        fourth_non_empty = next((i for i, x in enumerate(fourth_last) if x in ['P', 'B']), None)
         if last_non_empty is not None and fourth_non_empty is not None:
             if last_col[last_non_empty] == fourth_last[fourth_non_empty]:
                 grid[row][col] = 'R'  # Repeat (red)
@@ -253,7 +253,7 @@ def advanced_bet_selection(results, mode='Conservative'):
                 pattern_insights.append("Cockroach Pig: Break pattern")
             pattern_count += 1
 
-    # Momentum Score (Recent Wins)
+    # Momentum Score
     recent_wins = recent[-5:] if len(recent) >= 5 else recent
     freq = frequency_count(recent_wins)
     total = len(recent_wins)
@@ -315,13 +315,28 @@ def money_management(bankroll, base_bet, strategy, confidence=None, history=None
     min_bet = max(1.0, base_bet)
     max_bet = bankroll
 
-    if strategy == "Flat Betting":
+    if strategy == "T3":
+        if not history or len(history) < 3:
+            calculated_bet = base_bet
+        else:
+            mapped_history = ['P' if r == 'Player' else 'B' if r == 'Banker' else 'T' for r in history]
+            recent = mapped_history[-3:]
+            last_result = recent[-1]
+            streak = all(r == last_result for r in recent)
+            if streak and last_result in ['P', 'B']:
+                if len(mapped_history) >= 4 and mapped_history[-4] == last_result:
+                    calculated_bet = base_bet * 4
+                else:
+                    calculated_bet = base_bet * 2
+            else:
+                calculated_bet = base_bet
+    elif strategy == "Flat Betting":
         calculated_bet = base_bet
     else:
-        # Fallback to flat betting for simplicity
-        calculated_bet = base_bet
+        calculated_bet = base_bet  # Fallback to flat betting
 
-    bet_size = max(min_bet, min(calculated_bet, max_bet))
+    bet_size = round(calculated_bet / base_bet) * base_bet
+    bet_size = max(min_bet, min(bet_size, max_bet))
     return round(bet_size, 2)
 
 def calculate_bankroll(history, base_bet, strategy):
@@ -389,9 +404,9 @@ def main():
         with col_base:
             base_bet = st.number_input("Base Bet (Unit Size)", min_value=1.0, max_value=initial_bankroll, value=st.session_state.base_bet, step=1.0, format="%.2f")
         with col_strategy:
-            strategy_options = ["Flat Betting"]  # Only flat betting
-            money_management_strategy = st.selectbox("Money Management Strategy", strategy_options, index=0)
-            st.markdown("*Using Flat Betting: Fixed bet size equal to Base Bet.*")
+            strategy_options = ["Flat Betting", "T3"]
+            money_management_strategy = st.selectbox("Money Management Strategy", strategy_options, index=strategy_options.index(st.session_state.money_management_strategy))
+            st.markdown("*Flat Betting: Fixed bet size. T3: Doubles bet after 3 identical results, quadruples after 4.*")
         with col_mode:
             ai_mode = st.selectbox("AI Mode", ["Conservative", "Aggressive"], index=["Conservative", "Aggressive"].index(st.session_state.ai_mode))
 
@@ -476,28 +491,28 @@ def main():
 
         if "Big Eye Boy" in selected_patterns:
             st.markdown("### Big Eye Boy")
-            st.markdown("<p style='font-size: 12px; color: #ccc;'>Red (●): Repeat, Blue (●): Break</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size: 12px; color: #666666;'>Red (●): Repeat Pattern, Blue (●): Break Pattern</p>", unsafe_allow_html=True)
             big_road_grid, num_cols = build_big_road(st.session_state.history)
-            big_zoo_grid, big_zoo_cols = build_big_eye_boy(big_road_grid, num_cols)
-            if big_zoo_cols > 0:
-                display_cols = min(big_zoo_cols, 14)
+            big_eye_grid, big_eye_cols = build_big_eye_boy(big_road_grid, num_cols)
+            if big_eye_cols > 0:
+                display_cols = min(big_eye_cols, 14)
                 for row in range(6):
                     row_display = []
                     for col in range(display_cols):
-                        outcome = big_zoo_grid[row][col]
+                        outcome = big_eye_grid[row][col]
                         if outcome == 'R':
-                            row_display.append(f'<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #000; display: inline-block;"></div>')
+                            row_display.append('<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
                         elif outcome == 'B':
-                            row_display.append(f'<div style="width: 22px; height: 22px; background-color: #3182ce; border-radius: 50%; border: 1px solid #000; display: inline-block;"></div>')
+                            row_display.append('<div style="width: 22px; height: 22px; background-color: #3182ce; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
                         else:
-                            row_display.append('<div style="width: 22px; height: 22px;"></div>')
+                            row_display.append('<div style="width: 22px; height: 22px; display: inline-block;"></div>')
                     st.markdown(' '.join(row_display), unsafe_allow_html=True)
             else:
-                st.write("_No Big Zoo data yet._")
+                st.write("_No Big Eye Boy data yet._")
 
         if "Cockroach Pig" in selected_patterns:
             st.markdown("### Cockroach Pig")
-            st.markdown("<p style='font-size: 12px; color: #ccc;'>Red (●): Repeat, Blue (∞): Break</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size: 12px; color: #666666;'>Red (●): Repeat Pattern, Blue (●): Break Pattern</p>", unsafe_allow_html=True)
             big_road_grid, num_cols = build_big_road(st.session_state.history)
             cockroach_grid, cockroach_cols = build_cockroach_pig(big_road_grid, num_cols)
             if cockroach_cols > 0:
@@ -507,14 +522,14 @@ def main():
                     for col in range(display_cols):
                         outcome = cockroach_grid[row][col]
                         if outcome == 'R':
-                            row_display.append(f'<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #000; display: inline-block;"></div>')
+                            row_display.append('<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
                         elif outcome == 'B':
-                            row_display.append(f'<div style="width: 22px; height: 22px; background-color: #3182ce; border: 1px solid #000; border-radius: 50%; display: inline-block;"></div>')
+                            row_display.append('<div style="width: 22px; height: 22px; background-color: #3182ce; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
                         else:
-                            row_display.append('<div style="width: 22px; height: 22px;"></div>')
-                    st.markdown(''.join(row_display), unsafe_allow_html=True)
+                            row_display.append('<div style="width: 22px; height: 22px; display: inline-block;"></div>')
+                    st.markdown(' '.join(row_display), unsafe_allow_html=True)
             else:
-                st.write("_No Pig data yet._")
+                st.write("_No Cockroach Pig data yet._")
 
         if "Win/Loss Tracker" in selected_patterns:
             st.markdown("### Win/Loss Tracker")
@@ -526,7 +541,7 @@ def main():
                     color = '#38a169' if result == 'W' else '#e53e3e' if result == 'L' else '#ed8936' if result == 'S' else '#000000'
                     row_display.append(f'<div style="width: 22px; height: 22px; background-color: {color}; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
                 else:
-                    row_display.append('<div style="width: 22px; height: 22px;"></div>')
+                    row_display.append('<div style="width: 22px; height: 22px; display: inline-block;"></div>')
             st.markdown(' '.join(row_display), unsafe_allow_html=True)
             if not st.session_state.history:
                 st.write("_No Win/Loss data yet. Click the buttons above to add results._")
