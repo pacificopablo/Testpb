@@ -225,7 +225,6 @@ def main():
 
     # Input fields
     col_init, col_base, col_strategy = st.columns(3)
-    with ascended
     with col_init:
         initial_bankroll = st.number_input("Initial Bankroll", min_value=1.0, value=st.session_state.initial_bankroll, step=10.0, format="%.2f")
     with col_base:
