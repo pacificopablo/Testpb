@@ -304,10 +304,12 @@ def main():
     # Bankroll progression
     bankroll_progress, bet_sizes = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)
     if bankroll_progress:
-        st.markdown("### Bankroll and Bet Size Progression (Oldest to Newest)")
-        for i, (val, bet_size) in enumerate(zip(bankroll_progress, bet_sizes), 1):
+        st.markdown("### Bankroll and Bet Size Progression (Newest to Oldest)")
+        total_hands = len(bankroll_progress)
+        for i, (val, bet_size) in enumerate(zip(reversed(bankroll_progress), reversed(bet_sizes))):
+            hand_number = total_hands - i
             bet_display = f"Bet: ${bet_size:.2f}" if bet_size > 0 else "Bet: None (No prediction, Tie, or Pass)"
-            st.write(f"After hand {i}: Bankroll ${val:.2f}, {bet_display}")
+            st.write(f"Hand {hand_number}: Bankroll ${val:.2f}, {bet_display}")
         st.markdown(f"**Current Bankroll:** ${bankroll_progress[-1]:.2f}")
     else:
         st.markdown(f"**Current Bankroll:** ${initial_bankroll:.2f}")
