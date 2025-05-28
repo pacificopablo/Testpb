@@ -1,7 +1,7 @@
 
 import streamlit as st
 
-# Normalize_input(s):
+# Normalize input
 def normalize(s):
     s = s.strip().lower()
     if s == 'banker' or s == 'b':
@@ -177,7 +177,7 @@ def advanced_bet_selection(s, mode='Conservative'):
             emotional_tone = "Skeptical"
 
     # Alternating Pattern
-    if len(recent) >= 4 and is_alternating_pattern(recent[-4:], min_length=4):
+    if len(recent) >= 4 and is_alternating(recent[-4:], min_length=4):
         last = recent[-1]
         alternate_bet = 'Player' if last == 'Banker' else 'Banker'
         scores[alternate_bet] += 30
@@ -187,7 +187,7 @@ def advanced_bet_selection(s, mode='Conservative'):
         emotional_tone = "Excited"
 
     # Zigzag Pattern
-    if is_zigzag_pattern(recent[-6:]):
+    if is_zigzag(recent[-6:]):
         last = recent[-1]
         zigzag_bet = 'Player' if last == 'Banker' else 'Banker'
         scores[zigzag_bet] += 25
@@ -197,7 +197,7 @@ def advanced_bet_selection(s, mode='Conservative'):
         emotional_tone = "Curious"
 
     # Recent Trend
-    trend_bet, trend_score = recent_trend_analysis(recent)
+    trend_bet, trend_score = recent_trend(recent)
     if trend_bet:
         scores[trend_bet] += min(trend_score, 30)
         reason_parts.append(f"Recent trend favors {trend_bet} in last 10 hands.")
@@ -239,7 +239,7 @@ def advanced_bet_selection(s, mode='Conservative'):
     # Cockroach Pig
     cockroach_grid, cockroach_cols = build_cockroach_pig(big_road_grid, num_cols)
     if cockroach_cols > 0:
-        last_col = [cockroach_grid[row][big_eye_cols - 1] for row in range(6)]
+        last_col = [cockroach_grid[row][cockroach_cols - 1] for row in range(6)]
         last_signal = next((x for x in last_col if x in ['R', 'B']), None)
         if last_signal:
             last_side = 'Player' if big_road_grid[0][num_cols - 1] == 'P' else 'Banker'
@@ -471,7 +471,7 @@ def main():
         if "Bead Bin" in selected_patterns:
             st.markdown("### Bead Bin")
             sequence = [r for r in st.session_state.history][-84:]
-            sequence = ['P' if r == 'Player' else 'B' if result == 'Banker' else 'T' for result in sequence]
+            sequence = ['P' if result == 'Player' else 'B' if result == 'Banker' else 'T' for result in sequence]
             grid = [['' for _ in range(14)] for _ in range(6)]
             for i, result in enumerate(sequence):
                 if result in ['P', 'B', 'T']:
@@ -556,13 +556,11 @@ def main():
             for result in tracker:
                 if result in ['W', 'L', 'S', 'T']:
                     color = '#38a169' if result == 'W' else '#e53e3e' if result == 'L' else '#ed8936' if result == 'S' else '#000000'
-                    symbol = '●' if result in ['W', 'L', 'S'] else '✩'
+                    symbol = '●' if result in ['W', 'L', 'S'] else '★'
                     row_display.append(f'<div style="width: 20px; height: 20px; background-color: {color}; display: flex; justify-content: center; align-items: center; display: inline-block;"><span style="font-size: 18px;">{symbol}</span></div>')
                 else:
                     row_display.append('<div style="width: 20px; height: 20px; display: inline-block;"></div>')
             st.markdown(''.join(row_display), unsafe_allow_html=True)
-            if not st.session_state.history:
-                st.write("")
 
     # Bet Prediction
     with st.expander("Prediction", expanded=True):
@@ -594,7 +592,7 @@ def main():
         else:
             st.markdown(f"Bankroll: ${st.session_state.initial_bankroll:.2f}")
 
-    # Reset Game
+    # Reset
     with st.expander("Reset", expanded=False):
         if st.button("New Game"):
             st.session_state.history = []
@@ -608,4 +606,4 @@ def main():
             st.rerun()
 
 if __name__ == "__main__":
-    main() 
+    main()
