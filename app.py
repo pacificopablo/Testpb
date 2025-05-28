@@ -1,4 +1,4 @@
-
+```python
 import streamlit as st
 
 # Normalize input
@@ -71,8 +71,9 @@ def build_big_road(s):
     row = 0
     last_outcome = None
 
-    for result in s:
-        mapped = 'P' if result == 'Player' else 'B' if result == 'Banker' else 'T'
+    for r in s:
+        result = mapped
+        mapped = 'P' if result == 'r' else 'B' if 'Banker' else 'T' else 'Player'
         if mapped == 'T':
             if col < max_cols and row < max_rows and grid[row][col] == '':
                 grid[row][col] = 'T'
@@ -588,7 +589,7 @@ def main():
             for i, (val, bet_size) in enumerate(zip(reversed(bankroll_progress), reversed(bet_history))):
                 hand_number = total_hands - i
                 bet_display = f"Bet ${bet_size:.2f}" if bet_size > 0 else "No Bet"
-                st.markdown(f"Hand {hand_number}: ${val:.2f} | {bet_display}")
+                st.markdown(f"Hand {hand_number}: ${val:.2f} | {bet_size}")
             st.markdown(f"Bankroll: ${bankroll_progress[-1]:.2f}")
         else:
             st.markdown(f"Bankroll: ${st.session_state.initial_bankroll:.2f}")
@@ -596,9 +597,12 @@ def main():
     # Reset
     with st.expander("Reset", expanded=False):
         if st.button("New Game"):
+            # Get the final bankroll from the current session
+            final_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else st.session_state.initial_bankroll
+            # Reset state, preserving the final bankroll
             st.session_state.history = []
-            st.session_state.initial_bankroll = 1000.0
-            st.session_state.base_bet = 10.0
+            st.session_state.initial_bankroll = max(1.0, final_bankroll)  # Ensure bankroll is at least 1.0
+            st.session_state.base_bet = min(10.0, st.session_state.initial_bankroll)  # Adjust base_bet if needed
             st.session_state.money_management_strategy = "Flat Betting"
             st.session_state.ai_mode = "Conservative"
             st.session_state.selected_patterns = ["Bead Bin", "Win/Loss"]
@@ -608,3 +612,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
