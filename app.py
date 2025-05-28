@@ -196,6 +196,222 @@ def advanced_bet_selection(results, mode='Conservative'):
         if last_signal:
             last_side = 'Player' if big_road_grid[0][num_cols - 1] == 'P' else 'Banker'
             opposite_side = 'Player' if big_road_grid[0][num_cols - 1] == 'B' else 'Banker'
+            if last_signal == ' ව
+
+System: Thank you for the update! I'll make the requested changes to the Win/Loss Tracker to use gray (#666666) for ties while keeping the horizontal layout.
+
+Here are the specific changes:
+
+1. **Update `calculate_win_loss_tracker` Function**:
+   - Modified to return 'T' when the actual result is 'Tie', instead of 'S' (skip).
+   - Skips ('S') now only apply to 'Pass' or `None` predictions.
+
+2. **Update Win/Loss Tracker Display**:
+   - Updated the display logic to handle 'T' results with gray (#666666) circles.
+   - Updated the legend to indicate gray (●) represents ties.
+   - Maintained the horizontal layout with up to 14 results, using green (#38a169) for wins ('W'), red (#e53e3e) for losses ('L'), orange (#ed8936) for skips ('S'), and gray (#666666) for ties ('T').
+
+Below is the updated code with these changes. The `artifact_id` remains the same (`b775dbf7-dcc6-4862-a54c-8a19a331883b`) as this is an update to the existing artifact.
+
+<xaiArtifact artifact_id="b775dbf7-dcc6-4862-a54c-8a19a331883b" artifact_version_id="8c28127a-7e2a-4ff6-b5e9-be783b14b35d" title="Smart Baccarat Predictor with Horizontal Win/Loss Tracker and Gray Ties" contentType="text/python">
+import streamlit as st
+
+# Normalize input tokens
+def normalize_result(s):
+    s = s.strip().lower()
+    if s == 'banker' or s == 'b':
+        return 'Banker'
+    if s == 'player' or s == 'p':
+        return 'Player'
+    if s == 'tie' or s == 't':
+        return 'Tie'
+    return None
+
+def detect_streak(results):
+    if not results:
+        return None, 0
+    last = results[-1]
+    count = 1
+    for i in range(len(results) - 2, -1, -1):
+        if results[i] == last:
+            count += 1
+        else:
+            break
+    return last, count
+
+def is_alternating_pattern(arr):
+    if len(arr) < 4:
+        return False
+    for i in range(len(arr) - 1):
+        if arr[i] == arr[i + 1]:
+            return False
+    return True
+
+def recent_trend_analysis(results, window=10):
+    recent = results[-window:] if len(results) >= window else results
+    if not recent:
+        return None, 0
+    freq = frequency_count(recent)
+    total = len(recent)
+    if total == 0:
+        return None, 0
+    banker_ratio = freq['Banker'] / total
+    player_ratio = freq['Player'] / total
+    if banker_ratio > player_ratio + 0.2:
+        return 'Banker', banker_ratio * 50
+    elif player_ratio > banker_ratio + 0.2:
+        return 'Player', player_ratio * 50
+    return None, 0
+
+def frequency_count(arr):
+    count = {'Banker': 0, 'Player': 0, 'Tie': 0}
+    for r in arr:
+        if r in count:
+            count[r] += 1
+    return count
+
+def build_big_road(results):
+    max_rows = 6
+    max_cols = 50
+    grid = [['' for _ in range(max_cols)] for _ in range(max_rows)]
+    col = 0
+    row = 0
+    last_outcome = None
+
+    for result in results:
+        mapped = 'P' if result == 'Player' else 'B' if result == 'Banker' else 'T'
+        if mapped == 'T':
+            if col < max_cols and row < max_rows and grid[row][col] == '':
+                grid[row][col] = 'T'
+            continue
+        if col >= max_cols:
+            break
+        if last_outcome is None or (mapped == last_outcome and row < max_rows - 1):
+            grid[row][col] = mapped
+            row += 1
+        else:
+            col += 1
+            row = 0
+            if col < max_cols:
+                grid[row][col] = mapped
+                row += 1
+        last_outcome = mapped if mapped != 'T' else last_outcome
+    return grid, col + 1
+
+def build_big_eye_boy(big_road_grid, num_cols):
+    max_rows = 6
+    max_cols = 50
+    grid = [['' for _ in range(max_cols)] for _ in range(max_rows)]
+    col = 0
+    row = 0
+
+    for c in range(3, num_cols):
+        if col >= max_cols:
+            break
+        last_col = [big_road_grid[r][c - 1] for r in range(max_rows)]
+        third_last = [big_road_grid[r][c - 3] for r in range(max_rows)]
+        last_non_empty = next((i for i, x in enumerate(last_col) if x in ['P', 'B']), None)
+        third_non_empty = next((i for i, x in enumerate(third_last) if x in ['P', 'B']), None)
+        if last_non_empty is not None and third_non_empty is not None:
+            if last_col[last_non_empty] == third_last[third_non_empty]:
+                grid[row][col] = 'R'  # Repeat (red)
+            else:
+                grid[row][col] = 'B'  # Break (blue)
+            row += 1
+            if row >= max_rows:
+                col += 1
+                row = 0
+        else:
+            col += 1
+            row = 0
+    return grid, col + 1 if row > 0 else col
+
+def build_cockroach_pig(big_road_grid, num_cols):
+    max_rows = 6
+    max_cols = 50
+    grid = [['' for _ in range(max_cols)] for _ in range(max_rows)]
+    col = 0
+    row = 0
+
+    for c in range(4, num_cols):
+        if col >= max_cols:
+            break
+        last_col = [big_road_grid[r][c - 1] for r in range(max_rows)]
+        fourth_last = [big_road_grid[r][c - 4] for r in range(max_rows)]
+        last_non_empty = next((i for i, x in enumerate(last_col) if x in ['P', 'B']), None)
+        fourth_non_empty = next((i for i, x in enumerate(fourth_last) if x in ['P', 'B']), None)
+        if last_non_empty is not None and fourth_non_empty is not None:
+            if last_col[last_non_empty] == fourth_last[fourth_non_empty]:
+                grid[row][col] = 'R'  # Repeat (red)
+            else:
+                grid[row][col] = 'B'  # Break (blue)
+            row += 1
+            if row >= max_rows:
+                col += 1
+                row = 0
+        else:
+            col += 1
+            row = 0
+    return grid, col + 1 if row > 0 else col
+
+def advanced_bet_selection(results, mode='Conservative'):
+    max_recent_count = 30
+    recent = results[-max_recent_count:]
+    if not recent:
+        return 'Pass', 0, "No results yet. Let’s wait for the shoe to develop!", "Cautious", []
+
+    scores = {'Banker': 0, 'Player': 0, 'Tie': 0}
+    reason_parts = []
+    pattern_insights = []
+    emotional_tone = "Neutral"
+    confidence = 0
+
+    streak_value, streak_length = detect_streak(recent)
+    if streak_length >= 3 and streak_value != "Tie":
+        streak_score = min(75 + (streak_length - 3) * 10, 90)
+        scores[streak_value] += streak_score
+        reason_parts.append(f"Streak of {streak_length} {streak_value} wins detected.")
+        pattern_insights.append(f"Streak: {streak_length} {streak_value}")
+        emotional_tone = "Optimistic" if streak_length < 5 else "Confident"
+        if streak_length >= 5 and mode == 'Aggressive':
+            contrarian_bet = 'Player' if streak_value == 'Banker' else 'Banker'
+            scores[contrarian_bet] += 30
+            reason_parts.append(f"Long streak ({streak_length}); considering a break.")
+            pattern_insights.append("Possible streak break")
+            emotional_tone = "Skeptical"
+
+    elif len(recent) >= 4 and is_alternating_pattern(recent[-4:]):
+        last = recent[-1]
+        alternate_bet = 'Player' if last == 'Banker' else 'Banker'
+        scores[alternate_bet] += 70
+        reason_parts.append("Alternating pattern (chop) in last 4 hands.")
+        pattern_insights.append("Chop pattern: Alternating P/B")
+        emotional_tone = "Excited"
+
+    trend_bet, trend_score = recent_trend_analysis(recent)
+    if trend_bet:
+        scores[trend_bet] += trend_score
+        reason_parts.append(f"Recent trend favors {trend_bet} in last 10 hands.")
+        pattern_insights.append(f"Trend: {trend_bet} dominance")
+        emotional_tone = "Hopeful"
+
+    big_road_grid, num_cols = build_big_road(recent)
+    if num_cols > 0:
+        last_col = [big_road_grid[row][num_cols - 1] for row in range(6)]
+        col_length = sum(1 for x in last_col if x in ['P', 'B'])
+        if col_length >= 3:
+            bet_side = 'Player' if last_col[0] == 'P' else 'Banker'
+            scores[bet_side] += 60
+            reason_parts.append(f"Big Road column of {col_length} {bet_side}.")
+            pattern_insights.append(f"Big Road: {col_length} {bet_side}")
+
+    big_eye_grid, big_eye_cols = build_big_eye_boy(big_road_grid, num_cols)
+    if big_eye_cols > 0:
+        last_col = [big_eye_grid[row][big_eye_cols - 1] for row in range(6)]
+        last_signal = next((x for x in last_col if x in ['R', 'B']), None)
+        if last_signal:
+            last_side = 'Player' if big_road_grid[0][num_cols - 1] == 'P' else 'Banker'
+            opposite_side = 'Player' if big_road_grid[0][num_cols - 1] == 'B' else 'Banker'
             if last_signal == 'R':
                 scores[last_side] += 50
                 reason_parts.append("Big Eye Boy suggests pattern repetition.")
@@ -327,7 +543,9 @@ def calculate_win_loss_tracker(history, base_bet, strategy, ai_mode):
         current_rounds = history[:i + 1]
         bet, _, _, _, _ = advanced_bet_selection(current_rounds[:-1], ai_mode) if i != 0 else ('Pass', 0, '', 'Neutral', [])
         actual_result = history[i]
-        if bet in (None, 'Pass', 'Tie'):
+        if actual_result == 'Tie':
+            tracker.append('T')  # Tie
+        elif bet in (None, 'Pass'):
             tracker.append('S')  # Skip
         elif actual_result == bet:
             tracker.append('W')  # Win
@@ -483,12 +701,12 @@ def main():
 
         if "Win/Loss Tracker" in selected_patterns:
             st.markdown("### Win/Loss Tracker")
-            st.markdown("<p style='font-size: 12px; color: #666666;'>Green (●): Win, Red (●): Loss, Orange (●): Skip (Pass/Tie/No Prediction)</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size: 12px; color: #666666;'>Green (●): Win, Red (●): Loss, Orange (●): Skip (Pass/No Prediction), Gray (●): Tie</p>", unsafe_allow_html=True)
             tracker = calculate_win_loss_tracker(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy, st.session_state.ai_mode)[-14:]
             row_display = []
             for result in tracker:
-                if result in ['W', 'L', 'S']:
-                    color = '#38a169' if result == 'W' else '#e53e3e' if result == 'L' else '#ed8936'
+                if result in ['W', 'L', 'S', 'T']:
+                    color = '#38a169' if result == 'W' else '#e53e3e' if result == 'L' else '#ed8936' if result == 'S' else '#666666'
                     row_display.append(f'<div style="width: 22px; height: 22px; background-color: {color}; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
                 else:
                     row_display.append('<div style="width: 22px; height: 22px; display: inline-block;"></div>')
