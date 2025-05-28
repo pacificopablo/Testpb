@@ -240,96 +240,102 @@ def main():
         st.session_state.base_bet = 10.0
         st.session_state.money_management_strategy = "Fixed 5% of Bankroll"
 
-    # Input fields
-    col_init, col_base, col_strategy = st.columns(3)
-    with col_init:
-        initial_bankroll = st.number_input("Initial Bankroll", min_value=1.0, value=st.session_state.initial_bankroll, step=10.0, format="%.2f")
-    with col_base:
-        base_bet = st.number_input("Base Bet (Unit Size)", min_value=1.0, max_value=initial_bankroll, value=st.session_state.base_bet, step=1.0, format="%.2f")
-    with col_strategy:
-        strategy_options = ["Fixed 5% of Bankroll", "Flat Betting", "Confidence-Based", "T3"]
-        money_management_strategy = st.selectbox("Money Management Strategy", strategy_options, index=strategy_options.index(st.session_state.money_management_strategy))
+    # Input Fields
+    with st.expander("Game Settings", expanded=False):
+        col_init, col_base, col_strategy = st.columns(3)
+        with col_init:
+            initial_bankroll = st.number_input("Initial Bankroll", min_value=1.0, value=st.session_state.initial_bankroll, step=10.0, format="%.2f")
+        with col_base:
+            base_bet = st.number_input("Base Bet (Unit Size)", min_value=1.0, max_value=initial_bankroll, value=st.session_state.base_bet, step=1.0, format="%.2f")
+        with col_strategy:
+            strategy_options = ["Fixed 5% of Bankroll", "Flat Betting", "Confidence-Based", "T3"]
+            money_management_strategy = st.selectbox("Money Management Strategy", strategy_options, index=strategy_options.index(st.session_state.money_management_strategy))
 
-    st.session_state.initial_bankroll = initial_bankroll
-    st.session_state.base_bet = base_bet
-    st.session_state.money_management_strategy = money_management_strategy
+        st.session_state.initial_bankroll = initial_bankroll
+        st.session_state.base_bet = base_bet
+        st.session_state.money_management_strategy = money_management_strategy
 
-    # Game input buttons
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        if st.button("Banker"):
-            st.session_state.history.append("Banker")
-            st.rerun()
-    with col2:
-        if st.button("Player"):
-            st.session_state.history.append("Player")
-            st.rerun()
-    with col3:
-        if st.button("Tie"):
-            st.session_state.history.append("Tie")
-            st.rerun()
-    with col4:
-        if st.button("Undo", disabled=len(st.session_state.history) == 0):
-            if st.session_state.history:
-                st.session_state.history.pop()
+    # Game Input Buttons
+    with st.expander("Input Game Results", expanded=True):
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if st.button("Banker"):
+                st.session_state.history.append("Banker")
                 st.rerun()
-            else:
-                st.warning("Nothing to undo!")
+        with col2:
+            if st.button("Player"):
+                st.session_state.history.append("Player")
+                st.rerun()
+        with col3:
+            if st.button("Tie"):
+                st.session_state.history.append("Tie")
+                st.rerun()
+        with col4:
+            if st.button("Undo", disabled=len(st.session_state.history) == 0):
+                if st.session_state.history:
+                    st.session_state.history.pop()
+                    st.rerun()
+                else:
+                    st.warning("Nothing to undo!")
 
-    # Bead Plate History (Adapted from origmangbacc)
-    st.markdown("### Bead Plate")
-    sequence = [r for r in st.session_state.history]  # Copy history
-    sequence = ['P' if r == 'Player' else 'B' if r == 'Banker' else 'T' for r in sequence][-84:]  # Map to P/B/T and limit to 84
-    grid = [['' for _ in range(14)] for _ in range(6)]
-    for i, result in enumerate(sequence):
-        if result in ['P', 'B', 'T']:
-            col = i // 6
-            row = i % 6
-            if col < 14:
-                color = '#3182ce' if result == 'P' else '#e53e3e' if result == 'B' else '#38a169'
-                grid[row][col] = f'<div style="width: 20px; height: 20px; background-color: {color}; border-radius: 50%; display: inline-block;"></div>'
-    for row in grid:
-        st.markdown(' '.join(row), unsafe_allow_html=True)
-    if not st.session_state.history:
-        st.write("_No results yet. Click the buttons above to add results._")
+    # Bead Plate History
+    with st.expander("Bead Plate", expanded=False):
+        st.markdown("### Bead Plate")
+        sequence = [r for r in st.session_state.history]  # Copy history
+        sequence = ['P' if r == 'Player' else 'B' if r == 'Banker' else 'T' for r in sequence][-84:]  # Map to P/B/T and limit to 84
+        grid = [['' for _ in range(14)] for _ in range(6)]
+        for i, result in enumerate(sequence):
+            if result in ['P', 'B', 'T']:
+                col = i // 6
+                row = i % 6
+                if col < 14:
+                    color = '#3182ce' if result == 'P' else '#e53e3e' if result == 'B' else '#38a169'
+                    grid[row][col] = f'<div style="width: 20px; height: 20px; background-color: {color}; border-radius: 50%; display: inline-block;"></div>'
+        for row in grid:
+            st.markdown(' '.join(row), unsafe_allow_html=True)
+        if not st.session_state.history:
+            st.write("_No results yet. Click the buttons above to add results._")
 
-    st.markdown("---")
+    # Selected Money Management Strategy
+    with st.expander("Money Management Strategy", expanded=False):
+        st.markdown(f"**Selected Money Management Strategy:** {money_management_strategy}")
 
-    # Display selected money management strategy
-    st.markdown(f"**Selected Money Management Strategy:** {money_management_strategy}")
+    # Bet Prediction
+    with st.expander("Prediction for Next Bet", expanded=True):
+        bet, confidence, reason, emotional_tone = advanced_bet_selection(st.session_state.history)
+        st.markdown("### Prediction for Next Bet")
+        if bet == 'Pass':
+            st.warning("I’m not betting this time! The pattern is too unclear.")
+            st.info(reason)
+            recommended_bet_size = 0.0
+        else:
+            current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else initial_bankroll
+            recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy, confidence, st.session_state.history)
+            st.success(f"Predicted Bet: **{bet}**    Confidence: **{confidence}%**    Recommended Bet Size: **${recommended_bet_size:.2f}**    Emotion: **{emotional_tone}**")
+            st.write(reason)
 
-    # Bet prediction
-    bet, confidence, reason, emotional_tone = advanced_bet_selection(st.session_state.history)
-    st.markdown("### Prediction for Next Bet")
-    if bet == 'Pass':
-        st.warning("I’m not betting this time! The pattern is too unclear.")
-        st.info(reason)
-        recommended_bet_size = 0.0
-    else:
-        current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else initial_bankroll
-        recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy, confidence, st.session_state.history)
-        st.success(f"Predicted Bet: **{bet}**    Confidence: **{confidence}%**    Recommended Bet Size: **${recommended_bet_size:.2f}**    Emotion: **{emotional_tone}**")
-        st.write(reason)
+    # Bankroll Progression
+    with st.expander("Bankroll and Bet Size Progression", expanded=False):
+        bankroll_progress, bet_sizes = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)
+        if bankroll_progress:
+            st.markdown("### Bankroll and Bet Size Progression (Newest to Oldest)")
+            total_hands = len(bankroll_progress)
+            for i, (val, bet_size) in enumerate(zip(reversed(bankroll_progress), reversed(bet_sizes))):
+                hand_number = total_hands - i
+                bet_display = f"Bet: ${bet_size:.2f}" if bet_size > 0 else "Bet: None (No prediction, Tie, or Pass)"
+                st.write(f"Hand {hand_number}: Bankroll ${val:.2f}, {bet_display}")
+            st.markdown(f"**Current Bankroll:** ${bankroll_progress[-1]:.2f}")
+        else:
+            st.markdown(f"**Current Bankroll:** ${initial_bankroll:.2f}")
 
-    # Bankroll progression
-    bankroll_progress, bet_sizes = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)
-    if bankroll_progress:
-        st.markdown("### Bankroll and Bet Size Progression (Newest to Oldest)")
-        total_hands = len(bankroll_progress)
-        for i, (val, bet_size) in enumerate(zip(reversed(bankroll_progress), reversed(bet_sizes))):
-            hand_number = total_hands - i
-            bet_display = f"Bet: ${bet_size:.2f}" if bet_size > 0 else "Bet: None (No prediction, Tie, or Pass)"
-            st.write(f"Hand {hand_number}: Bankroll ${val:.2f}, {bet_display}")
-        st.markdown(f"**Current Bankroll:** ${bankroll_progress[-1]:.2f}")
-    else:
-        st.markdown(f"**Current Bankroll:** ${initial_bankroll:.2f}")
-
-    if st.button("Reset History and Bankroll"):
-        st.session_state.history = []
-        st.session_state.initial_bankroll = 1000.0
-        st.session_state.base_bet = 10.0
-        st.session_state.money_management_strategy = "Fixed 5% of Bankroll"
-        st.rerun()
+    # Reset History and Bankroll
+    with st.expander("Reset Game", expanded=False):
+        if st.button("Reset History and Bankroll"):
+            st.session_state.history = []
+            st.session_state.initial_bankroll = 1000.0
+            st.session_state.base_bet = 10.0
+            st.session_state.money_management_strategy = "Fixed 5% of Bankroll"
+            st.rerun()
 
 if __name__ == "__main__":
     main()
