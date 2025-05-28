@@ -484,17 +484,15 @@ def main():
         if "Win/Loss Tracker" in selected_patterns:
             st.markdown("### Win/Loss Tracker")
             st.markdown("<p style='font-size: 12px; color: #666666;'>Green (●): Win, Red (●): Loss, Orange (●): Skip (Pass/Tie/No Prediction)</p>", unsafe_allow_html=True)
-            tracker = calculate_win_loss_tracker(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy, st.session_state.ai_mode)[-84:]
-            grid = [['' for _ in range(14)] for _ in range(6)]
-            for i, result in enumerate(tracker):
+            tracker = calculate_win_loss_tracker(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy, st.session_state.ai_mode)[-14:]
+            row_display = []
+            for result in tracker:
                 if result in ['W', 'L', 'S']:
-                    col = i // 6
-                    row = i % 6
-                    if col < 14:
-                        color = '#38a169' if result == 'W' else '#e53e3e' if result == 'L' else '#ed8936'
-                        grid[row][col] = f'<div style="width: 22px; height: 22px; background-color: {color}; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>'
-            for row in grid:
-                st.markdown(' '.join(row), unsafe_allow_html=True)
+                    color = '#38a169' if result == 'W' else '#e53e3e' if result == 'L' else '#ed8936'
+                    row_display.append(f'<div style="width: 22px; height: 22px; background-color: {color}; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
+                else:
+                    row_display.append('<div style="width: 22px; height: 22px; display: inline-block;"></div>')
+            st.markdown(' '.join(row_display), unsafe_allow_html=True)
             if not st.session_state.history:
                 st.write("_No Win/Loss data yet. Click the buttons above to add results._")
 
