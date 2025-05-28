@@ -148,18 +148,35 @@ def advanced_bet_selection(results):
     reason = " ".join(reason_parts)
     return bet_choice, confidence, reason, emotional_tone
 
-def money_management(bankroll, base_bet, strategy, confidence=None):
+def money_management(bankroll, base_bet, strategy, confidence=None, history=None):
     """
     Calculate bet size based on selected money management strategy.
     - Fixed 5% of Bankroll: 5% of current bankroll, rounded to multiple of base_bet.
     - Flat Betting: Fixed bet equal to base_bet.
     - Confidence-Based: 2% + up to 3% based on confidence, rounded to multiple of base_bet.
+    - T3: Bet base_bet by default; 2x base_bet for 3rd streak; 4x base_bet for 4th+ streak; reset on loss/tie.
     - Enforce minimum and maximum bet limits.
     """
     min_bet = max(1.0, base_bet)  # Minimum bet is at least base_bet or $1
     max_bet = bankroll  # Max bet is the entire bankroll to prevent bankruptcy
 
-    if strategy == "Fixed 5% of Bankroll":
+    if strategy == "T3":
+        if not history or len(history) < 3:
+            calculated_bet = base_bet
+        else:
+            # Map history to P/B/T for T3 logic
+            mapped_history = ['P' if r == 'Player' else 'B' if r == 'Banker' else 'T' for r in history]
+            recent = mapped_history[-3:]  # Last 3 results
+            last_result = recent[-1]
+            streak = all(r == last_result for r in recent)  # Check if last 3 are same
+            if streak and last_result in ['P', 'B']:  # Streak of Player or Banker
+                if len(mapped_history) >= 4 and mapped_history[-4] == last_result:  # 4th in streak
+                    calculated_bet = base_bet * 4  # Bet 4x base unit
+                else:
+                    calculated_bet = base_bet * 2  # Bet 2x base unit for 3rd in streak
+            else:
+                calculated_bet = base_bet  # Default to base bet
+    elif strategy == "Fixed 5% of Bankroll":
         calculated_bet = bankroll * 0.05
     elif strategy == "Flat Betting":
         calculated_bet = base_bet
@@ -195,8 +212,8 @@ def calculate_bankroll(history, base_bet, strategy):
             bankroll_progress.append(current_bankroll)
             bet_sizes.append(0.0)
             continue
-        # Calculate bet size based on selected strategy
-        bet_size = money_management(current_bankroll, base_bet, strategy, confidence)
+        # Calculate bet size based on selected strategy, passing history for T3
+        bet_size = money_management(current_bankroll, base_bet, strategy, confidence, current_rounds)
         bet_sizes.append(bet_size)
         if actual_result == bet:
             if bet == 'Banker':
@@ -230,7 +247,7 @@ def main():
     with col_base:
         base_bet = st.number_input("Base Bet (Unit Size)", min_value=1.0, max_value=initial_bankroll, value=st.session_state.base_bet, step=1.0, format="%.2f")
     with col_strategy:
-        strategy_options = ["Fixed 5% of Bankroll", "Flat Betting", "Confidence-Based"]
+        strategy_options = ["Fixed 5% of Bankroll", "Flat Betting", "Confidence-Based", "T3"]
         money_management_strategy = st.selectbox("Money Management Strategy", strategy_options, index=strategy_options.index(st.session_state.money_management_strategy))
 
     st.session_state.initial_bankroll = initial_bankroll
@@ -280,7 +297,7 @@ def main():
         recommended_bet_size = 0.0
     else:
         current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else initial_bankroll
-        recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy, confidence)
+        recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy, confidence, st.session_state.history)
         st.success(f"Predicted Bet: **{bet}**    Confidence: **{confidence}%**    Recommended Bet Size: **${recommended_bet_size:.2f}**    Emotion: **{emotional_tone}**")
         st.write(reason)
 
