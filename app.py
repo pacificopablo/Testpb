@@ -238,7 +238,7 @@ def advanced_bet_selection(results, mode='Conservative'):
         bet_choice = 'Pass'
         emotional_tone = "Hesitant"
         reason_parts.append(f"Confidence too low ({confidence}% < {confidence_threshold}%). Passing.")
-    elif confidence < 70 and mode == 'Conservative':
+    elif mode == 'Conservative' and confidence < 70:
         emotional_tone = "Cautious"
         reason_parts.append("Moderate confidence; proceeding cautiously.")
 
@@ -276,6 +276,7 @@ def money_management(bankroll, base_bet, strategy, confidence=None, history=None
                     calculated_bet = base_bet * 2
             else:
                 calculated_bet = base_bet
+        calculated_bet = calculated_bet
     elif strategy == "Fixed 5% of Bankroll":
         calculated_bet = bankroll * 0.05
     elif strategy == "Flat Betting":
@@ -339,8 +340,8 @@ def calculate_win_loss_tracker(history, base_bet, strategy, ai_mode):
     return tracker
 
 def main():
-    st.set_page_config(page_title="Smart Mang Baccarat Group Predictor", page_icon="🎲", layout="centered")
-    st.title("Smart Mang Baccarat Group Predictor")
+    st.set_page_config(page_title="Mang Baccarat Group Predictor", page_icon="🎲", layout="centered")
+    st.title("Mang Baccarat Group Predictor")
 
     if 'history' not in st.session_state:
         st.session_state.history = []
