@@ -1,6 +1,7 @@
 
 import streamlit as st
 import logging
+import plotly.graph_objects as go
 
 # Set up basic logging
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -335,7 +336,6 @@ def money_management(bankroll, base_bet, strategy, confidence=None, history=None
                 st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
             elif losses > wins:
                 st.session_state.t3_level += 1
-            # If wins == losses, level remains unchanged
             st.session_state.t3_results = []
 
         calculated_bet = base_bet * st.session_state.t3_level
@@ -369,7 +369,6 @@ def calculate_bankroll(history, base_bet, strategy):
                 current_bankroll += win_amount
             else:
                 current_bankroll += bet_size
-            # Record win for T3 strategy
             if strategy == "T3":
                 money_management(current_bankroll, base_bet, strategy, confidence, current_rounds, bet_outcome='win')
         elif actual_result == 'Tie':
@@ -377,7 +376,6 @@ def calculate_bankroll(history, base_bet, strategy):
             continue
         else:
             current_bankroll -= bet_size
-            # Record loss for T3 strategy
             if strategy == "T3":
                 money_management(current_bankroll, base_bet, strategy, confidence, current_rounds, bet_outcome='loss')
         bankroll_progress.append(current_bankroll)
@@ -454,7 +452,6 @@ def main():
                 if st.button("Undo", disabled=len(st.session_state.history) == 0):
                     if st.session_state.history:
                         st.session_state.history.pop()
-                        # Reset T3 state if undoing a bet that affected it
                         if st.session_state.money_management_strategy == "T3":
                             st.session_state.t3_results = []
                             st.session_state.t3_level = 1
@@ -588,25 +585,51 @@ def main():
         with st.expander("Bankroll Progress", expanded=True):
             bankroll_progress, bet_history = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)
             if bankroll_progress:
+                # Numerical List
                 st.markdown("### Bankroll Progress")
                 total_hands = len(bankroll_progress)
                 for i, (val, bet_size) in enumerate(zip(reversed(bankroll_progress), reversed(bet_history))):
                     hand_number = total_hands - i
                     bet_display = f"Bet ${bet_size:.2f}" if bet_size > 0 else "No Bet"
                     st.markdown(f"Hand {hand_number}: ${val:.2f} | {bet_display}")
-                st.markdown(f"Bankroll: ${bankroll_progress[-1]:.2f}")
+                st.markdown(f"**Current Bankroll**: ${bankroll_progress[-1]:.2f}")
+
+                # Bankroll Trend Chart
+                st.markdown("### Bankroll Trend")
+                labels = [f"Hand {i+1}" for i in range(len(bankroll_progress))]
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=labels,
+                        y=bankroll_progress,
+                        mode='lines+markers',
+                        name='Bankroll',
+                        line=dict(color='#38a169', width=2),
+                        marker=dict(size=6)
+                    )
+                )
+                fig.update_layout(
+                    title="Bankroll Over Time",
+                    xaxis_title="Hand",
+                    yaxis_title="Bankroll ($)",
+                    xaxis=dict(tickangle=45),
+                    yaxis=dict(rangemode="tozero"),
+                    template="plotly_white",
+                    height=400,
+                    margin=dict(l=50, r=50, t=80, b=100)
+                )
+                st.plotly_chart(fig, use_container_width=True)
             else:
-                st.markdown(f"Bankroll: ${st.session_state.initial_bankroll:.2f}")
+                st.markdown(f"**Current Bankroll**: ${st.session_state.initial_bankroll:.2f}")
+                st.markdown("No bankroll history yet. Enter results below.")
 
         # Reset
         with st.expander("Reset", expanded=False):
             if st.button("New Game"):
-                # Get the final bankroll from the current session
                 final_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else st.session_state.initial_bankroll
-                # Reset state, preserving the final bankroll
                 st.session_state.history = []
-                st.session_state.initial_bankroll = max(1.0, final_bankroll)  # Ensure bankroll is at least 1.0
-                st.session_state.base_bet = min(10.0, st.session_state.initial_bankroll)  # Adjust base_bet if needed
+                st.session_state.initial_bankroll = max(1.0, final_bankroll)
+                st.session_state.base_bet = min(10.0, st.session_state.initial_bankroll)
                 st.session_state.money_management_strategy = "Flat Betting"
                 st.session_state.ai_mode = "Conservative"
                 st.session_state.selected_patterns = ["Bead Bin", "Win/Loss"]
@@ -615,7 +638,7 @@ def main():
                 st.rerun()
     except Exception as e:
         logging.error(f"Error in main: {str(e)}")
-        st.error(f"An error occurred: {str(e)}")
+        st.error(f"Error occurred: {str(e)}")
 
 if __name__ == "__main__":
     main()
