@@ -138,6 +138,24 @@ def build_cockroach_pig(big_road_grid, num_cols):
             row = 0
     return grid, col + 1 if row > 0 else col
 
+def compute_win_loss(history, ai_mode):
+    outcomes = []
+    for i in range(len(history)):
+        # Get the AI's prediction for the hand before the current result
+        if i == 0:
+            outcomes.append('N')  # No prediction for the first hand
+            continue
+        prior_history = history[:i]
+        bet, _, _, _, _ = advanced_bet_selection(prior_history, ai_mode)
+        actual_result = history[i]
+        if bet in ('Pass', None) or actual_result == 'Tie':
+            outcomes.append('N')  # Neutral for Pass or Tie
+        elif bet == actual_result:
+            outcomes.append('W')  # Win
+        else:
+            outcomes.append('L')  # Loss
+    return outcomes
+
 def advanced_bet_selection(results, mode='Conservative'):
     max_recent_count = 30
     recent = results[-max_recent_count:]
@@ -403,6 +421,20 @@ def main():
                 st.markdown(' '.join(row), unsafe_allow_html=True)
             if not st.session_state.history:
                 st.write("_No results yet. Click the buttons above to add results._")
+
+            # Win/Loss Tracker
+            st.markdown("#### Win/Loss Tracker")
+            st.markdown("<p style='font-size: 12px; color: #666666;'>Green (●): Win, Red (●): Loss, Gray (●): Pass/Tie</p>", unsafe_allow_html=True)
+            outcomes = compute_win_loss(st.session_state.history, st.session_state.ai_mode)[-84:]
+            tracker_row = []
+            for outcome in outcomes:
+                if outcome == 'W':
+                    tracker_row.append('<div style="width: 22px; height: 22px; background-color: #38a169; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
+                elif outcome == 'L':
+                    tracker_row.append('<div style="width: 22px; height: 22px; background-color: #e53e3e; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
+                else:  # 'N'
+                    tracker_row.append('<div style="width: 22px; height: 22px; background-color: #666666; border-radius: 50%; border: 1px solid #ffffff; display: inline-block;"></div>')
+            st.markdown(' '.join(tracker_row), unsafe_allow_html=True)
 
         if "Big Road" in selected_patterns:
             st.markdown("### Big Road")
