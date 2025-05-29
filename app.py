@@ -1,4 +1,3 @@
-
 import streamlit as st
 import logging
 import plotly.graph_objects as go
@@ -311,21 +310,24 @@ def money_management(bankroll, base_bet, strategy, bet_outcome=None):
     max_bet = bankroll
 
     if strategy == "T3":
+        # Update T3 state based on bet outcome
         if bet_outcome == 'win':
-            if not st.session_state.t3_results:
+            if not st.session_state.t3_results:  # If no results in current cycle, decrease level
                 st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
             st.session_state.t3_results.append('W')
         elif bet_outcome == 'loss':
             st.session_state.t3_results.append('L')
 
-        if len(st.session_state.t3_results) == 3:
+        # Evaluate T3 cycle after 3 results
+        if len(st.session_state.t3_results) >= 3:
             wins = st.session_state.t3_results.count('W')
             losses = st.session_state.t3_results.count('L')
             if wins > losses:
-                st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
+                st.session_state.t3_level = max(1, st.session_state.t3_level - 1)  # Decrease level if more wins
             elif losses > wins:
-                st.session_state.t3_level += 1
-            st.session_state.t3_results = []
+                st.session_state.t3_level += 1  # Increase level if more losses
+            # If wins == losses, level remains unchanged
+            st.session_state.t3_results = []  # Reset cycle
 
         calculated_bet = base_bet * st.session_state.t3_level
     else:
@@ -708,6 +710,8 @@ def main():
                 current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else st.session_state.initial_bankroll
                 recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy)
                 st.markdown(f"**Bet**: {bet} | **Confidence**: {confidence}% | **Bet Size**: ${recommended_bet_size:.2f} | **Mood**: {emotional_tone}")
+                if st.session_state.money_management_strategy == "T3":
+                    st.markdown(f"**T3 Level**: {st.session_state.t3_level} | **T3 Results**: {''.join(st.session_state.t3_results) or 'None'}")
             st.markdown(f"**Reasoning**: {reason}")
             if pattern_insights:
                 st.markdown("### Insights")
