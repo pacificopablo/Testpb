@@ -347,6 +347,7 @@ def money_management(bankroll, base_bet, strategy, bet_outcome=None):
         elif bet_outcome == 'loss':
             st.session_state.t3_results.append('L')
 
+        # Update T3 level after 3 results
         if len(st.session_state.t3_results) == 3:
             wins = st.session_state.t3_results.count('W')
             losses = st.session_state.t3_results.count('L')
@@ -369,6 +370,9 @@ def calculate_bankroll(history, base_bet, strategy):
     current_bankroll = bankroll
     bankroll_progress = []
     bet_sizes = []
+    # Reset T3 state for accurate recalculation
+    st.session_state.t3_level = 1
+    st.session_state.t3_results = []
     for i in range(len(history)):
         current_rounds = history[:i + 1]
         bet, confidence, _, _, _ = advanced_bet_selection(current_rounds[:-1], st.session_state.ai_mode) if i != 0 else ('Pass', 0, '', 'Neutral', [])
@@ -403,6 +407,9 @@ def calculate_bankroll(history, base_bet, strategy):
 
 def calculate_win_loss_tracker(history, base_bet, strategy, ai_mode):
     tracker = []
+    # Reset T3 state for accurate recalculation
+    st.session_state.t3_level = 1
+    st.session_state.t3_results = []
     for i in range(len(history)):
         current_rounds = history[:i + 1]
         bet, _, _, _, _ = advanced_bet_selection(current_rounds[:-1], ai_mode) if i != 0 else ('Pass', 0, '', 'Neutral', [])
@@ -413,8 +420,12 @@ def calculate_win_loss_tracker(history, base_bet, strategy, ai_mode):
             tracker.append('S')
         elif actual_result == bet:
             tracker.append('W')
+            if strategy == "T3":
+                money_management(st.session_state.initial_bankroll, base_bet, strategy, bet_outcome='win')
         else:
             tracker.append('L')
+            if strategy == "T3":
+                money_management(st.session_state.initial_bankroll, base_bet, strategy, bet_outcome='loss')
     return tracker
 
 def main():
@@ -661,7 +672,7 @@ def main():
 
             if "Big Eye" in st.session_state.selected_patterns:
                 st.markdown("### Big Eye Boy")
-                st.markdown("<p style='font-size: 12px; color: #666666;'>Red (●): Repeat Pattern, Blue (●): Break Pattern</p>", unsafe_allow_html=True)
+                st.markdown("<p style='font-size: 12px; color: #666666;'>Red (🔴): Repeat Pattern, Blue (🔵): Break Pattern</p>", unsafe_allow_html=True)
                 big_road_grid, num_cols = build_big_road(st.session_state.history)
                 big_eye_grid, big_eye_cols = build_big_eye_boy(big_road_grid, num_cols)
                 if big_eye_cols > 0:
@@ -684,7 +695,7 @@ def main():
 
             if "Cockroach" in st.session_state.selected_patterns:
                 st.markdown("### Cockroach Pig")
-                st.markdown("<p style='font-size: 12px; color: #666666;'>Red (●): Repeat Pattern, Blue (●): Break Pattern</p>", unsafe_allow_html=True)
+                st.markdown("<p style='font-size: 12px; color: #666666;'>Red (🔴): Repeat Pattern, Blue (🔵): Break Pattern</p>", unsafe_allow_html=True)
                 big_road_grid, num_cols = build_big_road(st.session_state.history)
                 cockroach_grid, cockroach_cols = build_cockroach_pig(big_road_grid, num_cols)
                 if cockroach_cols > 0:
@@ -707,7 +718,7 @@ def main():
 
             if "Win/Loss" in st.session_state.selected_patterns:
                 st.markdown("### Win/Loss")
-                st.markdown("<p style='font-size: 12px; color: #666666;'>Green (●): Win, Red (●): Loss, Gray (●): Skip or Tie</p>", unsafe_allow_html=True)
+                st.markdown("<p style='font-size: 12px; color: #666666;'>Green (🟢): Win, Red (🔴): Loss, Gray (⬜): Skip or Tie</p>", unsafe_allow_html=True)
                 tracker = calculate_win_loss_tracker(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy, st.session_state.ai_mode)[-max_display_cols:]
                 row_display = []
                 for result in tracker:
