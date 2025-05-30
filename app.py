@@ -287,7 +287,9 @@ def advanced_bet_selection(s, mode='Conservative'):
         scores['Player'] += (player_ratio * 1.0) * 25
         scores['Tie'] += (tie_ratio * 0.6) * 25 if tie_ratio > 0.25 else 0
         reason_parts.append(f"Long-term: Banker {freq['Banker']}, Player {freq['Player']}, Tie {freq['Tie']}.")
-        pattern_insights.append(f"Frequency: B:{freq['Banker']}, P:{freq['Player']}, T:{freq['Tie']}")
+        pattern_insights.append(f"Frequency: B:{freq \
+
+['Banker']}, P:{freq['Player']}, T:{freq['Tie']}")
 
     if pattern_count >= 3:
         max_score = max(scores['Banker'], scores['Player'])
@@ -594,12 +596,12 @@ def main():
         with st.expander("Input Game Results", expanded=True):
             cols = st.columns(4)
             with cols[0]:
-                if st.button("Banker"):
-                    st.session_state.history.append("Banker")
-                    st.rerun()
-            with cols[1]:
                 if st.button("Player"):
                     st.session_state.history.append("Player")
+                    st.rerun()
+            with cols[1]:
+                if st.button("Banker"):
+                    st.session_state.history.append("Banker")
                     st.rerun()
             with cols[2]:
                 if st.button("Tie"):
