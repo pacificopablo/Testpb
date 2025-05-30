@@ -341,7 +341,7 @@ def money_management(bankroll, base_bet, strategy, bet_outcome=None):
 
     if strategy == "T3":
         if bet_outcome == 'win':
-            if not st.session_state.t3_results:
+            if not st.session_state.t3_results:  # First step in T3 cycle
                 st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
             st.session_state.t3_results.append('W')
         elif bet_outcome == 'loss':
@@ -353,10 +353,10 @@ def money_management(bankroll, base_bet, strategy, bet_outcome=None):
             if wins > losses:
                 st.session_state.t3_level = max(1, st.session_state.t3_level - 1)
             elif losses > wins:
-                st.session_state.t3_level = min(10, st.session_state.t3_level + 1)
+                st.session_state.t3_level += 1
             st.session_state.t3_results = []
 
-        calculated_bet = base_bet * max(1, st.session_state.t3_level)
+        calculated_bet = base_bet * st.session_state.t3_level
     else:
         calculated_bet = base_bet
 
@@ -569,7 +569,7 @@ def main():
             with cols[2]:
                 strategy_options = ["Flat Betting", "T3"]
                 money_management_strategy = st.selectbox("Money Management Strategy", strategy_options, index=strategy_options.index(st.session_state.money_management_strategy))
-                st.markdown("*Flat Betting: Fixed bet size. T3: Adjusts bet level based on the last three bet outcomes (increase if more losses, decrease if more wins).*")
+                st.markdown("*Flat Betting: Fixed bet size. T3: Adjusts bet level based on the last three bet outcomes (increase if more losses, decrease if more wins or first-step win).*")
             with cols[3]:
                 ai_mode = st.selectbox("AI Mode", ["Conservative", "Aggressive"], index=["Conservative", "Aggressive"].index(st.session_state.ai_mode))
 
