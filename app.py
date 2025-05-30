@@ -1,4 +1,3 @@
-
 import streamlit as st
 import logging
 import plotly.graph_objects as go
@@ -288,7 +287,9 @@ def advanced_bet_selection(s, mode='Conservative'):
         scores['Player'] += (player_ratio * 1.0) * 25
         scores['Tie'] += (tie_ratio * 0.6) * 25 if tie_ratio > 0.25 else 0
         reason_parts.append(f"Long-term: Banker {freq['Banker']}, Player {freq['Player']}, Tie {freq['Tie']}.")
-        pattern_insights.append(f"Frequency: B:{freq['Banker']}, P:{freq['Player']}, T:{freq['Tie']}")
+        pattern_insights.append(f"Frequency: B:{freq \
+
+['Banker']}, P:{freq['Player']}, T:{freq['Tie']}")
 
     if pattern_count >= 3:
         max_score = max(scores['Banker'], scores['Player'])
@@ -492,21 +493,6 @@ def main():
                 width: 100%;
                 padding: 8px;
                 margin: 5px 0;
-                color: white !important;
-                border: none;
-                border-radius: 5px;
-            }
-            .stButton > button:hover {
-                opacity: 0.9;
-            }
-            div[data-testid="column"]:nth-child(1) .stButton > button {
-                background-color: #3182ce; /* Blue for Player */
-            }
-            div[data-testid="column"]:nth-child(2) .stButton > button {
-                background-color: #e53e3e; /* Red for Banker */
-            }
-            div[data-testid="column"]:nth-child(3) .stButton > button {
-                background-color: #38a169; /* Green for Tie */
             }
             .stNumberInput, .stSelectbox {
                 width: 100% !important;
