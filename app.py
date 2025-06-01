@@ -317,12 +317,12 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
         scores['Tie'] = 0
         bet_choice = max(scores, key=scores.get)
         if bet_choice != sequence[st.session_state.sequence_position]:
-            reason_parts.append(f"Overriding P,B,P,P,B,B with {bet_choice} due to stronger pattern signals.")
+            reason_parts.append(f"Overriding P,B,P,P,B,B with {bet_choice} due to stronger pattern.")
             pattern_insights.append(f"Override: {bet_choice} over P,B,P,P,B,B")
 
     max_score = max(scores.values(), default=0)
-    second_max = max([v for k, v in scores.items() if v != max_score], default=0)
-    confidence = min(round((max_score - second_max) / max_score * 100 if max_score > 0 else 0), 95)
+    second_max_score = max([v for k, v in scores.items() if v != max_score], default=0)
+    confidence = min(round((max_score - second_max_score) / max_score * 100 if max_score > 0 else 0), 95)
     confidence = max(confidence, 0)
 
     # Apply win streak bonus
@@ -339,14 +339,14 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
     elif shoe_position > CONFIG['late_shoe_threshold']:
         confidence_threshold = min(confidence_threshold + 5, 70)
         recent_runs = [len(list(g)) for _, g in itertools.groupby([r for r in recent if r != 'Tie'])]
-        avg_run_length = sum(recent_runs) / len(recent_runs) if recent_runs else 1
+        avg_run_length = sum(recent_runs) / len(recent_runs) if recent_runs else 0
         if entropy > CONFIG['entropy_threshold'] or avg_run_length < 2:
-            confidence = max(confidence - CONFIG['late_shoe_penalty'], 25)
+            confidence = max(confidence - CONFIG['late_shoe_penalty'], 0)
             reason_parts.append("Late shoe with unstable patterns; slightly increasing caution.")
             emotional_tone = "Cautious"
         else:
             reason_parts.append("Late shoe but stable patterns; maintaining confidence.")
-            pattern_insights.append("Late Shoe: Stable patterns")
+            pattern_insights.append(f"Late Shoe: Stable patterns")
 
     if confidence < confidence_threshold:
         bet_choice = 'Pass'
@@ -360,8 +360,8 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
     if history:
         st.session_state.last_result = history[-1]
 
-    reason = f"**Sequence Influence**: Following P,B,P,P,B,B (Position {st.session_state.sequence_position + 1}). "
-    reason += f"**Pattern Analysis**: {reason_parts[-2] if len(reason_parts) > 1 else reason_parts[0]}. "
+    reason = f"**Sequence**: Following P,B,P,P,B,B (position {st.session_state.sequence_position + 1}). "
+    reason += f"**Pattern Analysis**: {reason_parts[-1] if len(reason_parts) >= 1 else 'No patterns detected.'}. "
     reason += f"**Risk Factors**: {'High randomness' if entropy > CONFIG['entropy_threshold'] else 'Stable patterns'}; {'Late shoe' if shoe_position > CONFIG['late_shoe_threshold'] else 'Early shoe'}. "
     reason += f"**Bet Sizing**: {bet_size_hint}"
     return bet_choice, confidence, reason, emotional_tone, pattern_insights
@@ -415,10 +415,10 @@ def calculate_bankroll(history, base_bet, strategy):
     current_bankroll = bankroll
     bankroll_progress = []
     bet_sizes = []
-    st.session_state.t3_level = 1
-    st.session_state.t3_results = []
     st.session_state.progression_level = 1
     st.session_state.progression_count = 0
+    st.session_state.t3_level = 1
+    st.session_state.t3_results = []
     main_fund = bankroll * 0.6
     recovery_fund = bankroll * 0.3
     accel_fund = bankroll * 0.1
@@ -426,22 +426,22 @@ def calculate_bankroll(history, base_bet, strategy):
     loss_limit = bankroll * 0.8
 
     for i in range(len(history)):
-        current_rounds = history[:i + 1]
-        bet, confidence, _, _, _ = advanced_bet_selection(current_rounds[:-1], st.session_state.ai_mode) if i != 0 else ('Pass', 0, '', 'Neutral', [])
+        current_history = history[:i + 1]
+        bet, confidence, _, _, _ = advanced_bet_selection(current_history[:-1], st.session_state.ai_mode) if i != 0 else ('Pass', 0, '', 'Casino', [])
         actual_result = history[i]
-        
+
         use_fund = main_fund
         if st.session_state.get('last_bet_outcome') == 'loss' and recovery_fund > 0:
             use_fund = min(recovery_fund, use_fund)
         elif st.session_state.get('win_streak', 0) >= 2 and accel_fund > 0:
             use_fund = min(accel_fund, use_fund)
 
-        if bet in (None, 'Pass', 'Tie') or current_bankroll < base_bet:
+        if bet in ['Pass', 'Tie', None] or current_bankroll < base_bet:
             bankroll_progress.append(current_bankroll)
             bet_sizes.append(0.0)
             continue
 
-        bet_size = money_management(use_fund, base_bet, strategy)
+        bet_size = money_management(current_bankroll, base_bet, strategy)
         if bet_size == 0.0:
             bankroll_progress.append(current_bankroll)
             bet_sizes.append(0.0)
@@ -463,7 +463,7 @@ def calculate_bankroll(history, base_bet, strategy):
                 st.session_state.win_streak = st.session_state.get('win_streak', 0) + 1
                 st.session_state.last_bet_outcome = 'win'
             if strategy in ["T3", "1-3-2-1"]:
-                money_management(use_fund, base_bet, strategy, bet_outcome='win')
+                money_management(current_bankroll, base_bet, strategy, bet_outcome='win')
         elif actual_result == 'Tie':
             bankroll_progress.append(current_bankroll)
             continue
@@ -474,7 +474,7 @@ def calculate_bankroll(history, base_bet, strategy):
             st.session_state.win_streak = 0
             st.session_state.last_bet_outcome = 'loss'
             if strategy in ["T3", "1-3-2-1"]:
-                money_management(use_fund, base_bet, strategy, bet_outcome='loss')
+                money_management(current_bankroll, base_bet, strategy, bet_outcome='loss')
 
         bankroll_progress.append(current_bankroll)
 
@@ -486,17 +486,17 @@ def calculate_bankroll(history, base_bet, strategy):
 # Win/Loss tracker
 def calculate_win_loss_tracker(history: List[str], base_bet: float, strategy: str, ai_mode: str) -> List[str]:
     tracker = []
-    st.session_state.t3_level = 1
-    st.session_state.t3_results = []
     st.session_state.progression_level = 1
     st.session_state.progression_count = 0
+    st.session_state.t3_level = 1
+    st.session_state.t3_results = []
     for i in range(len(history)):
-        current_rounds = history[:i + 1]
-        bet, _, _, _, _ = advanced_bet_selection(current_rounds[:-1], ai_mode) if i != 0 else ('Pass', 0, '', 'Neutral', '')
+        current_history = history[:i + 1]
+        bet, _, _, _, _ = advanced_bet_selection(current_history[:-1], ai_mode) if i != 0 else ('Pass', None, '', '', [])
         actual_result = history[i]
         if actual_result == 'Tie':
             tracker.append('T')
-        elif bet in (None, 'Pass'):
+        elif bet in ['Pass', None]:
             tracker.append('S')
         elif actual_result == bet:
             tracker.append('W')
@@ -519,7 +519,7 @@ def main():
         st.session_state.setdefault('base_bet', 10.0)
         st.session_state.setdefault('money_management_strategy', "1-3-2-1")
         st.session_state.setdefault('ai_mode', "Conservative")
-        st.session_state.setdefault('selected_patterns', ["Bead Bin", "Win/Loss", "Triple Repeat"])
+        st.session_state.setdefault('selected_patterns', ['Bead Bin', 'Win/Loss', 'Triple Repeat'])
         st.session_state.setdefault('t3_level', 1)
         st.session_state.setdefault('t3_results', [])
         st.session_state.setdefault('progression_level', 1)
@@ -547,7 +547,7 @@ def main():
         screen_width_input = st.text_input("Screen Width", key="screen_width_input", value=str(st.session_state.screen_width), disabled=True)
         try:
             st.session_state.screen_width = int(screen_width_input) if screen_width_input.isdigit() else 1024
-        except ValueError):
+        except ValueError:
             st.session_state.screen_width = 1024
 
         st.markdown("""
@@ -702,32 +702,30 @@ def main():
             with cols[3]:
                 undo_clicked = st.button("Undo", disabled=len(st.session_state.history) == 0)
                 if undo_clicked and len(st.session_state.history) == 0:
-                    st.warning("No results to undo!")
-                elif undo_clicked:
                     st.session_state.history.pop()
                     if st.session_state.money_management_strategy in ["T3", "1-3-2-1"]:
-                        st.session_state.t3_results = []
+                        st.session_state.t3_results = deque(maxlen=3)
                         st.session_state.t3_level = 1
                         st.session_state.progression_count = 0
                         st.session_state.progression_level = 1
                     st.rerun()
 
         with st.expander("Shoe Patterns", expanded=False):
-            pattern_options = ["Bead Bin", "Big Road", "Big Eye", "Cockroach", "Win/Loss", "Triple Repeat"]
+            pattern_options = ['Bead Bin', 'Big Road', 'Big Eye', 'Cockroach', 'Win/Loss', 'Triple Repeat']
             selected_patterns = st.multiselect(
                 "Select Patterns to Display",
                 pattern_options,
                 default=["Bead Bin", "Win/Loss", "Triple Repeat"],
-                key="pattern_selector"
+                key="patterns"
             )
             st.session_state.selected_patterns = selected_patterns
 
-            max_display_cols = 10 if st.session_state.screen_width < 768 else 14
+            max_display_cols = 10 if st.session_state.screen_width < 768 else 50
 
             if "Bead Bin" in st.session_state.selected_patterns:
                 st.markdown("### Bead Bin")
                 sequence = [r for r in st.session_state.history][-84:]
-                sequence = ['P' if result == 'Player' else 'B' if result == 'Banker' else 'T' for result in sequence]
+                sequence = ['P' if r == 'Player' else 'B' if r == 'Banker' else 'T' for r in sequence]
                 grid = [['' for _ in range(max_display_cols)] for _ in range(6)]
                 for i, result in enumerate(sequence):
                     if result in ['P', 'B', 'T']:
@@ -859,10 +857,7 @@ def main():
                 st.markdown('<span class="bet-pass">**No Bet**: Insufficient confidence or bankroll.</span>', unsafe_allow_html=True)
             else:
                 bet_class = 'bet-player' if bet == 'Player' else 'bet-banker' if bet == 'Banker' else 'bet-tie'
-                st.markdown(
-                    f'<span class="{bet_class}">**Bet**: {bet}</span> | **Confidence**: {confidence}% | **Bet Size**: ${recommended_bet_size:.2f} | **Mood**: {emotional_tone}',
-                    unsafe_allow_html=True
-                )
+                st.markdown(f'<span class="{bet_class}">**Bet**: {bet}</span> | **Confidence**: {confidence}% | **Bet Size**: ${recommended_bet_size:.2f} | **Mood**: {emotional_tone}', unsafe_allow_html=True)
             st.markdown(f"**Reasoning**: {reason}")
             if pattern_insights:
                 st.markdown("### Pattern Insights")
@@ -875,10 +870,10 @@ def main():
             if bankroll_progress:
                 st.markdown("### Bankroll Progress")
                 total_hands = len(bankroll_progress)
-                for i in range(total_hands):
-                    hand_number = total_hands - i
-                    val = bankroll_progress[total_hands - i - 1]
-                    bet_size = bet_sizes[total_hands - i - 1]
+                for row in range(total_hands):
+                    hand_number = total_hands - row
+                    val = bankroll_progress[total_hands - row - 1]
+                    bet_size = bet_sizes[total_hands - row - 1]
                     bet_display = f"Bet ${bet_size:.2f}" if bet_size > 0 else "No Bet"
                     st.markdown(f"Hand {hand_number}: ${val:.2f} | {bet_display}")
                 st.markdown(f"**Current Bankroll**: ${bankroll_progress[-1]:.2f}")
@@ -903,7 +898,7 @@ def main():
                 )
                 fig.update_layout(
                     title=dict(
-                        text="Bankroll Over Time",
+                        text='Bankroll Over Time',
                         x=0.5,
                         xanchor='center'
                     ),
@@ -918,8 +913,8 @@ def main():
                     template="plotly_white",
                     height=400,
                     margin=dict(
-                        l=40,
-                        r=40,
+                        l=50,
+                        r=50,
                         t=50,
                         b=100
                     )
@@ -939,7 +934,7 @@ def main():
                 st.session_state.ai_mode = "Conservative"
                 st.session_state.selected_patterns = ["Bead Bin", "Win/Loss", "Triple Repeat"]
                 st.session_state.t3_level = 1
-                st.session_state.t3_results = []
+                st.session_state.t3_results = deque(maxlen=3)
                 st.session_state.progression_count = 0
                 st.session_state.progression_level = 1
                 st.session_state.win_streak = 0
