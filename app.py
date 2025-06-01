@@ -207,17 +207,15 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
         st.session_state.sequence_memory = deque(maxlen=3)
 
     # Calculate sequence performance over last 10 hands
-    sequence_success_rate = 1.0
-    if len(history) >= 10:
-        recent_bets = []
-        for i in range(1, min(11, len(history))):
-            prev_history = history[:-i]
-            bet, _, _, _, _ = advanced_bet_selection(prev_history, mode) if prev_history else ('Pass', 0, '', 'Neutral', [])
-            if bet != 'Pass' and history[-i] == bet:
-                recent_bets.append(1)
-            elif bet != 'Pass':
-                recent_bets.append(0)
-        sequence_success_rate = sum(recent_bets) / len(recent_bets) if recent_bets else 1.0
+    recent_bets = []
+    for i in range(1, min(11, len(history))):
+        prev_history = history[:-i]
+        bet, _, _, _, _ = advanced_bet_selection(prev_history, mode) if prev_history else ('Pass', 0, '', 'Neutral', [])
+        if bet != 'Pass' and history[-i] == bet:
+            recent_bets.append(1)
+        elif bet != 'Pass':
+            recent_bets.append(0)
+    sequence_success_rate = sum(recent_bets) / len(recent_bets) if recent_bets else 1.0
     sequence_weight = CONFIG['pattern_weights']['sequence'] * (0.8 + 0.4 * sequence_success_rate)
     reason_parts.append(f"Sequence weight adjusted to {sequence_weight:.1f} based on recent success ({sequence_success_rate:.2%}).")
     pattern_insights.append(f"Sequence Performance: {sequence_success_rate:.2%}")
@@ -362,8 +360,8 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
     if history:
         st.session_state.last_result = history[-1]
 
-    reason = f"**Sequence Influence**: Following P,B,P,P,B,B (position {st.session_state.sequence_position + 1}). "
-    reason += f"**Pattern Analysis**: {reason_parts[-2] if len(reason_parts) > 2 else reason_parts[-1]}. "
+    reason = f"**Sequence Influence**: Following P,B,P,P,B,B (Position {st.session_state.sequence_position + 1}). "
+    reason += f"**Pattern Analysis**: {reason_parts[-2] if len(reason_parts) > 1 else reason_parts[0]}. "
     reason += f"**Risk Factors**: {'High randomness' if entropy > CONFIG['entropy_threshold'] else 'Stable patterns'}; {'Late shoe' if shoe_position > CONFIG['late_shoe_threshold'] else 'Early shoe'}. "
     reason += f"**Bet Sizing**: {bet_size_hint}"
     return bet_choice, confidence, reason, emotional_tone, pattern_insights
@@ -429,14 +427,14 @@ def calculate_bankroll(history, base_bet, strategy):
 
     for i in range(len(history)):
         current_rounds = history[:i + 1]
-        bet, confidence, _, _, _ = advanced_bet_selection(current_rounds[:-1], st.session_state.ai_mode) if i != 0 else ('Pass', 0, '', 'Neutral', '')
+        bet, confidence, _, _, _ = advanced_bet_selection(current_rounds[:-1], st.session_state.ai_mode) if i != 0 else ('Pass', 0, '', 'Neutral', [])
         actual_result = history[i]
         
         use_fund = main_fund
         if st.session_state.get('last_bet_outcome') == 'loss' and recovery_fund > 0:
-            use_fund = min(recovery_fund, main_fund)
+            use_fund = min(recovery_fund, use_fund)
         elif st.session_state.get('win_streak', 0) >= 2 and accel_fund > 0:
-            use_fund = min(accel_fund, main_fund)
+            use_fund = min(accel_fund, use_fund)
 
         if bet in (None, 'Pass', 'Tie') or current_bankroll < base_bet:
             bankroll_progress.append(current_bankroll)
@@ -515,40 +513,24 @@ def main():
         st.set_page_config(page_title="Mang Baccarat Predictor", page_icon="🎲", layout="wide")
         st.title("Mang Baccarat Predictor")
 
-        if 'history' not in st.session_state:
-            st.session_state.history = []
-        if 'initial_bankroll' not in st.session_state:
-            st.session_state.initial_bankroll = 1000.0
-        if 'base_bet' not in st.session_state:
-            st.session_state.base_bet = 10.0
-        if 'money_management_strategy' not in st.session_state:
-            st.session_state.money_management_strategy = "1-3-2-1"
-        if 'ai_mode' not in st.session_state:
-            st.session_state.ai_mode = "Conservative"
-        if 'selected_patterns' not in st.session_state:
-            st.session_state.selected_patterns = ["Bead Bin", "Win/Loss", "Triple Repeat"]
-        if 't3_level' not in st.session_state:
-            st.session_state.t3_level = 1
-        if 't3_results' not in st.session_state:
-            st.session_state.t3_results = []
-        if 'progression_level' not in st.session_state:
-            st.session_state.progression_level = 1
-        if 'progression_count' not in st.session_state:
-            st.session_state.progression_count = 0
-        if 'win_streak' not in st.session_state:
-            st.session_state.win_streak = 0
-        if 'last_bet_outcome' not in st.session_state:
-            st.session_state.last_bet_outcome = None
-        if 'screen_width' not in st.session_state:
-            st.session_state.screen_width = 1024
-        if 'sequence_position' not in st.session_state:
-            st.session_state.sequence_position = 0
-        if 'last_bet' not in st.session_state:
-            st.session_state.last_bet = None
-        if 'last_result' not in st.session_state:
-            st.session_state.last_result = None
-        if 'sequence_memory' not in st.session_state:
-            st.session_state.sequence_memory = deque(maxlen=3)
+        # Initialize session state
+        st.session_state.setdefault('history', [])
+        st.session_state.setdefault('initial_bankroll', 1000.0)
+        st.session_state.setdefault('base_bet', 10.0)
+        st.session_state.setdefault('money_management_strategy', "1-3-2-1")
+        st.session_state.setdefault('ai_mode', "Conservative")
+        st.session_state.setdefault('selected_patterns', ["Bead Bin", "Win/Loss", "Triple Repeat"])
+        st.session_state.setdefault('t3_level', 1)
+        st.session_state.setdefault('t3_results', [])
+        st.session_state.setdefault('progression_level', 1)
+        st.session_state.setdefault('progression_count', 0)
+        st.session_state.setdefault('win_streak', 0)
+        st.session_state.setdefault('last_bet_outcome', None)
+        st.session_state.setdefault('screen_width', 1024)
+        st.session_state.setdefault('sequence_position', 0)
+        st.session_state.setdefault('last_bet', None)
+        st.session_state.setdefault('last_result', None)
+        st.session_state.setdefault('sequence_memory', deque(maxlen=3))
 
         st.markdown("""
             <script>
@@ -565,7 +547,7 @@ def main():
         screen_width_input = st.text_input("Screen Width", key="screen_width_input", value=str(st.session_state.screen_width), disabled=True)
         try:
             st.session_state.screen_width = int(screen_width_input) if screen_width_input.isdigit() else 1024
-        except ValueError:
+        except ValueError):
             st.session_state.screen_width = 1024
 
         st.markdown("""
@@ -632,7 +614,7 @@ def main():
             }
             @media (min-width: 769px) {
                 .stButton > button, .stNumberInput, .stSelectbox {
-                    max-width: 200px;
+                    max-width: 300px;
                 }
             }
             @media (max-width: 768px) {
@@ -649,7 +631,8 @@ def main():
                     width: 16px !important;
                     height: 16px !important;
                 }
-                .stButton > button {                    font-size: 0.9rem;
+                .stButton > button {
+                    font-size: 0.9rem;
                     padding: 6px;
                 }
                 .stNumberInput input, .stSelectbox div {
@@ -682,7 +665,7 @@ def main():
         """, unsafe_allow_html=True)
 
         with st.expander("Game Settings", expanded=False):
-            st.markdown("**BLACKBOXAI Strategy**: Use commission-free Baccarat (e.g., EZ Baccarat) for lower house edge. Divide bankroll into 50 units: 60% main betting, 30% recovery, 10% acceleration for bets. Stop at 30% profit or loss by 20%. Take a 30-minute breaks after big losses or wins.")
+            st.markdown("**BLACKBOXAI Strategy**: Use commission-free Baccarat (e.g., EZ Baccarat) for lower house edge. Divide bankroll into 50 units: 60% main betting, 30% recovery, 10% acceleration for bets. Stop at 30% profit or 20% loss. Take 30-minute breaks after big wins/losses.")
             cols = st.columns(4)
             with cols[0]:
                 initial_bankroll = st.number_input("Initial Bankroll", min_value=1.0, value=st.session_state.initial_bankroll, step=10.0, format="%.2f")
@@ -690,10 +673,10 @@ def main():
                 base_bet = st.number_input("Base Bet (Unit Size)", min_value=1.0, max_value=initial_bankroll, value=st.session_state.base_bet, step=1.0, format="%.2f")
             with cols[2]:
                 strategy_options = ["Flat Betting", "T3", "1-3-2-1"]
-                money_management_strategy = st.selectbox("bet", strategy, options,strategy_options, index=strategy_options.index(st.session_state.money_management_strategy))
-                st.markdown("*Flat: Fixed bets. T3: Adjust bets based on last three outcomes. 1-3-2-1: BLACKBOXAI progression (1, 3, 2, 1 units).*")
+                money_management_strategy = st.selectbox("Money Management Strategy", strategy_options, index=strategy_options.index(st.session_state.money_management_strategy))
+                st.markdown("*Flat: Fixed bets. T3: Adjusts based on last three outcomes. 1-3-2-1: BLACKBOXAI progression (1, 3, 2, 1 units).*")
             with cols[3]:
-                ai_mode = st.selectbox("AI mode", ["Conservative", "Aggressive"], index=["Conservative", "Aggressive"].index(st.session_state.ai_mode))
+                ai_mode = st.selectbox("AI Mode", ["Conservative", "Aggressive"], index=["Conservative", "Aggressive"].index(st.session_state.ai_mode))
 
             st.session_state.initial_bankroll = initial_bankroll
             st.session_state.base_bet = base_bet
@@ -703,7 +686,7 @@ def main():
             st.markdown(f"**Selected Strategy**: {money_management_strategy}")
 
         with st.expander("Input Game Results", expanded=True):
-            cols = st.columns(4)
+            cols = st.columns(4])
             with cols[0]:
                 if st.button("Player"):
                     st.session_state.history.append("Player")
@@ -743,7 +726,7 @@ def main():
 
             if "Bead Bin" in st.session_state.selected_patterns:
                 st.markdown("### Bead Bin")
-                sequence = [r for r in st.session_state.history][-6:]
+                sequence = [r for r in st.session_state.history][-84:]
                 sequence = ['P' if result == 'Player' else 'B' if result == 'Banker' else 'T' for result in sequence]
                 grid = [['' for _ in range(max_display_cols)] for _ in range(6)]
                 for i, result in enumerate(sequence):
@@ -758,7 +741,7 @@ def main():
                     st.markdown(' '.join(row), unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
                 if not st.session_state.history:
-                    st.markdown("No results yet. Enter results below.")
+                    st.markdown("No results yet.")
 
             if "Big Road" in st.session_state.selected_patterns:
                 st.markdown("### Big Road")
@@ -768,7 +751,7 @@ def main():
                     st.markdown('<div id="big-road-scroll" class="pattern-scroll">', unsafe_allow_html=True)
                     for row in range(6):
                         row_display = []
-                        for col in range(num_cols):
+                        for col in range(display_cols):
                             outcome = big_road_grid[row][col]
                             if outcome == 'P':
                                 row_display.append(f'<div class="pattern-circle" style="background-color: #3182ce; border-radius: 50%; border: 1px solid #000000;"></div>')
@@ -781,7 +764,7 @@ def main():
                         st.markdown(''.join(row_display), unsafe_allow_html=True)
                     st.markdown('</div>', unsafe_allow_html=True)
                 else:
-                    st.markdown("No data for Big Road.")
+                    st.markdown("No Big Road data.")
 
             if "Big Eye" in st.session_state.selected_patterns:
                 st.markdown("### Big Eye Boy")
@@ -831,10 +814,10 @@ def main():
 
             if "Triple Repeat" in st.session_state.selected_patterns:
                 st.markdown("### Triple Repeat (BLACKBOXAI P,B,P,P,B,B)")
-                st.markdown("<p style='font-size: 0.9rem; color: #666;'>🎢: PBBPPB pattern</p>", unsafe_allow=True)
+                st.markdown("<p style='font-size: 0.9rem; color: #666;'>🎢: P,B,P,P,B,B pattern</p>", unsafe_allow_html=True)
                 sequence = st.session_state.history[-12:]
                 row_display = []
-                for i in range(len(sequence) - 6):
+                for i in range(len(sequence) - 5):
                     chunk = sequence[i:i+6]
                     if len(chunk) == 6 and chunk == ['Player', 'Banker', 'Player', 'Player', 'Banker', 'Banker']:
                         row_display.append(f'<div class="pattern-circle" style="background-color: #38a169;"></div>')
@@ -851,7 +834,7 @@ def main():
                 row_display = []
                 for result in tracker:
                     if result in ['W', 'L', 'S', 'T']:
-                        color = '#38a169' if result == 'W' else '#e53e3e' if result == 'L' else '#A0aec0'
+                        color = '#38a169' if result == 'W' else '#e53e3e' if result == 'L' else '#A0AEC0'
                         row_display.append(f'<div class="pattern-circle" style="background-color: {color}; border-radius: 50%; border: 1px solid #000000;"></div>')
                     else:
                         row_display.append(f'<div class="display-circle"></div>')
@@ -867,13 +850,13 @@ def main():
             current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else st.session_state.initial_bankroll
             recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy)
             if current_bankroll < max(1.0, st.session_state.base_bet):
-                st.warning("Warning: Insufficient bankroll to place a bet. Please increase your bankroll or reset the game.")
+                st.warning("Insufficient bankroll to place a bet. Please increase your bankroll or reset the game.")
                 bet = 'Pass'
                 confidence = 0
                 reason = "Bankroll too low to continue betting."
                 emotional_tone = "Cautious"
             if bet == 'Pass':
-                st.markdown('<span class="bet-pass">**No Bet**: Insufficient confidence or or sufficient funds.</span>', unsafe_allow_html=True)
+                st.markdown('<span class="bet-pass">**No Bet**: Insufficient confidence or bankroll.</span>', unsafe_allow_html=True)
             else:
                 bet_class = 'bet-player' if bet == 'Player' else 'bet-banker' if bet == 'Banker' else 'bet-tie'
                 st.markdown(
@@ -897,7 +880,7 @@ def main():
                     val = bankroll_progress[total_hands - i - 1]
                     bet_size = bet_sizes[total_hands - i - 1]
                     bet_display = f"Bet ${bet_size:.2f}" if bet_size > 0 else "No Bet"
-                    st.markdown(f"Hand {hand_number}: ${val:.2f} | ${bet_display}")
+                    st.markdown(f"Hand {hand_number}: ${val:.2f} | {bet_display}")
                 st.markdown(f"**Current Bankroll**: ${bankroll_progress[-1]:.2f}")
 
                 st.markdown("### Bankroll Progression Chart")
@@ -905,8 +888,7 @@ def main():
                 fig = go.Figure()
                 fig.add_trace(
                     go.Scatter(
-                        labels,
-                        xaxis=labels,
+                        x=labels,
                         y=bankroll_progress,
                         mode='lines+markers',
                         name='Bankroll',
@@ -928,10 +910,10 @@ def main():
                     xaxis_title="Hand",
                     yaxis_title="Bankroll ($)",
                     xaxis=dict(
-                        tickangle=45,
+                        tickangle=45
                     ),
                     yaxis=dict(
-                        autorange=True,
+                        autorange=True
                     ),
                     template="plotly_white",
                     height=400,
@@ -956,7 +938,7 @@ def main():
                 st.session_state.money_management_strategy = "1-3-2-1"
                 st.session_state.ai_mode = "Conservative"
                 st.session_state.selected_patterns = ["Bead Bin", "Win/Loss", "Triple Repeat"]
-                st.session_state.t3_level = []
+                st.session_state.t3_level = 1
                 st.session_state.t3_results = []
                 st.session_state.progression_count = 0
                 st.session_state.progression_level = 1
@@ -973,7 +955,7 @@ def main():
         st.error(f"Error occurred: {str(e)}. Please try refreshing the page or resetting the game.")
     except Exception as e:
         logging.error(f"Unexpected error in main: {str(e)}")
-        st.error("Unexpected error: {str(e)}. Contact support if this persists.")
+        st.error(f"Unexpected error: {str(e)}. Contact support if this persists.")
 
 if __name__ == "__main__":
     main()
