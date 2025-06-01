@@ -1,3 +1,4 @@
+
 import streamlit as st
 import logging
 import plotly.graph_objects as go
@@ -136,24 +137,23 @@ def build_small_road(big_road_grid, num_cols):
             row = 0
     return grid, col + 1 if row > 0 else col
 
-# Advanced bet selection with PBPPBB sequence and reset on win
+# Advanced bet selection with P,B,P,P,B,B sequence and reset on any win
 def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tuple[str, float, str, str, List[str]]:
     CONFIG = {
         'max_recent_count': 40,
         'half_life': 20,
-        'min_confidence': {'Conservative': 50, 'Aggressive': 30},  # Lowered thresholds
-        'tie_confidence_threshold': 70,  # Lowered for more Tie bets
-        'tie_ratio_threshold': 0.15,  # Lowered to allow Tie bets with fewer ties
+        'min_confidence': {'Conservative': 50, 'Aggressive': 30},
+        'tie_confidence_threshold': 70,
+        'tie_ratio_threshold': 0.15,
         'pattern_weights': {
             'sequence': 40,
             'frequency': {'banker': 0.9, 'player': 1.0, 'tie': 0.6, 'tie_boost': 25},
             'derived_roads': 20,
         },
         'entropy_threshold': 1.5,
-        'entropy_reduction': 0.9,  # Less aggressive reduction
+        'entropy_reduction': 0.9,
         'late_shoe_threshold': 60,
-        'late_shoe_penalty': 5,  # Reduced penalty
-        'sequence_success_threshold': 0.3,  # Lowered threshold
+        'late_shoe_penalty': 5,
     }
 
     def calculate_entropy(freq: Dict[str, int], total: int) -> float:
@@ -185,41 +185,35 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
     emotional_tone = "Neutral"
     shoe_position = len(history)
 
-    # Track PBPPBB sequence success
+    # Use P,B,P,P,B,B sequence
     sequence = ['Player', 'Banker', 'Player', 'Player', 'Banker', 'Banker']
     if 'sequence_position' not in st.session_state:
         st.session_state.sequence_position = 0
-    if 'sequence_success' not in st.session_state:
-        st.session_state.sequence_success = {'wins': 0, 'total': 0}
 
     # Check previous bet outcome
     if history and 'last_bet' in st.session_state and 'last_result' in st.session_state:
-        if st.session_state.last_bet == st.session_state.last_result:
-            st.session_state.sequence_success['wins'] += 1
-            st.session_state.sequence_success['total'] += 1
+        if st.session_state.last_bet == st.session_state.last_result and st.session_state.last_bet != 'Pass':
             st.session_state.sequence_position = 0
-            reason_parts.append("Previous bet won; resetting PBPPBB sequence.")
-            pattern_insights.append("Sequence Reset: Starting PBPPBB")
-        elif st.session_state.last_result == 'Tie':
-            reason_parts.append("Previous result was Tie; maintaining sequence position.")
+            reason_parts.append("Previous bet won; resetting P,B,P,P,B,B sequence.")
+            pattern_insights.append("Sequence Reset: Starting P,B,P,P,B,B")
+        elif st.session_state.last_result == 'Tie' or st.session_state.last_bet == 'Pass':
+            reason_parts.append("Previous result was Tie or Pass; maintaining sequence position.")
         else:
-            st.session_state.sequence_success['total'] += 1
             st.session_state.sequence_position = (st.session_state.sequence_position + 1) % len(sequence)
-            reason_parts.append(f"Advancing to position {st.session_state.sequence_position + 1} in PBPPBB sequence.")
+            reason_parts.append(f"Advancing to position {st.session_state.sequence_position + 1} in P,B,P,P,B,B sequence.")
             pattern_insights.append(f"Sequence Position: {st.session_state.sequence_position + 1}")
 
-    sequence_success_rate = st.session_state.sequence_success['wins'] / st.session_state.sequence_success['total'] if st.session_state.sequence_success['total'] > 0 else 1.0
-    sequence_weight = CONFIG['pattern_weights']['sequence']  # Always use full weight
+    sequence_weight = CONFIG['pattern_weights']['sequence']
     bet_choice = sequence[st.session_state.sequence_position]
     scores[bet_choice] += sequence_weight
-    reason_parts.append(f"Base bet: {bet_choice} (PBPPBB position {st.session_state.sequence_position + 1}, weight: {sequence_weight:.1f}).")
-    pattern_insights.append(f"PBPPBB Sequence: Betting {bet_choice}")
+    reason_parts.append(f"Base bet: {bet_choice} (P,B,P,P,B,B position {st.session_state.sequence_position + 1}, weight: {sequence_weight:.1f}).")
+    pattern_insights.append(f"P,B,P,P,B,B Sequence: Betting {bet_choice}")
 
     recent_window = recent[-6:] if len(recent) >= 6 else recent
     sequence_match = sum(1 for i, r in enumerate(recent_window) if r == sequence[i % len(sequence)])
     if len(recent_window) > 0 and sequence_match / len(recent_window) > 0.6:
         scores[bet_choice] += 10
-        reason_parts.append(f"Recent {len(recent_window)} outcomes match PBPPBB pattern ({sequence_match}/{len(recent_window)}).")
+        reason_parts.append(f"Recent {len(recent_window)} outcomes match P,B,P,P,B,B pattern ({sequence_match}/{len(recent_window)}).")
         pattern_insights.append(f"Recent Pattern Match: {sequence_match}/{len(recent_window)}")
 
     freq = defaultdict(int, {'Banker': 0, 'Player': 0, 'Tie': 0})
@@ -260,7 +254,7 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
         reason_parts.append(f"Derived roads suggest {'Player' if player_adjust > banker_adjust else 'Banker'} (P:+{player_adjust}, B:+{banker_adjust}).")
         pattern_insights.append(f"Derived Roads: P:+{player_adjust}, B:+{banker_adjust}")
 
-    dynamic_tie_threshold = CONFIG['tie_confidence_threshold'] if shoe_position > 30 or tie_ratio < 0.15 else 60  # Lowered early shoe threshold
+    dynamic_tie_threshold = CONFIG['tie_confidence_threshold'] if shoe_position > 30 or tie_ratio < 0.15 else 60
     if scores['Tie'] > max(scores['Banker'], scores['Player']) and tie_ratio >= CONFIG['tie_ratio_threshold'] and scores['Tie'] > dynamic_tie_threshold / 1.3:
         bet_choice = 'Tie'
         reason_parts.append(f"Tie bet selected due to high tie ratio ({tie_ratio:.2%}) and adaptive threshold ({dynamic_tie_threshold}%).")
@@ -268,20 +262,19 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
         scores['Tie'] = 0
         bet_choice = max(scores, key=scores.get)
         if bet_choice != sequence[st.session_state.sequence_position]:
-            reason_parts.append(f"Overriding PBPPBB with {bet_choice} due to stronger pattern signals.")
-            pattern_insights.append(f"Override: {bet_choice} over PBPPBB")
+            reason_parts.append(f"Overriding P,B,P,P,B,B with {bet_choice} due to stronger pattern signals.")
+            pattern_insights.append(f"Override: {bet_choice} over P,B,P,P,B,B")
 
     max_score = max(scores.values(), default=0)
     second_max = max([v for k, v in scores.items() if v != max_score], default=0)
     confidence = min(round((max_score - second_max) / max_score * 100 if max_score > 0 else 0), 95)
     confidence = max(confidence, 0)
-    confidence *= (sequence_success_rate if sequence_success_rate < 1 else 1.0)
 
     if shoe_position > CONFIG['late_shoe_threshold']:
         recent_runs = [len(list(g)) for _, g in itertools.groupby([r for r in recent if r != 'Tie'])]
         avg_run_length = sum(recent_runs) / len(recent_runs) if recent_runs else 1
         if entropy > CONFIG['entropy_threshold'] or avg_run_length < 2:
-            confidence = max(confidence - CONFIG['late_shoe_penalty'], 25)  # Increased minimum confidence
+            confidence = max(confidence - CONFIG['late_shoe_penalty'], 25)
             reason_parts.append("Late shoe with unstable patterns; slightly increasing caution.")
             emotional_tone = "Cautious"
         else:
@@ -293,7 +286,7 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
         bet_choice = 'Pass'
         emotional_tone = "Hesitant"
         reason_parts.append(f"Confidence too low ({confidence}% < {confidence_threshold}%). Passing.")
-    elif mode == 'Conservative' and confidence < 60:  # Lowered cautious threshold
+    elif mode == 'Conservative' and confidence < 60:
         emotional_tone = "Cautious"
         reason_parts.append("Moderate confidence; proceeding cautiously.")
 
@@ -301,7 +294,7 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
     if history:
         st.session_state.last_result = history[-1]
 
-    reason = f"**Sequence Influence**: Following PBPPBB (position {st.session_state.sequence_position + 1}, success rate {sequence_success_rate:.2%}). "
+    reason = f"**Sequence Influence**: Following P,B,P,P,B,B (position {st.session_state.sequence_position + 1}). "
     reason += f"**Pattern Analysis**: {reason_parts[-2] if len(reason_parts) > 2 else reason_parts[-1]}. "
     reason += f"**Risk Factors**: {'High randomness' if entropy > CONFIG['entropy_threshold'] else 'Stable patterns'}; {'Late shoe' if shoe_position > CONFIG['late_shoe_threshold'] else 'Early shoe'}."
     return bet_choice, confidence, reason, emotional_tone, pattern_insights
@@ -485,8 +478,6 @@ def main():
             st.session_state.last_bet = None
         if 'last_result' not in st.session_state:
             st.session_state.last_result = None
-        if 'sequence_success' not in st.session_state:
-            st.session_state.sequence_success = {'wins': 0, 'total': 0}
 
         st.markdown("""
             <script>
@@ -769,8 +760,8 @@ def main():
                     st.markdown("No recent Cockroach data.")
 
             if "Triple Repeat" in st.session_state.selected_patterns:
-                st.markdown("### Triple Repeat (BLACKBOXAI PBPPBB)")
-                st.markdown("<p style='font-size: 0.9rem; color: #666;'>🎢: PBPPBB pattern</p>", unsafe_allow_html=True)
+                st.markdown("### Triple Repeat (BLACKBOXAI P,B,P,P,B,B)")
+                st.markdown("<p style='font-size: 0.9rem; color: #666;'>🎢: P,B,P,P,B,B pattern</p>", unsafe_allow_html=True)
                 sequence = st.session_state.history[-12:]
                 row_display = []
                 for i in range(len(sequence) - 5):
@@ -885,7 +876,6 @@ def main():
                 st.session_state.sequence_position = 0
                 st.session_state.last_bet = None
                 st.session_state.last_result = None
-                st.session_state.sequence_success = {'wins': 0, 'total': 0}
                 st.rerun()
 
     except (KeyError, ValueError, IndexError) as e:
