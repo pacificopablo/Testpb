@@ -686,7 +686,7 @@ def main():
             st.markdown(f"**Selected Strategy**: {money_management_strategy}")
 
         with st.expander("Input Game Results", expanded=True):
-            cols = st.columns(4])
+            cols = st.columns(4)
             with cols[0]:
                 if st.button("Player"):
                     st.session_state.history.append("Player")
@@ -701,7 +701,7 @@ def main():
                     st.rerun()
             with cols[3]:
                 undo_clicked = st.button("Undo", disabled=len(st.session_state.history) == 0)
-                if undo_clicked and len(st.session_state.history) == 0:
+                if undo_clicked and len(st.session_state.history) > 0:
                     st.session_state.history.pop()
                     if st.session_state.money_management_strategy in ["T3", "1-3-2-1"]:
                         st.session_state.t3_results = deque(maxlen=3)
@@ -827,25 +827,25 @@ def main():
 
             if "Win/Loss" in st.session_state.selected_patterns:
                 st.markdown("### Win/Loss")
-                st.markdown("<p style='font-size: 12px; color: #666666;'>Green (🎢): Win, Red (🎴): Loss, Gray (⬛): Skip or Tie</p>", unsafe_allow_html=True)
+                st.markdown("<p style='font-size: 12px; color: #666666;'>Green (🎯): Win, Red (🎴): Loss, Gray (💤): Skip/Tie</p>", unsafe_allow_html=True)
                 tracker = calculate_win_loss_tracker(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy, st.session_state.ai_mode)[-max_display_cols:]
                 row_display = []
                 for result in tracker:
                     if result in ['W', 'L', 'S', 'T']:
                         color = '#38a169' if result == 'W' else '#e53e3e' if result == 'L' else '#A0AEC0'
-                        row_display.append(f'<div class="pattern-circle" style="background-color: {color}; border-radius: 50%; border: 1px solid #000000;"></div>')
+                        row_display.append(f'<div class="display-circle" style="background-color: {color}; border-radius: 50%; border: 1px solid #000000;"></div>')
                     else:
                         row_display.append(f'<div class="display-circle"></div>')
                 st.markdown('<div id="win-loss-scroll" class="pattern-scroll">', unsafe_allow_html=True)
                 st.markdown(''.join(row_display), unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
                 if not st.session_state.history:
-                    st.markdown("No results yet. Enter results below.")
+                    st.markdown("No results yet.")
 
         with st.expander("Prediction", expanded=True):
             bet, confidence, reason, emotional_tone, pattern_insights = advanced_bet_selection(st.session_state.history, st.session_state.ai_mode)
             st.markdown("### Prediction")
-            current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else st.session_state.initial_bankroll
+            current_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet)[0][-1] if st.session_state.history else st.session_state.initial_bankroll
             recommended_bet_size = money_management(current_bankroll, st.session_state.base_bet, st.session_state.money_management_strategy)
             if current_bankroll < max(1.0, st.session_state.base_bet):
                 st.warning("Insufficient bankroll to place a bet. Please increase your bankroll or reset the game.")
@@ -854,28 +854,25 @@ def main():
                 reason = "Bankroll too low to continue betting."
                 emotional_tone = "Cautious"
             if bet == 'Pass':
-                st.markdown('<span class="bet-pass">**No Bet**: Insufficient confidence or bankroll.</span>', unsafe_allow_html=True)
+                st.markdown('<span class="bet-pass">**No Bet**: Insufficient confidence.</span>', unsafe_allow_html=True)
             else:
                 bet_class = 'bet-player' if bet == 'Player' else 'bet-banker' if bet == 'Banker' else 'bet-tie'
-                st.markdown(f'<span class="{bet_class}">**Bet**: {bet}</span> | **Confidence**: {confidence}% | **Bet Size**: ${recommended_bet_size:.2f} | **Mood**: {emotional_tone}', unsafe_allow_html=True)
+                st.markdown(f'<span class="{bet_class}">**Bet**: {bet} | **Confidence**: {confidence}% | **Bet Size**: ${recommended_bet_size:.2f} | **Mood**: {emotional_tone}</span>', unsafe_allow_html=True)
             st.markdown(f"**Reasoning**: {reason}")
             if pattern_insights:
                 st.markdown("### Pattern Insights")
-                st.markdown("Detected patterns influencing the prediction:")
                 for insight in pattern_insights:
                     st.markdown(f"- {insight}")
 
         with st.expander("Bankroll Progress", expanded=True):
-            bankroll_progress, bet_sizes = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)
+            bankroll_progress, _ = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)
             if bankroll_progress:
                 st.markdown("### Bankroll Progress")
                 total_hands = len(bankroll_progress)
-                for row in range(total_hands):
-                    hand_number = total_hands - row
-                    val = bankroll_progress[total_hands - row - 1]
-                    bet_size = bet_sizes[total_hands - row - 1]
-                    bet_display = f"Bet ${bet_size:.2f}" if bet_size > 0 else "No Bet"
-                    st.markdown(f"Hand {hand_number}: ${val:.2f} | {bet_display}")
+                for i in range(total_hands):
+                    hand_number = total_hands - i
+                    val = bankroll_progress[total_hands - i - 1]
+                    st.markdown(f"Hand {hand_number}: ${val:.2f}")
                 st.markdown(f"**Current Bankroll**: ${bankroll_progress[-1]:.2f}")
 
                 st.markdown("### Bankroll Progression Chart")
@@ -897,11 +894,7 @@ def main():
                     )
                 )
                 fig.update_layout(
-                    title=dict(
-                        text='Bankroll Over Time',
-                        x=0.5,
-                        xanchor='center'
-                    ),
+                    title="Bankroll Over Time",
                     xaxis_title="Hand",
                     yaxis_title="Bankroll ($)",
                     xaxis=dict(
@@ -913,8 +906,8 @@ def main():
                     template="plotly_white",
                     height=400,
                     margin=dict(
-                        l=50,
-                        r=50,
+                        l=40,
+                        r=40,
                         t=50,
                         b=100
                     )
@@ -929,7 +922,7 @@ def main():
                 final_bankroll = calculate_bankroll(st.session_state.history, st.session_state.base_bet, st.session_state.money_management_strategy)[0][-1] if st.session_state.history else st.session_state.initial_bankroll
                 st.session_state.history = []
                 st.session_state.initial_bankroll = max(1.0, final_bankroll)
-                st.session_state.base_bet = min(10.0, st.session_state.initial_bankroll)
+                st.session_state.base_bet = min(10.0, 1000)
                 st.session_state.money_management_strategy = "1-3-2-1"
                 st.session_state.ai_mode = "Conservative"
                 st.session_state.selected_patterns = ["Bead Bin", "Win/Loss", "Triple Repeat"]
