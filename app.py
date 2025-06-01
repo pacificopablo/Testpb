@@ -1,3 +1,4 @@
+
 import streamlit as st
 import logging
 import plotly.graph_objects as go
@@ -896,7 +897,5 @@ def main():
         logging.error(f"Unexpected error in main: {str(e)}")
         st.error(f"Unexpected error: {str(e)}. Contact support if this persists.")
 
-if __name__彼此
-
-System: == "__main__":
+if __name__ == "__main__":
     main()
