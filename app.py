@@ -1,4 +1,3 @@
-
 import streamlit as st
 import logging
 import plotly.graph_objects as go
@@ -142,19 +141,19 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
     CONFIG = {
         'max_recent_count': 40,
         'half_life': 20,
-        'min_confidence': {'Conservative': 65, 'Aggressive': 45},
-        'tie_confidence_threshold': 85,
-        'tie_ratio_threshold': 0.25,
+        'min_confidence': {'Conservative': 50, 'Aggressive': 30},  # Lowered thresholds
+        'tie_confidence_threshold': 70,  # Lowered for more Tie bets
+        'tie_ratio_threshold': 0.15,  # Lowered to allow Tie bets with fewer ties
         'pattern_weights': {
             'sequence': 40,
             'frequency': {'banker': 0.9, 'player': 1.0, 'tie': 0.6, 'tie_boost': 25},
             'derived_roads': 20,
         },
         'entropy_threshold': 1.5,
-        'entropy_reduction': 0.7,
+        'entropy_reduction': 0.9,  # Less aggressive reduction
         'late_shoe_threshold': 60,
-        'late_shoe_penalty': 10,
-        'sequence_success_threshold': 0.5,
+        'late_shoe_penalty': 5,  # Reduced penalty
+        'sequence_success_threshold': 0.3,  # Lowered threshold
     }
 
     def calculate_entropy(freq: Dict[str, int], total: int) -> float:
@@ -210,8 +209,7 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
             pattern_insights.append(f"Sequence Position: {st.session_state.sequence_position + 1}")
 
     sequence_success_rate = st.session_state.sequence_success['wins'] / st.session_state.sequence_success['total'] if st.session_state.sequence_success['total'] > 0 else 1.0
-    sequence_weight = CONFIG['pattern_weights']['sequence'] if sequence_success_rate >= CONFIG['sequence_success_threshold'] else CONFIG['pattern_weights']['sequence'] * 0.5
-
+    sequence_weight = CONFIG['pattern_weights']['sequence']  # Always use full weight
     bet_choice = sequence[st.session_state.sequence_position]
     scores[bet_choice] += sequence_weight
     reason_parts.append(f"Base bet: {bet_choice} (PBPPBB position {st.session_state.sequence_position + 1}, weight: {sequence_weight:.1f}).")
@@ -232,7 +230,7 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
     if entropy > CONFIG['entropy_threshold']:
         for key in scores:
             scores[key] *= CONFIG['entropy_reduction']
-        reason_parts.append("High randomness detected; reducing confidence.")
+        reason_parts.append("High randomness detected; slightly reducing confidence.")
         pattern_insights.append("Randomness: High entropy")
         emotional_tone = "Cautious"
 
@@ -262,7 +260,7 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
         reason_parts.append(f"Derived roads suggest {'Player' if player_adjust > banker_adjust else 'Banker'} (P:+{player_adjust}, B:+{banker_adjust}).")
         pattern_insights.append(f"Derived Roads: P:+{player_adjust}, B:+{banker_adjust}")
 
-    dynamic_tie_threshold = CONFIG['tie_confidence_threshold'] if shoe_position > 30 or tie_ratio < 0.25 else 75
+    dynamic_tie_threshold = CONFIG['tie_confidence_threshold'] if shoe_position > 30 or tie_ratio < 0.15 else 60  # Lowered early shoe threshold
     if scores['Tie'] > max(scores['Banker'], scores['Player']) and tie_ratio >= CONFIG['tie_ratio_threshold'] and scores['Tie'] > dynamic_tie_threshold / 1.3:
         bet_choice = 'Tie'
         reason_parts.append(f"Tie bet selected due to high tie ratio ({tie_ratio:.2%}) and adaptive threshold ({dynamic_tie_threshold}%).")
@@ -283,8 +281,8 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
         recent_runs = [len(list(g)) for _, g in itertools.groupby([r for r in recent if r != 'Tie'])]
         avg_run_length = sum(recent_runs) / len(recent_runs) if recent_runs else 1
         if entropy > CONFIG['entropy_threshold'] or avg_run_length < 2:
-            confidence = max(confidence - CONFIG['late_shoe_penalty'], 40)
-            reason_parts.append("Late shoe with unstable patterns; increasing caution.")
+            confidence = max(confidence - CONFIG['late_shoe_penalty'], 25)  # Increased minimum confidence
+            reason_parts.append("Late shoe with unstable patterns; slightly increasing caution.")
             emotional_tone = "Cautious"
         else:
             reason_parts.append("Late shoe but stable patterns; maintaining confidence.")
@@ -295,7 +293,7 @@ def advanced_bet_selection(history: List[str], mode: str = 'Conservative') -> Tu
         bet_choice = 'Pass'
         emotional_tone = "Hesitant"
         reason_parts.append(f"Confidence too low ({confidence}% < {confidence_threshold}%). Passing.")
-    elif mode == 'Conservative' and confidence < 75:
+    elif mode == 'Conservative' and confidence < 60:  # Lowered cautious threshold
         emotional_tone = "Cautious"
         reason_parts.append("Moderate confidence; proceeding cautiously.")
 
