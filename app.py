@@ -73,7 +73,7 @@ def add_result(result, bet_history):
             state.bets_won += 1
             bet_outcome = 'win'
             if not state.t3_results:
-                state.t3_level = max(1, state.t3_level - 1)
+                state.t3_level = max(0, state.t3_level - 1)  # Changed minimum to 0
             state.t3_results.append('W')
         else:
             state.bankroll -= bet_amount
@@ -93,7 +93,10 @@ def add_result(result, bet_history):
         bet_selection = 'B' if "Banker" in prediction else 'P' if "Player" in prediction else None
         if bet_selection:
             bet_amount = state.base_bet * state.t3_level
-            if bet_amount <= state.bankroll:
+            if state.t3_level == 0:
+                state.pending_bet = None
+                state.prediction = f"No bet placed (T3 Level {state.t3_level}, bet amount $0.00)"
+            elif bet_amount <= state.bankroll:
                 state.pending_bet = (bet_amount, bet_selection)
                 state.prediction = f"Bet ${bet_amount:.2f} on {bet_selection} (T3 Level {state.t3_level})"
             else:
@@ -236,3 +239,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
