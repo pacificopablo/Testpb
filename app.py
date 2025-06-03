@@ -15,21 +15,23 @@ if st.session_state.history:
 else:
     st.info("No outcomes entered yet.")
 
-# Input buttons with spinner
-col1, col2, col3 = st.columns(3)
-with col1:
-    if st.button("➕ Player (P)", key="player_btn"):
-        with st.spinner("Updating..."):
-            st.session_state.history.append("P")
-with col2:
-    if st.button("➕ Banker (B)", key="banker_btn"):
-        with st.spinner("Updating..."):
-            st.session_state.history.append("B")
-with col3:
-    if st.button("🗑️ Undo", key="undo_btn"):
-        with st.spinner("Updating..."):
-            if st.session_state.history:
-                st.session_state.history.pop()
+# Form to handle button clicks
+with st.form(key="input_form"):
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        player_submit = st.form_submit_button("➕ Player (P)")
+    with col2:
+        banker_submit = st.form_submit_button("➕ Banker (B)")
+    with col3:
+        undo_submit = st.form_submit_button("🗑️ Undo")
+
+# Handle form submissions
+if player_submit:
+    st.session_state.history.append("P")
+if banker_submit:
+    st.session_state.history.append("B")
+if undo_submit and st.session_state.history:
+    st.session_state.history.pop()
 
 # Prediction logic
 def get_prediction(history):
