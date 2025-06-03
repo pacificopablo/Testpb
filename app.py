@@ -1,27 +1,64 @@
 import streamlit as st
 from collections import deque
+import math
 
-def get_prediction(history):
+def get_prediction(history, bet_history):
     if len(history) < 3:
         return "Default: Bet Banker"
 
+    # Initialize pattern scores
+    scores = {'B': 0.0, 'P': 0.0}
+    weights = {'bias': 0.4, 'streak': 0.5, 'alternation': 0.3}  # Initial weights
+
+    # Adjust weights based on recent bet outcomes (simulating AI adaptation)
+    recent_bets = bet_history[-3:] if len(bet_history) >= 3 else bet_history
+    correct_preds = sum(1 for _, _, sel, outcome, _, _ in recent_bets if outcome == 'win' and sel)
+    if recent_bets:
+        success_rate = correct_preds / len(recent_bets)
+        # Increase weights for successful patterns, decrease for failures
+        weights['bias'] *= (1.0 + 0.1 * success_rate)
+        weights['streak'] *= (1.0 + 0.15 * success_rate)
+        weights['alternation'] *= (1.0 + 0.05 * success_rate)
+
+    # Bias: Count frequency of B and P
     count = {'B': history.count('B'), 'P': history.count('P')}
-
     if count['B'] >= 3:
-        return "Banker (Bias)"
+        scores['B'] += weights['bias'] * (count['B'] / 5)
     if count['P'] >= 3:
-        return "Player (Bias)"
-    
-    last3 = list(history)[-3:]
-    if ''.join(history) in ("BPBPB", "PBPBP"):
-        return f"Zigzag Breaker → Bet {list(history)[-1]}"
-    if last3 == [last3[0]] * 3:
-        return f"Dragon Slayer → Bet {'Player' if last3[0] == 'B' else 'Banker'}"
-    
-    second_last = list(history)[-2]
-    return f"OTB4L → Bet {'Player' if second_last == 'B' else 'Banker'}"
+        scores['P'] += weights['bias'] * (count['P'] / 5)
 
-def add_result(result):
+    # Streak: Check for three consecutive identical outcomes
+    last3 = list(history)[-3:]
+    if last3 == [last3[0]] * 3:
+        # Bet opposite of streak (Dragon Slayer-like)
+        target = 'P' if last3[0] == 'B' else 'B'
+        scores[target] += weights['streak']
+
+    # Alternation: Check for BPBPB or PBPBP
+    if ''.join(history) in ("BPBPB", "PBPBP"):
+        # Bet the last result (Zigzag-like)
+        scores[list(history)[-1]] += weights['alternation']
+
+    # OTB4L-like: Bet opposite of second-to-last result
+    second_last = list(history)[-2]
+    scores['P' if second_last == 'B' else 'B'] += weights['alternation'] * 0.8
+
+    # Normalize scores to probabilities (softmax-like)
+    total = scores['B'] + scores['P']
+    if total == 0:
+-return "Default: Bet Banker"
+    prob_b = scores['B'] / total
+    prob_p = scores['P'] / total
+
+    # Select bet with highest probability, with threshold to avoid weak predictions
+    if prob_b > prob_p + 0.1:  # Require 10% confidence gap
+        return f"AI Bet: Banker (Confidence: {prob_b:.2%})"
+    elif prob_p > prob_b + 0.1:
+        return f"AI Bet: Player (Confidence: {prob_p:.2%})"
+    else:
+        return "Default: Bet Banker"
+
+def add_result(result, bet_history):
     state = st.session_state
     bet_amount = 0
     bet_selection = None
@@ -51,7 +88,7 @@ def add_result(result):
     state.history.append(result)
 
     if len(state.history) >= 5:
-        prediction = get_prediction(state.history)
+        prediction = get_prediction(state.history, state.bet_history)
         bet_selection = 'B' if "Banker" in prediction else 'P' if "Player" in prediction else None
         if bet_selection:
             bet_amount = state.base_bet * state.t3_level
@@ -71,11 +108,11 @@ def add_result(result):
     state.bet_history.append((result, bet_amount, bet_selection, bet_outcome, state.t3_level, state.t3_results[:]))
 
 def main():
-    st.title("Baccarat Predictor with T3")
+    st.title("Baccarat Predictor with AI-Powered T3")
 
     state = st.session_state
     if 'history' not in state:
-        state.history = deque(maxlen=5)  # Initialize with deque
+        state.history = deque(maxlen=5)
         state.prediction = ""
         state.bankroll = 0.0
         state.base_bet = 0.0
@@ -102,7 +139,7 @@ def main():
                 'bankroll': bankroll_input,
                 'base_bet': base_bet_input,
                 'initial_bankroll': bankroll_input,
-                'history': deque(maxlen=5),  # Reset with deque
+                'history': deque(maxlen=5),
                 'bet_history': [],
                 'pending_bet': None,
                 'bets_placed': 0,
@@ -119,7 +156,7 @@ def main():
             'bankroll': 0.0,
             'base_bet': 0.0,
             'initial_bankroll': 0.0,
-            'history': deque(maxlen=5),  # Reset with deque
+            'history': deque(maxlen=5),
             'bet_history': [],
             'pending_bet': None,
             'bets_placed': 0,
@@ -142,7 +179,7 @@ def main():
                     st.success("Bankroll above 150% of initial. Session ended.")
                     state.session_active = False
                 else:
-                    add_result('B')
+                    add_result('B', state.bet_history)
         with col2:
             if st.button("Player (P)"):
                 if state.bankroll <= state.initial_bankroll * 0.8:
@@ -152,13 +189,13 @@ def main():
                     st.success("Bankroll above 150% of initial. Session ended.")
                     state.session_active = False
                 else:
-                    add_result('P')
+                    add_result('P', state.bet_history)
 
     if st.button("Undo Last Result"):
         if not state.history:
             st.warning("No results to undo.")
         else:
-            state.history.pop()  # deque supports pop()
+            state.history.pop()
             if state.bet_history:
                 last_bet = state.bet_history.pop()
                 result, bet_amount, bet_selection, bet_outcome, t3_level, t3_results = last_bet
@@ -175,7 +212,6 @@ def main():
             state.prediction = ""
             state.session_active = True
 
-    # Display statuses
     st.markdown(f"""
 **Current History:** {"".join(state.history) if state.history else "No results yet"}  
 **Bankroll:** ${state.bankroll:.2f}  
@@ -187,7 +223,7 @@ def main():
 
     with st.expander("Debug: Session State"):
         st.write({
-            'History': list(state.history),  # Convert deque to list for display
+            'History': list(state.history),
             'Prediction': state.prediction,
             'Bankroll': state.bankroll,
             'Base Bet': state.base_bet,
