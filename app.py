@@ -24,28 +24,34 @@ def get_prediction(history):
 def main():
     st.title("Baccarat Predictor")
     
-    # Initialize session state for history if not exists
+    # Initialize session state for history and prediction
     if 'history' not in st.session_state:
-        st.session_state.history = ""
+        st.session_state.history = []
     if 'prediction' not in st.session_state:
         st.session_state.prediction = ""
     
-    # Input field for history
-    history_input = st.text_input("Enter last results (e.g., BPPBB)", 
-                                 value=st.session_state.history,
-                                 key="history_input")
+    # Display current history
+    st.markdown("**Current History:** " + ("".join(st.session_state.history) if st.session_state.history else "No results yet"))
     
-    # Update history in session state
-    st.session_state.history = history_input
+    # Create two columns for buttons
+    col1, col2 = st.columns(2)
     
-    # Predict button
-    if st.button("Get Prediction"):
-        clean_history = history_input.upper().replace("[^BP]", "").split()
-        clean_history = list(''.join(clean_history))
-        if clean_history:
-            st.session_state.prediction = get_prediction(clean_history)
-        else:
-            st.session_state.prediction = "Please enter valid history (B or P only)"
+    # Banker button
+    with col1:
+        if st.button("Banker (B)"):
+            st.session_state.history.append("B")
+            st.session_state.prediction = get_prediction(st.session_state.history)
+    
+    # Player button
+    with col2:
+        if st.button("Player (P)"):
+            st.session_state.history.append("P")
+            st.session_state.prediction = get_prediction(st.session_state.history)
+    
+    # Clear history button
+    if st.button("Clear History"):
+        st.session_state.history = []
+        st.session_state.prediction = ""
     
     # Display prediction
     if st.session_state.prediction:
