@@ -1,11 +1,11 @@
 import streamlit as st
 
 def get_prediction(history):
-    last5 = history[-5:]  # Direct slicing for efficiency
+    last5 = history[-5:]
     if len(last5) < 3:
         return "Default: Bet Banker"
 
-    count = {'B': last5.count('B'), 'P': last5.count('P')}  # Use count method for faster tally
+    count = {'B': last5.count('B'), 'P': last5.count('P')}
 
     if count['B'] >= 3:
         return "Banker (Bias)"
@@ -27,7 +27,6 @@ def add_result(result):
     bet_selection = None
     bet_outcome = None
 
-    # Resolve pending bet
     if state.pending_bet:
         bet_amount, bet_selection = state.pending_bet
         state.bets_placed += 1
@@ -49,10 +48,8 @@ def add_result(result):
             state.t3_results = []
         state.pending_bet = None
 
-    # Add new result
     state.history.append(result)
 
-    # Make prediction
     if len(state.history) >= 5:
         prediction = get_prediction(state.history)
         bet_selection = 'B' if "Banker" in prediction else 'P' if "Player" in prediction else None
@@ -76,7 +73,6 @@ def add_result(result):
 def main():
     st.title("Baccarat Predictor with T3")
 
-    # Initialize session state
     state = st.session_state
     if 'history' not in state:
         state.history = []
@@ -92,7 +88,6 @@ def main():
         state.bets_won = 0
         state.session_active = False
 
-    # Session setup
     st.markdown("**Session Setup**")
     bankroll_input = st.number_input("Enter Initial Bankroll ($):", min_value=0.0, step=10.0, key="bankroll_input")
     base_bet_input = st.number_input("Enter Base Bet ($):", min_value=0.0, step=1.0, key="base_bet_input")
@@ -136,7 +131,6 @@ def main():
         })
         st.success("Session reset. Enter new bankroll and bet to start.")
 
-    # Result buttons
     if state.session_active:
         col1, col2 = st.columns(2)
         with col1:
@@ -160,7 +154,6 @@ def main():
                 else:
                     add_result('P')
 
-    # Undo button
     if st.button("Undo Last Result"):
         if not state.history:
             st.warning("No results to undo.")
@@ -184,7 +177,7 @@ def main():
 
     # Display statuses
     st.markdown(f"""
-**Current History:** {"".join(state.history) if state.history else "No results yet"}  
+**Current History:** {"".join(state.history[-5:]) if state.history else "No results yet"}  
 **Bankroll:** ${state.bankroll:.2f}  
 **Base Bet:** ${state.base_bet:.2f}  
 **Session:** {state.bets_placed} bets, {state.bets_won} wins  
@@ -192,7 +185,6 @@ def main():
 **Prediction:** {state.prediction}
     """)
 
-    # Debug section
     with st.expander("Debug: Session State"):
         st.write({
             'History': state.history,
