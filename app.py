@@ -9,28 +9,39 @@ def predict_bet(history):
     # Validate input: filter valid outcomes (B or P)
     history = [x.upper() for x in history if x.upper() in ['B', 'P']]
     if len(history) < 2:
-        return "Please enter at least 2 valid outcomes (B or P) by pressing Player or Banker.", None
+        return "Please press Player or Banker at least 2 times to record valid outcomes.", None
+
+    # Detect pattern type for clarity
+    pattern = "Unknown"
+    if len(history) >= 3 and history[-1] == history[-2] == history[-3]:
+        pattern = "Streak (3+ in a row)"
+    elif len(history) >= 2 and history[-1] == history[-2] and (len(history) < 3 or history[-1] != history[-3]):
+        pattern = "Short Streak (2 in a row)"
+    elif len(history) >= 4 and history[-1] != history[-2] and history[-2] != history[-3] and history[-3] != history[-4]:
+        pattern = "Chop (Alternating)"
+    elif len(history) >= 2 and history[-1] != history[-2]:
+        pattern = "Chop (Short Alternating)"
 
     # Rule 5: 2-in-a-Row Catcher
     if len(history) >= 2 and history[-1] == history[-2] and (len(history) < 3 or history[-1] != history[-3]):
-        return f"Bet: {history[-1]} (2-in-a-Row Catcher)", history[-1]
+        return f"Bet: {history[-1]} (2-in-a-Row Catcher, Pattern: {pattern})", history[-1]
 
     # Rule 4: Dragon Slayer (3 or more in a row)
     if len(history) >= 3 and history[-1] == history[-2] == history[-3]:
         bet = 'P' if history[-1] == 'B' else 'B'
-        return f"Bet: {bet} (Dragon Slayer - 3+ streak)", bet
+        return f"Bet: {bet} (Dragon Slayer - 3+ streak, Pattern: {pattern})", bet
 
     # Rule 3: Zigzag Pattern Break
     if len(history) >= 4 and history[-1] != history[-2] and history[-2] != history[-3] and history[-3] != history[-4]:
-        return f"Bet: {history[-1]} (Zigzag Break)", history[-1]
+        return f"Bet: {history[-1]} (Zigzag Break, Pattern: {pattern})", history[-1]
 
     # Rule 2: OTB4L Check
     if len(history) >= 2 and history[-1] != history[-2]:
         bet = 'P' if history[-2] == 'B' else 'B'
-        return f"Bet: {bet} (OTB4L)", bet
+        return f"Bet: {bet} (OTB4L, Pattern: {pattern})", bet
 
     # Rule 1: Banker Bias (Default)
-    return "Bet: B (Banker Bias - Default)", 'B'
+    return f"Bet: B (Banker Bias - Default, Pattern: {pattern})", 'B'
 
 # Initialize session state for history
 if 'history' not in st.session_state:
@@ -40,7 +51,8 @@ if 'history' not in st.session_state:
 st.title("Smart Fusion 5 Baccarat Predictor")
 st.markdown("""
 Press the **Player** or **Banker** button to record each Baccarat game outcome (ignore Ties).
-The system will predict the next bet using the Smart Fusion 5 rules, based on the last 5 outcomes.
+The system predicts the next bet using the Smart Fusion 5 rules, based on the last 5 outcomes.
+It adapts to **streaks** (e.g., B-B-B) and **chops** (e.g., B-P-B-P).
 Use flat betting (1 unit) and avoid Tie bets.
 """)
 
@@ -69,7 +81,7 @@ with col2:
 # Display current sequence and prediction
 st.subheader("Current Status")
 if st.session_state.history:
-    st.write(f"**Current Sequence**: {'-'.join(st.session_state.history)}")
+    st.write(f"**Current Sequence**: {'-'.join(st.session_state.history)} (Length: {len(st.session_state.history)})")
 else:
     st.write("**Current Sequence**: None (press Player or Banker to start)")
 
