@@ -9,7 +9,7 @@ def predict_bet(history):
     # Validate input: filter valid outcomes (B or P)
     history = [x.upper() for x in history if x.upper() in ['B', 'P']]
     if len(history) < 2:
-        return "Please enter at least 2 valid outcomes (B or P).", None
+        return "Please enter at least 2 valid outcomes (B or P) by pressing Player or Banker.", None
 
     # Rule 5: 2-in-a-Row Catcher
     if len(history) >= 2 and history[-1] == history[-2] and (len(history) < 3 or history[-1] != history[-3]):
@@ -32,39 +32,58 @@ def predict_bet(history):
     # Rule 1: Banker Bias (Default)
     return "Bet: B (Banker Bias - Default)", 'B'
 
+# Initialize session state for history
+if 'history' not in st.session_state:
+    st.session_state.history = []
+
 # Streamlit app layout
 st.title("Smart Fusion 5 Baccarat Predictor")
 st.markdown("""
-Enter the last 5 outcomes from your live dealer Baccarat game (B for Banker, P for Player, ignore Ties).
-The system will predict the next bet using the Smart Fusion 5 rules. Use flat betting (1 unit) and avoid Tie bets.
+Press the **Player** or **Banker** button to record each Baccarat game outcome (ignore Ties).
+The system will predict the next bet using the Smart Fusion 5 rules, based on the last 5 outcomes.
+Use flat betting (1 unit) and avoid Tie bets.
 """)
 
-# Input fields for the last 5 outcomes
-st.subheader("Enter Last 5 Outcomes")
-col1, col2, col3, col4, col5 = st.columns(5)
+# Buttons to input outcomes
+st.subheader("Record Latest Outcome")
+col1, col2 = st.columns(2)
 with col1:
-    input1 = st.text_input("1", max_chars=1, key="input1", placeholder="B/P")
+    if st.button("Player"):
+        st.session_state.history.append('P')
+        # Keep only the last 5 outcomes
+        if len(st.session_state.history) > 5:
+            st.session_state.history = st.session_state.history[-5:]
+        # Predict next bet
+        result, _ = predict_bet(st.session_state.history)
+        st.session_state.result = result
 with col2:
-    input2 = st.text_input("2", max_chars=1, key="input2", placeholder="B/P")
-with col3:
-    input3 = st.text_input("3", max_chars=1, key="input3", placeholder="B/P")
-with col4:
-    input4 = st.text_input("4", max_chars=1, key="input4", placeholder="B/P")
-with col5:
-    input5 = st.text_input("5", max_chars=1, key="input5", placeholder="B/P")
+    if st.button("Banker"):
+        st.session_state.history.append('B')
+        # Keep only the last 5 outcomes
+        if len(st.session_state.history) > 5:
+            st.session_state.history = st.session_state.history[-5:]
+        # Predict next bet
+        result, _ = predict_bet(st.session_state.history)
+        st.session_state.result = result
 
-# Collect inputs
-history = [input1, input2, input3, input4, input5]
+# Display current sequence and prediction
+st.subheader("Current Status")
+if st.session_state.history:
+    st.write(f"**Current Sequence**: {'-'.join(st.session_state.history)}")
+else:
+    st.write("**Current Sequence**: None (press Player or Banker to start)")
 
-# Button to predict
-if st.button("Predict Next Bet"):
-    result, _ = predict_bet(history)
-    st.markdown(f"**{result}**")
-    valid_history = [x.upper() for x in history if x.upper() in ['B', 'P']]
-    if valid_history:
-        st.write(f"**Current Sequence**: {'-'.join(valid_history)}")
-    else:
-        st.write("**Current Sequence**: None")
+if 'result' in st.session_state and st.session_state.result:
+    st.markdown(f"**{st.session_state.result}**")
+else:
+    st.write("**Prediction**: None (need at least 2 outcomes)")
+
+# Clear history button
+if st.button("Clear History"):
+    st.session_state.history = []
+    if 'result' in st.session_state:
+        del st.session_state.result
+    st.write("**History cleared**. Start recording outcomes.")
 
 # Additional instructions
 st.markdown("""
