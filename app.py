@@ -1,24 +1,24 @@
 import streamlit as st
+from collections import deque
 
 def get_prediction(history):
-    last5 = history[-5:]
-    if len(last5) < 3:
+    if len(history) < 3:
         return "Default: Bet Banker"
 
-    count = {'B': last5.count('B'), 'P': last5.count('P')}
+    count = {'B': history.count('B'), 'P': history.count('P')}
 
     if count['B'] >= 3:
         return "Banker (Bias)"
     if count['P'] >= 3:
         return "Player (Bias)"
     
-    last3 = last5[-3:]
-    if ''.join(last5) in ("BPBPB", "PBPBP"):
-        return f"Zigzag Breaker → Bet {last5[-1]}"
+    last3 = list(history)[-3:]
+    if ''.join(history) in ("BPBPB", "PBPBP"):
+        return f"Zigzag Breaker → Bet {list(history)[-1]}"
     if last3 == [last3[0]] * 3:
         return f"Dragon Slayer → Bet {'Player' if last3[0] == 'B' else 'Banker'}"
     
-    second_last = last5[-2]
+    second_last = list(history)[-2]
     return f"OTB4L → Bet {'Player' if second_last == 'B' else 'Banker'}"
 
 def add_result(result):
@@ -75,7 +75,7 @@ def main():
 
     state = st.session_state
     if 'history' not in state:
-        state.history = []
+        state.history = deque(maxlen=5)  # Initialize with deque
         state.prediction = ""
         state.bankroll = 0.0
         state.base_bet = 0.0
@@ -102,7 +102,7 @@ def main():
                 'bankroll': bankroll_input,
                 'base_bet': base_bet_input,
                 'initial_bankroll': bankroll_input,
-                'history': [],
+                'history': deque(maxlen=5),  # Reset with deque
                 'bet_history': [],
                 'pending_bet': None,
                 'bets_placed': 0,
@@ -119,7 +119,7 @@ def main():
             'bankroll': 0.0,
             'base_bet': 0.0,
             'initial_bankroll': 0.0,
-            'history': [],
+            'history': deque(maxlen=5),  # Reset with deque
             'bet_history': [],
             'pending_bet': None,
             'bets_placed': 0,
@@ -158,7 +158,7 @@ def main():
         if not state.history:
             st.warning("No results to undo.")
         else:
-            state.history.pop()
+            state.history.pop()  # deque supports pop()
             if state.bet_history:
                 last_bet = state.bet_history.pop()
                 result, bet_amount, bet_selection, bet_outcome, t3_level, t3_results = last_bet
@@ -177,7 +177,7 @@ def main():
 
     # Display statuses
     st.markdown(f"""
-**Current History:** {"".join(state.history[-5:]) if state.history else "No results yet"}  
+**Current History:** {"".join(state.history) if state.history else "No results yet"}  
 **Bankroll:** ${state.bankroll:.2f}  
 **Base Bet:** ${state.base_bet:.2f}  
 **Session:** {state.bets_placed} bets, {state.bets_won} wins  
@@ -187,7 +187,7 @@ def main():
 
     with st.expander("Debug: Session State"):
         st.write({
-            'History': state.history,
+            'History': list(state.history),  # Convert deque to list for display
             'Prediction': state.prediction,
             'Bankroll': state.bankroll,
             'Base Bet': state.base_bet,
