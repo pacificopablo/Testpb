@@ -16,6 +16,8 @@ Manual input buttons
 
 col1, col2, col3 = st.columns(3) with col1: if st.button("➕ Player (P)"): st.session_state.history.append("P") with col2: if st.button("➕ Banker (B)"): st.session_state.history.append("B") with col3: if st.button("🗑️ Undo"): if st.session_state.history: st.session_state.history.pop()
 
+Prediction logic function
+
 def get_prediction(history): if len(history) < 5: return "Need at least 5 rounds of history."
 
 last_5 = history[-5:]
