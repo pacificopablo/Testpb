@@ -25,7 +25,7 @@ def main():
     st.title("Baccarat Predictor")
     
     # Initialize session state for history and prediction
-    if 'history' not in st.session_state:
+    if 'history' not in st.session_state or not isinstance(st.session_state.history, list):
         st.session_state.history = []
     if 'prediction' not in st.session_state:
         st.session_state.prediction = ""
@@ -39,12 +39,18 @@ def main():
     # Banker button
     with col1:
         if st.button("Banker (B)"):
+            # Ensure history is a list before appending
+            if not isinstance(st.session_state.history, list):
+                st.session_state.history = []
             st.session_state.history.append("B")
             st.session_state.prediction = get_prediction(st.session_state.history)
     
     # Player button
     with col2:
         if st.button("Player (P)"):
+            # Ensure history is a list before appending
+            if not isinstance(st.session_state.history, list):
+                st.session_state.history = []
             st.session_state.history.append("P")
             st.session_state.prediction = get_prediction(st.session_state.history)
     
@@ -56,6 +62,11 @@ def main():
     # Display prediction
     if st.session_state.prediction:
         st.markdown(f"**Prediction:** {st.session_state.prediction}")
+    
+    # Debug: Show session state for troubleshooting
+    with st.expander("Debug: Session State"):
+        st.write("History:", st.session_state.history)
+        st.write("Prediction:", st.session_state.prediction)
 
 if __name__ == "__main__":
     main()
