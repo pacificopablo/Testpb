@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(page_title="Smart Fusion 5 Baccarat Predictor", layout="centered")
 
-st.title("Smart Fusion 5 - Live Baccarat Predictor")
+st.title("🎰 Smart Fusion 5 - Live Baccarat Predictor")
 
 # Initialize session state
 if 'history' not in st.session_state:
@@ -15,18 +15,21 @@ if st.session_state.history:
 else:
     st.info("No outcomes entered yet.")
 
-# Input buttons
+# Input buttons with spinner
 col1, col2, col3 = st.columns(3)
 with col1:
-    if st.button("➕ Player (P)"):
-        st.session_state.history.append("P")
+    if st.button("➕ Player (P)", key="player_btn"):
+        with st.spinner("Updating..."):
+            st.session_state.history.append("P")
 with col2:
-    if st.button("➕ Banker (B)"):
-        st.session_state.history.append("B")
+    if st.button("➕ Banker (B)", key="banker_btn"):
+        with st.spinner("Updating..."):
+            st.session_state.history.append("B")
 with col3:
-    if st.button("🗑️ Undo"):
-        if st.session_state.history:
-            st.session_state.history.pop()
+    if st.button("🗑️ Undo", key="undo_btn"):
+        with st.spinner("Updating..."):
+            if st.session_state.history:
+                st.session_state.history.pop()
 
 # Prediction logic
 def get_prediction(history):
