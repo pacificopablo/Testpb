@@ -1,3 +1,4 @@
+
 import streamlit as st
 from collections import deque
 import math
@@ -46,7 +47,7 @@ def get_prediction(history, bet_history):
     # Normalize scores to probabilities (softmax-like)
     total = scores['B'] + scores['P']
     if total == 0:
--return "Default: Bet Banker"
+        return "Default: Bet Banker"
     prob_b = scores['B'] / total
     prob_p = scores['P'] / total
 
