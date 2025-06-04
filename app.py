@@ -69,9 +69,12 @@ def add_result(result):
             state.bankroll += bet_amount * (0.95 if bet_selection == 'B' else 1.0)
             state.bets_won += 1
             bet_outcome = 'win'
-            if not state.t3_results:
-                state.t3_level = state.t3_level - 1  # Allow negative levels
-            state.t3_results.append('W')
+            if state.t3_level < 0:
+                state.t3_level = 1  # Reset to level 1 on win at negative level
+            else:
+                if not state.t3_results:
+                    state.t3_level = state.t3_level - 1  # Allow negative levels
+                state.t3_results.append('W')
         else:
             state.bankroll -= bet_amount
             bet_outcome = 'loss'
