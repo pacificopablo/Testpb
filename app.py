@@ -23,8 +23,8 @@ def get_prediction(history, bet_history):
     count = {'B': history.count('B'), 'P': history.count('P')}
     if count['B'] >= 3:
         scores['B'] += weights['bias'] * (count['B'] / 5)
-        if count['P'] >= 3:
-            scores['P'] += weights['bias'] * (count['P'] / 5)
+    if count['P'] >= 3:
+        scores['P'] += weights['bias'] * (count['P'] / 5)
 
     # Pattern: Streak (three consecutive identical outcomes)
     last3 = list(history)[-3:]
@@ -33,17 +33,17 @@ def get_prediction(history, bet_history):
         scores[target] += weights['streak']
 
     # Pattern: Alternation (BPBPB or PBPBP)
-    if ''.join(history) in ("BPBPB", "PBPBP""):
+    if ''.join(history) in ("BPBPB", "PBPBP"):
         scores[list(history)[-1]] += weights['alternation']
 
-    # Pattern: OTB4L (bet opposite of second-to-last bet)
+    # Pattern: OTB4L (bet opposite of second-to-last)
     second_last = list(history)[-2]
     scores['P' if second_last == 'B' else 'B'] += weights['alternation'] * 0.8
 
     # Normalize to probabilities
     total = scores['B'] + scores['P']
     if total == 0:
-        return "Default: Bet Banker"
+        return "Default: Bet on Banker"
     prob_b = scores['B'] / total
     prob_p = scores['P'] / total
 
@@ -52,7 +52,7 @@ def get_prediction(history, bet_history):
         return f"AI Bet: Banker (Confidence: {prob_b:.2%})"
     elif prob_p > prob_b + 0.1:
         return f"AI Bet: Player (Confidence: {prob_p:.2%})"
-    return "Default: Bet Banker"
+    return "Default: Bet on Banker"
 
 def add_result(result):
     state = st.session_state
