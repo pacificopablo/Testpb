@@ -4,7 +4,7 @@ from collections import deque
 
 def get_prediction(history, bet_history):
     if len(history) < 3:
-        return "Default: Bet Banker"
+        return "Default: Bet on Banker"
 
     # Initialize scores for Banker and Player
     scores = {'B': 0.0, 'P': 0.0}
@@ -23,8 +23,8 @@ def get_prediction(history, bet_history):
     count = {'B': history.count('B'), 'P': history.count('P')}
     if count['B'] >= 3:
         scores['B'] += weights['bias'] * (count['B'] / 5)
-    if count['P'] >= 3:
-        scores['P'] += weights['bias'] * (count['P'] / 5)
+        if count['P'] >= 3:
+            scores['P'] += weights['bias'] * (count['P'] / 5)
 
     # Pattern: Streak (three consecutive identical outcomes)
     last3 = list(history)[-3:]
@@ -33,10 +33,10 @@ def get_prediction(history, bet_history):
         scores[target] += weights['streak']
 
     # Pattern: Alternation (BPBPB or PBPBP)
-    if ''.join(history) in ("BPBPB", "PBPBP"):
+    if ''.join(history) in ("BPBPB", "PBPBP""):
         scores[list(history)[-1]] += weights['alternation']
 
-    # Pattern: OTB4L (bet opposite of second-to-last)
+    # Pattern: OTB4L (bet opposite of second-to-last bet)
     second_last = list(history)[-2]
     scores['P' if second_last == 'B' else 'B'] += weights['alternation'] * 0.8
 
@@ -68,21 +68,21 @@ def add_result(result):
             state.bankroll += bet_amount * (0.95 if bet_selection == 'B' else 1.0)
             state.bets_won += 1
             bet_outcome = 'win'
-            state.t3_outcomes.append('W')
+            state.t3_results.append('W')
         else:
             state.bankroll -= bet_amount
             bet_outcome = 'loss'
-            state.t3_outcomes.append('L')
+            state.t3_results.append('L')
 
         # Evaluate T3 level after three rounds
-        if len(state.t3_outcomes) == 3:
-            wins = state.t3_outcomes.count('W')
-            losses = state.t3_outcomes.count('L')
+        if len(state.t3_results) == 3:
+            wins = state.t3_results.count('W')
+            losses = state.t3_results.count('L')
             if wins > losses:
                 state.t3_level += 1  # More wins: move forward
             elif losses > wins:
                 state.t3_level -= 1  # More losses: move back
-            state.t3_outcomes = []  # Reset for next three rounds
+            state.t3_results = []  # Reset for next three rounds
         state.pending_bet = None
 
     state.history.append(result)
@@ -92,11 +92,8 @@ def add_result(result):
         prediction = get_prediction(state.history, state.bet_history)
         bet_selection = 'B' if "Banker" in prediction else 'P' if "Player" in prediction else None
         if bet_selection:
-            bet_amount = state.base_bet * state.t3_level
-            if bet_amount < 0:
-                state.pending_bet = None
-                state.prediction = f"{prediction} | Skip betting (negative T3 Level {state.t3_level})"
-            elif bet_amount > state.bankroll:
+            bet_amount = state.base_bet * abs(state.t3_level)  # Use absolute value for wager
+            if bet_amount > state.bankroll:
                 state.pending_bet = None
                 state.prediction = f"{prediction} | Skip betting (bet ${bet_amount:.2f} exceeds bankroll)."
             else:
@@ -109,7 +106,7 @@ def add_result(result):
         state.pending_bet = None
         state.prediction = f"Need {5 - len(state.history)} more results for prediction."
 
-    state.bet_history.append((result, bet_amount, bet_selection, bet_outcome, state.t3_level, state.t3_outcomes[:]))
+    state.bet_history.append((result, bet_amount, bet_selection, bet_outcome, state.t3_level, state.t3_results[:]))
 
 def main():
     st.title("Baccarat Predictor with AI-Powered T3")
@@ -122,7 +119,7 @@ def main():
         state.base_bet = 0.0
         state.initial_bankroll = 0.0
         state.t3_level = 1
-        state.t3_outcomes = []
+        state.t3_results = []
         state.bet_history = []
         state.pending_bet = None
         state.bets_placed = 0
@@ -144,7 +141,7 @@ def main():
                 'base_bet': base_bet_input,
                 'initial_bankroll': bankroll_input,
                 'history': deque(maxlen=5),
-                't3_outcomes': [],
+                't3_results': [],
                 'bet_history': [],
                 'pending_bet': None,
                 'bets_placed': 0,
@@ -161,7 +158,7 @@ def main():
             'base_bet': 0.0,
             'initial_bankroll': 0.0,
             'history': deque(maxlen=5),
-            't3_outcomes': [],
+            't3_results': [],
             'bet_history': [],
             'pending_bet': None,
             'bets_placed': 0,
@@ -202,7 +199,7 @@ def main():
             state.history.pop()
             if state.bet_history:
                 last_bet = state.bet_history.pop()
-                result, bet_amount, bet_selection, bet_outcome, t3_level, t3_outcomes = last_bet
+                result, bet_amount, bet_selection, bet_outcome, t3_level, t3_results = last_bet
                 if bet_amount > 0:
                     state.bets_placed -= 1
                     if bet_outcome == 'win':
@@ -211,7 +208,7 @@ def main():
                     elif bet_outcome == 'loss':
                         state.bankroll += bet_amount
                     state.t3_level = t3_level
-                    state.t3_outcomes = t3_outcomes[:]
+                    state.t3_results = t3_results[:]
             state.pending_bet = None
             state.prediction = ""
             state.session_active = True
@@ -221,7 +218,7 @@ def main():
 **Bankroll:** ${state.bankroll:.2f}  
 **Base Bet:** ${state.base_bet:.2f}  
 **Session:** {state.bets_placed} bets, {state.bets_won} wins  
-**T3 Status:** Level {state.t3_level}, Outcomes: {state.t3_outcomes}  
+**T3 Status:** Level {state.t3_level}, Results: {state.t3_results}  
 **Prediction:** {state.prediction}
     """)
 
@@ -232,7 +229,7 @@ def main():
             "Bankroll": state.bankroll,
             "Base Bet": state.base_bet,
             "T3 Level": state.t3_level,
-            "T3 Outcomes": state.t3_outcomes,
+            "T3 Results": state.t3_results,
             "Transactions": state.bet_history,
             "Pending Transaction": state.pending_bet
         })
