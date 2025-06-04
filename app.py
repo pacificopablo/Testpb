@@ -70,7 +70,7 @@ def add_result(result):
             state.bets_won += 1
             bet_outcome = 'win'
             if not state.t3_results:
-                state.t3_level = max(0, state.t3_level - 1)  # Minimum T3 level set to 0
+                state.t3_level = state.t3_level - 1  # Allow negative levels
             state.t3_results.append('W')
         else:
             state.bankroll -= bet_amount
@@ -89,8 +89,13 @@ def add_result(result):
         prediction = get_prediction(state.history, state.bet_history)
         bet_selection = 'B' if "Banker" in prediction else 'P' if "Player" in prediction else None
         if bet_selection:
-            bet_amount = state.base_bet * state.t3_level
-            if bet_amount < 0:  # Explicit check for negative wager
+            # D'Alembert-like wager for negative T3 levels
+            if state.t3_level >= 0:
+                bet_amount = state.base_bet * state.t3_level
+            else:
+                bet_amount = state.base_bet * (1 - state.t3_level)  # Positive wager for negative levels
+
+            if bet_amount < 0:  # Safeguard against negative wagers
                 state.pending_bet = None
                 state.prediction = f"Error: Negative bet amount ${bet_amount:.2f} (T3 Level {state.t3_level})"
             elif bet_amount <= state.bankroll:
