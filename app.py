@@ -90,7 +90,10 @@ def add_result(result):
         bet_selection = 'B' if "Banker" in prediction else 'P' if "Player" in prediction else None
         if bet_selection:
             bet_amount = state.base_bet * state.t3_level
-            if bet_amount <= state.bankroll:
+            if bet_amount < 0:  # Explicit check for negative wager
+                state.pending_bet = None
+                state.prediction = f"Error: Negative bet amount ${bet_amount:.2f} (T3 Level {state.t3_level})"
+            elif bet_amount <= state.bankroll:
                 state.pending_bet = (bet_amount, bet_selection)
                 state.prediction = f"Bet ${bet_amount:.2f} on {bet_selection} (T3 Level {state.t3_level})"
             else:
