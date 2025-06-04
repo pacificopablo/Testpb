@@ -1,17 +1,16 @@
 
 import streamlit as st
 from collections import deque
-import math
 
 def get_prediction(history, bet_history):
     if len(history) < 3:
         return "Default: Bet Banker"
 
-    # Initialize pattern scores
+    # Initialize scores for Banker and Player
     scores = {'B': 0.0, 'P': 0.0}
-    weights = {'bias': 0.4, 'streak': 0.5, 'alternation': 0.3}  # Initial weights
+    weights = {'bias': 0.4, 'streak': 0.5, 'alternation': 0.3}  # Initial pattern weights
 
-    # Adjust weights based on recent bet outcomes (simulating AI adaptation)
+    # Adjust weights based on recent bet success
     recent_bets = bet_history[-3:] if len(bet_history) >= 3 else bet_history
     correct_preds = sum(1 for _, _, sel, outcome, _, _ in recent_bets if outcome == 'win' and sel)
     if recent_bets:
@@ -20,41 +19,40 @@ def get_prediction(history, bet_history):
         weights['streak'] *= (1.0 + 0.15 * success_rate)
         weights['alternation'] *= (1.0 + 0.05 * success_rate)
 
-    # Bias: Count frequency of B and P
+    # Pattern: Bias (frequent outcomes)
     count = {'B': history.count('B'), 'P': history.count('P')}
     if count['B'] >= 3:
         scores['B'] += weights['bias'] * (count['B'] / 5)
     if count['P'] >= 3:
         scores['P'] += weights['bias'] * (count['P'] / 5)
 
-    # Streak: Check for three consecutive identical outcomes
+    # Pattern: Streak (three consecutive identical outcomes)
     last3 = list(history)[-3:]
     if last3 == [last3[0]] * 3:
         target = 'P' if last3[0] == 'B' else 'B'
         scores[target] += weights['streak']
 
-    # Alternation: Check for BPBPB or PBPBP
+    # Pattern: Alternation (BPBPB or PBPBP)
     if ''.join(history) in ("BPBPB", "PBPBP"):
         scores[list(history)[-1]] += weights['alternation']
 
-    # OTB4L-like: Bet opposite of second-to-last result
+    # Pattern: OTB4L (bet opposite of second-to-last)
     second_last = list(history)[-2]
     scores['P' if second_last == 'B' else 'B'] += weights['alternation'] * 0.8
 
-    # Normalize scores to probabilities (softmax-like)
+    # Normalize to probabilities
     total = scores['B'] + scores['P']
     if total == 0:
         return "Default: Bet Banker"
     prob_b = scores['B'] / total
     prob_p = scores['P'] / total
 
-    # Select bet with highest probability
-    if prob_b > prob_p + 0.1:  # Require 10% confidence gap
+    # Select bet with confidence threshold
+    if prob_b > prob_p + 0.1:
         return f"AI Bet: Banker (Confidence: {prob_b:.2%})"
     elif prob_p > prob_b + 0.1:
         return f"AI Bet: Player (Confidence: {prob_p:.2%})"
-    else:
-        return "Default: Bet Banker"
+    return "Default: Bet Banker"
 
 def add_result(result):
     state = st.session_state
@@ -62,6 +60,7 @@ def add_result(result):
     bet_selection = None
     bet_outcome = None
 
+    # Process pending bet outcome
     if state.pending_bet:
         bet_amount, bet_selection = state.pending_bet
         state.bets_placed += 1
@@ -69,44 +68,30 @@ def add_result(result):
             state.bankroll += bet_amount * (0.95 if bet_selection == 'B' else 1.0)
             state.bets_won += 1
             bet_outcome = 'win'
-            if state.t3_level < 0:
-                state.t3_level = 1  # Reset to level 1 on win at negative level
-            else:
-                if not state.t3_results:
-                    state.t3_level = state.t3_level - 1  # Allow negative levels
-                state.t3_results.append('W')
+            state.t3_level += 1  # Win: move to next level
         else:
             state.bankroll -= bet_amount
             bet_outcome = 'loss'
-            state.t3_results.append('L')
-
-        if len(state.t3_results) == 3:
-            wins = state.t3_results.count('W')
-            state.t3_level += -1 if wins > 1 else 1 if state.t3_results.count('L') > 1 else 0
-            state.t3_results = []
+            state.t3_level -= 1  # Loss: move back one level
         state.pending_bet = None
 
     state.history.append(result)
 
+    # Generate new prediction and bet
     if len(state.history) >= 5:
         prediction = get_prediction(state.history, state.bet_history)
         bet_selection = 'B' if "Banker" in prediction else 'P' if "Player" in prediction else None
         if bet_selection:
-            # D'Alembert-like wager for negative T3 levels
-            if state.t3_level >= 0:
-                bet_amount = state.base_bet * state.t3_level
-            else:
-                bet_amount = state.base_bet * (1 - state.t3_level)  # Positive wager for negative levels
-
-            if bet_amount < 0:  # Safeguard against negative wagers
+            bet_amount = state.base_bet * state.t3_level
+            if bet_amount < 0:
                 state.pending_bet = None
-                state.prediction = f"Error: Negative bet amount ${bet_amount:.2f} (T3 Level {state.t3_level})"
-            elif bet_amount <= state.bankroll:
+                state.prediction = f"{prediction} | Skip betting (negative T3 Level {state.t3_level})"
+            elif bet_amount > state.bankroll:
+                state.pending_bet = None
+                state.prediction = f"{prediction} | Skip betting (bet ${bet_amount:.2f} exceeds bankroll)."
+            else:
                 state.pending_bet = (bet_amount, bet_selection)
-                state.prediction = f"Bet ${bet_amount:.2f} on {bet_selection} (T3 Level {state.t3_level})"
-            else:
-                state.pending_bet = None
-                state.prediction = f"Skip betting (bet ${bet_amount:.2f} exceeds bankroll)."
+                state.prediction = f"Bet ${bet_amount:.2f} on {bet_selection} (T3 Level {state.t3_level}) | {prediction}"
         else:
             state.pending_bet = None
             state.prediction = "No valid bet selection."
@@ -114,7 +99,7 @@ def add_result(result):
         state.pending_bet = None
         state.prediction = f"Need {5 - len(state.history)} more results for prediction."
 
-    state.bet_history.append((result, bet_amount, bet_selection, bet_outcome, state.t3_level, state.t3_results[:]))
+    state.bet_history.append((result, bet_amount, bet_selection, bet_outcome, state.t3_level, []))
 
 def main():
     st.title("Baccarat Predictor with AI-Powered T3")
@@ -127,7 +112,6 @@ def main():
         state.base_bet = 0.0
         state.initial_bankroll = 0.0
         state.t3_level = 1
-        state.t3_results = []
         state.bet_history = []
         state.pending_bet = None
         state.bets_placed = 0
@@ -154,7 +138,6 @@ def main():
                 'bets_placed': 0,
                 'bets_won': 0,
                 't3_level': 1,
-                't3_results': [],
                 'prediction': "",
                 'session_active': True
             })
@@ -171,7 +154,6 @@ def main():
             'bets_placed': 0,
             'bets_won': 0,
             't3_level': 1,
-            't3_results': [],
             'prediction': "",
             'session_active': False
         })
@@ -181,7 +163,7 @@ def main():
         col1, col2 = st.columns(2)
         with col1:
             if st.button("Banker (B)"):
-                if state.bankroll <= state.initial_bankroll * 0.8:
+                if state.bankroll < state.initial_bankroll * 0.8:
                     st.error("Bankroll below 80% of initial. Session ended.")
                     state.session_active = False
                 elif state.bankroll >= state.initial_bankroll * 1.5:
@@ -191,7 +173,7 @@ def main():
                     add_result('B')
         with col2:
             if st.button("Player (P)"):
-                if state.bankroll <= state.initial_bankroll * 0.8:
+                if state.bankroll < state.initial_bankroll * 0.8:
                     st.error("Bankroll below 80% of initial. Session ended.")
                     state.session_active = False
                 elif state.bankroll >= state.initial_bankroll * 1.5:
@@ -207,7 +189,7 @@ def main():
             state.history.pop()
             if state.bet_history:
                 last_bet = state.bet_history.pop()
-                result, bet_amount, bet_selection, bet_outcome, t3_level, t3_results = last_bet
+                result, bet_amount, bet_selection, bet_outcome, t3_level, _ = last_bet
                 if bet_amount > 0:
                     state.bets_placed -= 1
                     if bet_outcome == 'win':
@@ -216,7 +198,6 @@ def main():
                     elif bet_outcome == 'loss':
                         state.bankroll += bet_amount
                     state.t3_level = t3_level
-                    state.t3_results = t3_results[:]
             state.pending_bet = None
             state.prediction = ""
             state.session_active = True
@@ -226,20 +207,19 @@ def main():
 **Bankroll:** ${state.bankroll:.2f}  
 **Base Bet:** ${state.base_bet:.2f}  
 **Session:** {state.bets_placed} bets, {state.bets_won} wins  
-**T3 Status:** Level {state.t3_level}, Results: {state.t3_results}  
+**T3 Status:** Level {state.t3_level}  
 **Prediction:** {state.prediction}
     """)
 
-    with st.expander("Debug: Session State"):
+    with st.expander("Debug Statements"):
         st.write({
-            'History': list(state.history),
-            'Prediction': state.prediction,
-            'Bankroll': state.bankroll,
-            'Base Bet': state.base_bet,
-            'T3 Level': state.t3_level,
-            'T3 Results': state.t3_results,
-            'Bet History': state.bet_history,
-            'Pending Bet': state.pending_bet
+            "History": list(state.history),
+            "Prediction": state.prediction,
+            "Bankroll": state.bankroll,
+            "Base Bet": state.base_bet,
+            "T3 Level": state.t3_level,
+            "Transactions": state.bet_history,
+            "Pending Transaction": state.pending_bet
         })
 
 if __name__ == "__main__":
