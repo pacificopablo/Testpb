@@ -115,19 +115,20 @@ def main():
         if st.button("Undo"):
             undo(baccarat)
 
-    # Deal history
+    # Deal history (newest at top)
     st.markdown('<div class="label">Deal History:</div>', unsafe_allow_html=True)
     history_text = ""
-    for i, pair in enumerate(baccarat['pair_types'][-100:], 1):
+    # Reverse the pair_types to show newest first
+    for i, pair in enumerate(reversed(baccarat['pair_types'][-100:]), 1):
         pair_type = "Even" if pair[0] == pair[1] else "Odd"
         history_text += f"{pair} ({pair_type})\n"
     st.text_area("", value=history_text, height=200, key="history_area")
-    # JavaScript to auto-scroll text area to bottom
+    # JavaScript to scroll to the top of the text area
     st.components.v1.html("""
         <script>
         const textarea = document.querySelector('textarea');
         if (textarea) {
-            textarea.scrollTop = textarea.scrollHeight;
+            textarea.scrollTop = 0;
         }
         </script>
     """, height=0)
