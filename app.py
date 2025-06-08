@@ -338,7 +338,7 @@ def main():
         st.markdown(f'<div class="{alert_class}">{st.session_state.alert["message"]}</div>', unsafe_allow_html=True)
 
     # Title
-    st.markdown('<h1>Enhanced Dominant Pairs Baccarat Predictor</h1>', unsafe_allow_html=True)
+    st.markdown('<h1>Baccarat Predictor</h1>', unsafe_allow_html=True)
 
     # Sidebar for controls
     with st.sidebar:
