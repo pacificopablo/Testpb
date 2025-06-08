@@ -1,6 +1,7 @@
 import streamlit as st
 import random
 import pandas as pd
+import uuid
 
 def initialize_session_state():
     """Initialize session state variables if not already set."""
@@ -26,16 +27,16 @@ def set_base_amount():
         if 1 <= amount <= 100:
             st.session_state.base_amount = amount
             st.session_state.bet_amount = st.session_state.base_amount
-            st.success("Base amount updated successfully.")
+            st.session_state.alert = {"type": "success", "message": "Base amount updated successfully.", "id": str(uuid.uuid4())}
         else:
-            st.error("Base amount must be between $1 and $100.")
+            st.session_state.alert = {"type": "error", "message": "Base amount must be between $1 and $100.", "id": str(uuid.uuid4())}
     except ValueError:
-        st.error("Please enter a valid number.")
+        st.session_state.alert = {"type": "error", "message": "Please enter a valid number.", "id": str(uuid.uuid4())}
 
 def reset_betting():
     """Reset betting parameters."""
     if st.session_state.result_tracker <= -10 * st.session_state.base_amount:
-        st.warning("Stop-loss reached. Resetting to resume betting.")
+        st.session_state.alert = {"type": "warning", "message": "Stop-loss reached. Resetting to resume betting.", "id": str(uuid.uuid4())}
     if st.session_state.result_tracker >= 0:
         st.session_state.result_tracker = 0.0
     st.session_state.bet_amount = st.session_state.base_amount
@@ -72,7 +73,7 @@ def reset_betting():
         st.session_state.streak_type = None
         st.session_state.bet_amount = st.session_state.base_amount
 
-    st.success("Betting reset.")
+    st.session_state.alert = {"type": "success", "message": "Betting reset.", "id": str(uuid.uuid4())}
 
 def reset_all():
     """Reset all session data."""
@@ -89,7 +90,7 @@ def reset_all():
     st.session_state.consecutive_losses = 0
     st.session_state.streak_type = None
     st.session_state.stats = {'wins': 0, 'losses': 0, 'ties': 0, 'streaks': [], 'odd_pairs': 0, 'even_pairs': 0}
-    st.success("All session data reset, profit lock reset.")
+    st.session_state.alert = {"type": "success", "message": "All session data reset, profit lock reset.", "id": str(uuid.uuid4())}
 
 def record_result(result):
     """Record a game result and update state."""
@@ -168,7 +169,7 @@ def record_result(result):
                     st.session_state.profit_lock = st.session_state.result_tracker
                     st.session_state.result_tracker = 0.0
                     st.session_state.bet_amount = st.session_state.base_amount
-                    st.info(f"New profit lock achieved: ${st.session_state.profit_lock:.2f}! Bankroll reset.")
+                    st.session_state.alert = {"type": "info", "message": f"New profit lock achieved: ${st.session_state.profit_lock:.2f}! Bankroll reset.", "id": str(uuid.uuid4())}
                     return
                 if st.session_state.consecutive_wins >= 2:
                     st.session_state.bet_amount = max(st.session_state.base_amount, st.session_state.bet_amount - st.session_state.base_amount)
@@ -181,7 +182,7 @@ def record_result(result):
                     st.session_state.profit_lock = st.session_state.result_tracker
                     st.session_state.result_tracker = 0.0
                     st.session_state.bet_amount = st.session_state.base_amount
-                    st.info(f"New profit lock achieved: ${st.session_state.profit_lock:.2f}! Bankroll reset.")
+                    st.session_state.alert = {"type": "info", "message": f"New profit lock achieved: ${st.session_state.profit_lock:.2f}! Bankroll reset.", "id": str(uuid.uuid4())}
                     return
                 if st.session_state.consecutive_wins >= 2:
                     st.session_state.bet_amount = max(st.session_state.base_amount, st.session_state.bet_amount - st.session_state.base_amount)
@@ -198,7 +199,7 @@ def record_result(result):
                     st.session_state.bet_amount = min(5 * st.session_state.base_amount, st.session_state.bet_amount + st.session_state.base_amount)
 
     if st.session_state.result_tracker <= -10 * st.session_state.base_amount:
-        st.warning("Loss limit reached. Resetting to resume betting.")
+        st.session_state.alert = {"type": "warning", "message": "Loss limit reached. Resetting to resume betting.", "id": str(uuid.uuid4())}
         st.session_state.bet_amount = st.session_state.base_amount
         st.session_state.next_prediction = "Player" if result == 'B' else "Banker" if result == 'P' else random.choice(["Player", "Banker"])
         return
@@ -208,7 +209,7 @@ def record_result(result):
 def undo():
     """Undo the last action."""
     if not st.session_state.state_history:
-        st.error("No actions to undo.")
+        st.session_state.alert = {"type": "error", "message": "No actions to undo.", "id": str(uuid.uuid4())}
         return
 
     last_state = st.session_state.state_history.pop()
@@ -223,7 +224,7 @@ def undo():
     st.session_state.consecutive_losses = last_state['consecutive_losses']
     st.session_state.streak_type = last_state['streak_type']
     st.session_state.stats = last_state['stats']
-    st.success("Last action undone.")
+    st.session_state.alert = {"type": "success", "message": "Last action undone.", "id": str(uuid.uuid4())}
 
 def simulate_games(num_games=100):
     """Simulate a number of games."""
@@ -232,108 +233,199 @@ def simulate_games(num_games=100):
     for _ in range(num_games):
         result = random.choices(outcomes, weights)[0]
         record_result(result)
-    st.success(f"Simulated {num_games} games. Check stats for results.")
+    st.session_state.alert = {"type": "success", "message": f"Simulated {num_games} games. Check stats for results.", "id": str(uuid.uuid4())}
 
 def main():
     """Main Streamlit application."""
     # Initialize session state
     initialize_session_state()
 
-    # Custom CSS for dark theme
+    # Custom CSS with Tailwind CDN
     st.markdown("""
+        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
         <style>
-        .stApp {
+        body, .stApp {
+            background-color: #1F2528;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #E5E7EB;
+        }
+        .card {
             background-color: #2C2F33;
-            color: white;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1rem;
         }
         .stButton>button {
-            background-color: #7289DA;
+            background-color: #6366F1;
             color: white;
-            border-radius: 5px;
-            border: none;
-            padding: 10px;
-            font-weight: bold;
+            border-radius: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            transition: background-color 0.2s;
+            width: 100%;
         }
         .stButton>button:hover {
-            background-color: #99AAB5;
+            background-color: #4F46E5;
         }
-        .stTextInput>div>input {
+        .stNumberInput input {
             background-color: #23272A;
             color: white;
-            border: none;
-            border-radius: 5px;
+            border: 1px solid #4B5563;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
         }
-        .stDataFrame {
+        .stDataFrame table {
             background-color: #23272A;
             color: white;
+            border-collapse: collapse;
         }
-        h1, h2, h3, h4, h5, h6, label, .stMarkdown {
-            color: white !important;
+        .stDataFrame th {
+            background-color: #374151;
+            color: white;
+            font-weight: 600;
+            padding: 0.75rem;
+        }
+        .stDataFrame td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #4B5563;
+        }
+        .stDataFrame tr:nth-child(even) {
+            background-color: #2D3748;
+        }
+        h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: #F3F4F6;
+            margin-bottom: 1rem;
+        }
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #D1D5DB;
+            margin-bottom: 0.75rem;
+        }
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .alert-success {
+            background-color: #10B981;
+            color: white;
+        }
+        .alert-error {
+            background-color: #EF4444;
+            color: white;
+        }
+        .alert-info {
+            background-color: #3B82F6;
+            color: white;
+        }
+        .alert-warning {
+            background-color: #F59E0B;
+            color: white;
+        }
+        .sidebar .stButton>button {
+            margin-bottom: 0.5rem;
         }
         </style>
     """, unsafe_allow_html=True)
 
+    # Display alert if present
+    if 'alert' in st.session_state:
+        alert_class = f"alert alert-{st.session_state.alert['type']}"
+        st.markdown(f'<div class="{alert_class}">{st.session_state.alert["message"]}</div>', unsafe_allow_html=True)
+
     # Title
-    st.title("Enhanced Dominant Pairs Baccarat Predictor")
+    st.markdown('<h1>Enhanced Dominant Pairs Baccarat Predictor</h1>', unsafe_allow_html=True)
 
     # Sidebar for controls
     with st.sidebar:
-        st.header("Controls")
-        st.number_input("Base Amount ($1-$100)", min_value=1.0, max_value=100.0, value=st.session_state.base_amount, step=1.0, key="base_amount_input")
-        if st.button("Set Amount"):
-            set_base_amount()
+        st.markdown('<h2>Controls</h2>', unsafe_allow_html=True)
+        with st.expander("Bet Settings", expanded=True):
+            st.number_input("Base Amount ($1-$100)", min_value=1.0, max_value=100.0, value=st.session_state.base_amount, step=1.0, key="base_amount_input")
+            if st.button("Set Amount"):
+                set_base_amount()
 
-        st.header("Session Actions")
-        if st.button("Reset Bet"):
-            reset_betting()
-        if st.button("Reset Session"):
-            reset_all()
-        if st.button("New Session"):
-            reset_all()
-            st.success("New session started.")
-        if st.button("Simulate 100 Games"):
-            simulate_games(100)
+        with st.expander("Session Actions"):
+            if st.button("Reset Bet"):
+                reset_betting()
+            if st.button("Reset Session"):
+                reset_all()
+            if st.button("New Session"):
+                reset_all()
+                st.session_state.alert = {"type": "success", "message": "New session started.", "id": str(uuid.uuid4())}
+            if st.button("Simulate 100 Games"):
+                simulate_games(100)
 
-    # Main content
-    st.subheader("Betting Information")
-    st.markdown(f"**Bet Amount:** {'No Bet' if st.session_state.bet_amount == 0 else f'${st.session_state.bet_amount:.2f}'}")
-    st.markdown(f"**Bankroll:** ${st.session_state.result_tracker:.2f}")
-    st.markdown(f"**Profit Lock:** ${st.session_state.profit_lock:.2f}")
-    st.markdown(f"**Bet:** {st.session_state.next_prediction}")
-    st.markdown(f"**Streak:** {st.session_state.streak_type if st.session_state.streak_type else 'None'}")
+    # Main content with card layout
+    with st.container():
+        st.markdown('<h2>Betting Overview</h2>', unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"""
+                <div class="card">
+                    <p class="text-sm font-semibold text-gray-400">Next Bet</p>
+                    <p class="text-xl font-bold text-white">{st.session_state.next_prediction}</p>
+                </div>
+                <div class="card">
+                    <p class="text-sm font-semibold text-gray-400">Bet Amount</p>
+                    <p class="text-xl font-bold text-white">{'No Bet' if st.session_state.bet_amount == 0 else f'${st.session_state.bet_amount:.2f}'}</p>
+                </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+                <div class="card">
+                    <p class="text-sm font-semibold text-gray-400">Bankroll</p>
+                    <p class="text-xl font-bold text-white">${st.session_state.result_tracker:.2f}</p>
+                </div>
+                <div class="card">
+                    <p class="text-sm font-semibold text-gray-400">Profit Lock</p>
+                    <p class="text-xl font-bold text-white">${st.session_state.profit_lock:.2f}</p>
+                </div>
+            """, unsafe_allow_html=True)
 
-    # Stats
-    total_games = st.session_state.stats['wins'] + st.session_state.stats['losses']
-    win_rate = (st.session_state.stats['wins'] / total_games * 100) if total_games > 0 else 0
-    avg_streak = sum(st.session_state.stats['streaks']) / len(st.session_state.stats['streaks']) if st.session_state.stats['streaks'] else 0
-    st.markdown(f"**Win Rate:** {win_rate:.1f}% | **Avg Streak:** {avg_streak:.1f} | **Patterns:** Odd: {st.session_state.stats['odd_pairs']}, Even: {st.session_state.stats['even_pairs']}")
+        # Statistics
+        total_games = st.session_state.stats['wins'] + st.session_state.stats['losses']
+        win_rate = (st.session_state.stats['wins'] / total_games * 100) if total_games > 0 else 0
+        avg_streak = sum(st.session_state.stats['streaks']) / len(st.session_state.stats['streaks']) if st.session_state.stats['streaks'] else 0
+        st.markdown(f"""
+            <div class="card">
+                <p class="text-sm font-semibold text-gray-400">Statistics</p>
+                <p class="text-base text-white">Win Rate: {win_rate:.1f}%</p>
+                <p class="text-base text-white">Avg Streak: {avg_streak:.1f}</p>
+                <p class="text-base text-white">Patterns: Odd: {st.session_state.stats['odd_pairs']}, Even: {st.session_state.stats['even_pairs']}</p>
+                <p class="text-base text-white">Streak: {st.session_state.streak_type if st.session_state.streak_type else 'None'}</p>
+            </div>
+        """, unsafe_allow_html=True)
 
-    # Result input buttons
-    st.subheader("Record Result")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        if st.button("Player"):
-            record_result('P')
-    with col2:
-        if st.button("Banker"):
-            record_result('B')
-    with col3:
-        if st.button("Tie"):
-            record_result('T')
-    with col4:
-        if st.button("Undo"):
-            undo()
+        # Result input buttons
+        st.markdown('<h2>Record Result</h2>', unsafe_allow_html=True)
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if st.button("Player"):
+                record_result('P')
+        with col2:
+            if st.button("Banker"):
+                record_result('B')
+        with col3:
+            if st.button("Tie"):
+                record_result('T')
+        with col4:
+            if st.button("Undo"):
+                undo()
 
-    # Deal History
-    st.subheader("Deal History")
-    if st.session_state.pair_types:
-        history_data = [
-            {"Pair": f"{pair[0]}{pair[1]}", "Type": "Even" if pair[0] == pair[1] else "Odd"}
-            for pair in st.session_state.pair_types[-100:]
-        ]
-        st.dataframe(pd.DataFrame(history_data), use_container_width=True, height=200)
-    else:
-        st.write("No history yet.")
+        # Deal History
+        st.markdown('<h2>Deal History</h2>', unsafe_allow_html=True)
+        if st.session_state.pair_types:
+            history_data = [
+                {"Pair": f"{pair[0]}{pair[1]}", "Type": "Even" if pair[0] == pair[1] else "Odd"}
+                for pair in st.session_state.pair_types[-100:]
+            ]
+            st.dataframe(pd.DataFrame(history_data), use_container_width=True, height=300)
+        else:
+            st.markdown('<p class="text-gray-400">No history yet.</p>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
