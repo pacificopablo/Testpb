@@ -6,23 +6,6 @@ import math
 st.set_page_config(page_title="Baccarat Predictor - Enhanced Dominant Pairs System", layout="wide")
 
 class BaccaratPredictor:
-    def __init__(self):
-        # Initialize session state to persist data
-        if 'pair_types' not in st.session_state:
-            st.session_state.pair_types = []
-            st.session_state.next_prediction = "N/A"
-            st.session_state.base_amount = 10.0
-            st.session_state.bet_amount = st.session_state.base_amount
-            st.session_state.result_tracker = 0.0
-            st.session_state.profit_lock = 0.0
-            st.session_state.previous_result = None
-            st.session_state.state_history = []
-            st.session_state.current_dominance = "N/A"
-            st.session_state.streak_type = None
-            st.session_state.consecutive_wins = 0
-            st.session_state.consecutive_losses = 0
-            st.session_state.stats = {'wins': 0, 'losses': 0, 'ties': 0, 'streaks': [], 'odd_pairs': 0, 'even_pairs': 0}
-
     def set_base_amount(self, amount):
         try:
             amount = float(amount)
@@ -267,6 +250,29 @@ class BaccaratPredictor:
         st.success(f"Simulated {num_games} games. Check stats for results.")
 
 def main():
+    # Initialize session state at the start of the main function
+    if 'pair_types' not in st.session_state:
+        st.session_state.pair_types = []
+        st.session_state.next_prediction = "N/A"
+        st.session_state.base_amount = 10.0
+        st.session_state.bet_amount = st.session_state.base_amount
+        st.session_state.result_tracker = 0.0
+        st.session_state.profit_lock = 0.0
+        st.session_state.previous_result = None
+        st.session_state.state_history = []
+        st.session_state.current_dominance = "N/A"
+        st.session_state.streak_type = None
+        st.session_state.consecutive_wins = 0
+        st.session_state.consecutive_losses = 0
+        st.session_state.stats = {'wins': 0, 'losses': 0, 'ties': 0, 'streaks': [], 'odd_pairs': 0, 'even_pairs': 0}
+        st.session_state.unit_info = f"Bet Amount: ${st.session_state.bet_amount:.2f}"
+        st.session_state.profit = f"Bankroll: ${st.session_state.result_tracker:.2f}"
+        st.session_state.profit_lock = f"Profit Lock: ${st.session_state.profit_lock:.2f}"
+        st.session_state.prediction = f"Bet: {st.session_state.next_prediction}"
+        st.session_state.streak = f"Streak: {st.session_state.streak_type if st.session_state.streak_type else 'None'}"
+        st.session_state.stats_display = "Win Rate: 0% | Avg Streak: 0 | Patterns: Odd: 0, Even: 0"
+        st.session_state.history_text = ""
+
     app = BaccaratPredictor()
 
     # Custom CSS for styling
@@ -324,7 +330,6 @@ def main():
     # Base amount input
     col1, col2 = st.columns([2, 1])
     with col1:
-        # Use a unique key and rely on session state for persistence
         base_amount = st.text_input("Base Amount ($1-$100)", value="", placeholder=str(st.session_state.base_amount), key="base_amount_input")
     with col2:
         if st.button("Set Amount"):
@@ -334,14 +339,14 @@ def main():
                 st.error("Please enter a value for the base amount.")
 
     # Info display
-    st.markdown(f"**{st.session_state.get('unit_info', 'Bet Amount: $10.00')}**")
-    st.markdown(f"**{st.session_state.get('profit', 'Bankroll: $0.00')}**")
-    st.markdown(f"**{st.session_state.get('profit_lock', 'Profit Lock: $0.00')}**")
-    st.markdown(f"**{st.session_state.get('prediction', 'Bet: N/A')}**")
-    st.markdown(f"**{st.session_state.get('streak', 'Streak: None')}**")
+    st.markdown(f"**{st.session_state.unit_info}**")
+    st.markdown(f"**{st.session_state.profit}**")
+    st.markdown(f"**{st.session_state.profit_lock}**")
+    st.markdown(f"**{st.session_state.prediction}**")
+    st.markdown(f"**{st.session_state.streak}**")
 
     # Stats display
-    st.markdown(f"**{st.session_state.get('stats_display', 'Win Rate: 0% | Avg Streak: 0 | Patterns: Odd: 0, Even: 0')}**")
+    st.markdown(f"**{st.session_state.stats_display}**")
 
     # Action buttons
     st.markdown('<div class="section-title">Record Result</div>', unsafe_allow_html=True)
@@ -361,7 +366,7 @@ def main():
 
     # Deal history
     st.markdown('<div class="section-title">Deal History</div>', unsafe_allow_html=True)
-    st.text_area("", value=st.session_state.get('history_text', ''), height=200, key="history", disabled=True)
+    st.text_area("", value=st.session_state.history_text, height=200, key="history", disabled=True)
 
     # Session controls
     st.markdown('<div class="section-title">Session Controls</div>', unsafe_allow_html=True)
