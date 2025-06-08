@@ -56,6 +56,9 @@ def main():
         .title {font-size: 24px; font-weight: bold; text-align: center; padding: 20px;}
         .label {font-size: 14px; color: white;}
         .info {font-size: 16px; font-weight: bold; padding: 10px;}
+        .player-bet {color: #1E90FF; font-weight: bold;} /* Blue for Player */
+        .banker-bet {color: #FF4500; font-weight: bold;} /* Red for Banker */
+        .na-bet {color: white; font-weight: bold;} /* White for N/A */
         </style>
     """, unsafe_allow_html=True)
 
@@ -83,7 +86,13 @@ def main():
     st.markdown(f'<div class="info">Bet Amount: {"No Bet" if baccarat["bet_amount"] == 0 else f"${baccarat['bet_amount']:.2f}"}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="info">Bankroll: ${baccarat["result_tracker"]:.2f}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="info">Profit Lock: ${baccarat["profit_lock"]:.2f}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="info">Bet: {baccarat["next_prediction"]}</div>', unsafe_allow_html=True)
+    # Highlighted bet prediction
+    if baccarat['next_prediction'] == "Player":
+        st.markdown(f'<div class="info">Bet: <span class="player-bet">{baccarat["next_prediction"]}</span></div>', unsafe_allow_html=True)
+    elif baccarat['next_prediction'] == "Banker":
+        st.markdown(f'<div class="info">Bet: <span class="banker-bet">{baccarat["next_prediction"]}</span></div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="info">Bet: <span class="na-bet">{baccarat["next_prediction"]}</span></div>', unsafe_allow_html=True)
     st.markdown(f'<div class="info">Streak: {baccarat["streak_type"] if baccarat["streak_type"] else "None"}</div>', unsafe_allow_html=True)
 
     # Stats display
