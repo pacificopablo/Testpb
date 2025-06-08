@@ -133,7 +133,7 @@ def main():
 
 def update_display(baccarat):
     st.session_state.baccarat = baccarat
-    st.experimental_rerun()
+    st.rerun()
 
 def set_base_amount(baccarat, amount):
     try:
