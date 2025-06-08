@@ -86,7 +86,6 @@ def main():
     st.markdown(f'<div class="info">Bet Amount: {"No Bet" if baccarat["bet_amount"] == 0 else f"${baccarat['bet_amount']:.2f}"}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="info">Bankroll: ${baccarat["result_tracker"]:.2f}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="info">Profit Lock: ${baccarat["profit_lock"]:.2f}</div>', unsafe_allow_html=True)
-    # Highlighted bet prediction
     if baccarat['next_prediction'] == "Player":
         st.markdown(f'<div class="info">Bet: <span class="player-bet">{baccarat["next_prediction"]}</span></div>', unsafe_allow_html=True)
     elif baccarat['next_prediction'] == "Banker":
@@ -122,10 +121,19 @@ def main():
     for i, pair in enumerate(baccarat['pair_types'][-100:], 1):
         pair_type = "Even" if pair[0] == pair[1] else "Odd"
         history_text += f"{pair} ({pair_type})\n"
-    st.text_area("", value=history_text, height=200, key=str(uuid.uuid4()))
+    st.text_area("", value=history_text, height=200, key="history_area")
+    # JavaScript to auto-scroll text area to bottom
+    st.components.v1.html("""
+        <script>
+        const textarea = document.querySelector('textarea');
+        if (textarea) {
+            textarea.scrollTop = textarea.scrollHeight;
+        }
+        </script>
+    """, height=0)
 
-    # Session control buttons
-    col1, col2, col3, col4 = st.columns(4)
+    # Session control buttons (only Reset Bet and Reset Session)
+    col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("Reset Bet"):
             reset_betting(baccarat)
@@ -133,12 +141,7 @@ def main():
         if st.button("Reset Session"):
             reset_all(baccarat)
     with col3:
-        if st.button("New Session"):
-            reset_all(baccarat)
-            st.write("New session started.")
-    with col4:
-        if st.button("Simulate"):
-            simulate_games(baccarat, 100)
+        pass  # Empty column to maintain layout
 
 def update_display(baccarat):
     st.session_state.baccarat = baccarat
@@ -391,14 +394,6 @@ def undo(baccarat):
 
     update_display(baccarat)
     st.write("Last action undone.")
-
-def simulate_games(baccarat, num_games=100):
-    outcomes = ['P', 'B', 'T']
-    weights = [0.446, 0.458, 0.096]
-    for _ in range(num_games):
-        result = random.choices(outcomes, weights)[0]
-        record_result(baccarat, result)
-    st.write(f"Simulated {num_games} games. Check stats for results.")
 
 if __name__ == "__main__":
     main()
