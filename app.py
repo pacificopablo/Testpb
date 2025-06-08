@@ -1,7 +1,6 @@
 import streamlit as st
 import random
 import math
-import uuid
 
 # Set page configuration
 st.set_page_config(page_title="Baccarat Predictor - Enhanced Dominant Pairs System", layout="wide")
@@ -323,18 +322,22 @@ def main():
     st.markdown('<div class="title">Enhanced Dominant Pairs Baccarat Predictor</div>', unsafe_allow_html=True)
 
     # Base amount input
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2 = st.columns([2, 1])
     with col1:
-        base_amount = st.text_input("Base Amount ($1-$100)", value=str(st.session_state.base_amount), key="base_amount")
+        # Use a unique key and rely on session state for persistence
+        base_amount = st.text_input("Base Amount ($1-$100)", value="", placeholder=str(st.session_state.base_amount), key="base_amount_input")
     with col2:
         if st.button("Set Amount"):
-            app.set_base_amount(base_amount)
+            if base_amount:
+                app.set_base_amount(base_amount)
+            else:
+                st.error("Please enter a value for the base amount.")
 
     # Info display
     st.markdown(f"**{st.session_state.get('unit_info', 'Bet Amount: $10.00')}**")
     st.markdown(f"**{st.session_state.get('profit', 'Bankroll: $0.00')}**")
     st.markdown(f"**{st.session_state.get('profit_lock', 'Profit Lock: $0.00')}**")
-    st.markdown(f"**{st.session_state.get('prediction', 'Bet: N/A')}**", unsafe_allow_html=True)
+    st.markdown(f"**{st.session_state.get('prediction', 'Bet: N/A')}**")
     st.markdown(f"**{st.session_state.get('streak', 'Streak: None')}**")
 
     # Stats display
