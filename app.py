@@ -56,14 +56,14 @@ def main():
         .title {font-size: 24px; font-weight: bold; text-align: center; padding: 20px;}
         .label {font-size: 14px; color: white;}
         .info {font-size: 16px; font-weight: bold; padding: 10px;}
-        .player-bet {color: #1E90FF; font-weight: bold;} /* Blue for Player */
-        .banker-bet {color: #FF4500; font-weight: bold;} /* Red for Banker */
-        .na-bet {color: white; font-weight: bold;} /* White for N/A */
+        .player-bet {color: #1E90FF; font-weight: bold;}
+        .banker-bet {color: #FF4500; font-weight: bold;}
+        .na-bet {color: white; font-weight: bold;}
         </style>
     """, unsafe_allow_html=True)
 
     # Title
-    st.markdown('<div class="title">Balanced Progression Baccarat Predictor</div>', unsafe_allow_html=True)
+    st.markdown('<div class="title">Enhanced Dominant Pairs Baccarat Predictor</div>', unsafe_allow_html=True)
 
     # Base amount input
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -118,12 +118,10 @@ def main():
     # Deal history (newest at top)
     st.markdown('<div class="label">Deal History:</div>', unsafe_allow_html=True)
     history_text = ""
-    # Reverse the pair_types to show newest first
     for i, pair in enumerate(reversed(baccarat['pair_types'][-100:]), 1):
         pair_type = "Even" if pair[0] == pair[1] else "Odd"
         history_text += f"{pair} ({pair_type})\n"
     st.text_area("", value=history_text, height=200, key="history_area")
-    # JavaScript to scroll to the top of the text area
     st.components.v1.html("""
         <script>
         const textarea = document.querySelector('textarea');
@@ -133,7 +131,7 @@ def main():
         </script>
     """, height=0)
 
-    # Session control buttons (only Reset Bet and Reset Session)
+    # Session control buttons
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("Reset Bet"):
@@ -147,18 +145,6 @@ def main():
 def update_display(baccarat):
     st.session_state.baccarat = baccarat
     st.rerun()
-
-def set_base_amount(baccarat, amount):
-    try:
-        amount = float(amount)
-        if 1 <= amount <= 100:
-            baccarat['base_amount'] = amount
-            baccarat['bet_amount'] = amount
-            update_display(baccarat)
-        else:
-            st.write("Base amount must be between $1 and $100.")
-    except ValueError:
-        st.write("Please enter a valid number.")
 
 def reset_betting(baccarat):
     if baccarat['result_tracker'] <= -10 * baccarat['base_amount']:
@@ -176,26 +162,22 @@ def reset_betting(baccarat):
             odd_count = sum(1 for a, b in recent_pairs if a != b)
             even_count = sum(1 for a, b in recent_pairs if a == b)
             result = baccarat['previous_result']
-            if abs(odd_count - even_count) < 2:
+            last_three = [p[1] for p in baccarat['pair_types'][-3:] if p[1] != 'T']
+            if len(last_three) >= 3 and all(r == last_three[0] for r in last_three):
+                baccarat['streak_type'] = last_three[0]
+                baccarat['next_prediction'] = "Player" if baccarat['streak_type'] == 'P' else "Banker"
+                baccarat['current_dominance'] = f"Streak ({baccarat['streak_type']})"
+            elif abs(odd_count - even_count) < 2:
                 baccarat['current_dominance'] = "N/A"
-                baccarat['next_prediction'] = "Player" if result == 'B' else "Banker" if result == 'P' else random.choice(["Player", "Banker"])
-                baccarat['bet_amount'] = baccarat['base_amount']
+                baccarat['next_prediction'] = "Hold"
             elif odd_count > even_count:
                 baccarat['current_dominance'] = "Odd"
                 baccarat['next_prediction'] = "Player" if result == 'B' else "Banker"
-                baccarat['bet_amount'] = baccarat['base_amount'] if abs(odd_count - even_count) < 3 else 2 * baccarat['base_amount']
             else:
                 baccarat['current_dominance'] = "Even"
                 baccarat['next_prediction'] = "Player" if result == 'P' else "Banker"
-                baccarat['bet_amount'] = baccarat['base_amount'] if abs(odd_count - even_count) < 3 else 2 * baccarat['base_amount']
-            last_four = [p[1] for p in baccarat['pair_types'][-4:] if p[1] != 'T']
-            if len(last_four) >= 4 and all(r == last_four[0] for r in last_four):
-                baccarat['streak_type'] = last_four[0]
-                baccarat['next_prediction'] = "Player" if baccarat['streak_type'] == 'P' else "Banker"
-                baccarat['current_dominance'] = f"Streak ({baccarat['streak_type']})"
-                baccarat['bet_amount'] = 2 * baccarat['base_amount']
     else:
-        baccarat['next_prediction'] = random.choice(["Player", "Banker"])
+        baccarat['next_prediction'] = "N/A"
         baccarat['current_dominance'] = "N/A"
         baccarat['streak_type'] = None
         baccarat['bet_amount'] = baccarat['base_amount']
@@ -220,62 +202,6 @@ def reset_all(baccarat):
     update_display(baccarat)
     st.write("All session data reset, profit lock reset.")
 
-def analyze_pair_patterns(recent_pairs, result):
-    if not recent_pairs:
-        return "N/A", random.choice(["Player", "Banker"]), 1.0
-
-    odd_count = sum(1 for a, b in recent_pairs if a != b)
-    even_count = sum(1 for a, b in recent_pairs if a == b)
-    total_pairs = len(recent_pairs)
-    dominance_diff = abs(odd_count - even_count)
-    confidence = dominance_diff / total_pairs
-
-    pair_sequence = ["Odd" if a != b else "Even" for a, b in recent_pairs]
-    cycle_detected = False
-    cycle_length = 0
-    for length in range(2, min(5, len(pair_sequence) // 2 + 1)):
-        if len(pair_sequence) >= 2 * length:
-            recent = pair_sequence[-2 * length:-length]
-            previous = pair_sequence[-length:]
-            if recent == previous:
-                cycle_detected = True
-                cycle_length = length
-                confidence += 0.2
-                break
-
-    last_three_pairs = pair_sequence[-3:] if len(pair_sequence) >= 3 else []
-    pair_streak = len(last_three_pairs) >= 3 and all(p == last_three_pairs[0] for p in last_three_pairs)
-
-    if pair_streak:
-        dominance = f"Pair Streak ({last_three_pairs[0]})"
-        if last_three_pairs[0] == "Odd":
-            prediction = "Player" if result == 'B' else "Banker"
-        else:
-            prediction = "Player" if result == 'P' else "Banker"
-        bet_multiplier = math.ceil(1.5 if confidence < 0.7 else 2.0)
-    elif cycle_detected:
-        dominance = f"Cycle (length {cycle_length})"
-        last_pair_type = pair_sequence[-1]
-        if last_pair_type == "Odd":
-            prediction = "Player" if result == 'B' else "Banker"
-        else:
-            prediction = "Player" if result == 'P' else "Banker"
-        bet_multiplier = math.ceil(1.2 + 0.3 * cycle_length)
-    elif dominance_diff >= 4 and confidence > 0.5:
-        if odd_count > even_count:
-            dominance = "Odd"
-            prediction = "Player" if result == 'B' else "Banker"
-        else:
-            dominance = "Even"
-            prediction = "Player" if result == 'P' else "Banker"
-        bet_multiplier = math.ceil(1.0 + confidence)
-    else:
-        dominance = "N/A"
-        prediction = "Player" if result == 'B' else "Banker" if result == 'P' else random.choice(["Player", "Banker"])
-        bet_multiplier = 1.0
-
-    return dominance, prediction, bet_multiplier
-
 def record_result(baccarat, result):
     state = {
         'pair_types': baccarat['pair_types'].copy(),
@@ -299,7 +225,7 @@ def record_result(baccarat, result):
 
     if baccarat['previous_result'] is None:
         baccarat['previous_result'] = result
-        baccarat['next_prediction'] = random.choice(["Player", "Banker"])
+        baccarat['next_prediction'] = "N/A"
         baccarat['bet_amount'] = baccarat['base_amount']
         update_display(baccarat)
         return
@@ -310,67 +236,83 @@ def record_result(baccarat, result):
         pair_type = "Even" if pair[0] == pair[1] else "Odd"
         baccarat['stats']['odd_pairs' if pair_type == "Odd" else 'even_pairs'] += 1
 
-    last_four = [p[1] for p in baccarat['pair_types'][-4:] if p[1] != 'T']
-    if len(last_four) >= 3 and all(r == result for r in last_four):
+    last_three = [p[1] for p in baccarat['pair_types'][-3:] if p[1] != 'T']
+    if len(last_three) >= 3 and all(r == result for r in last_three):
         baccarat['streak_type'] = result
-        baccarat['stats']['streaks'].append(len(last_four))
+        baccarat['stats']['streaks'].append(len(last_three))
     else:
         baccarat['streak_type'] = None
 
-    previous_prediction = baccarat['state_history'][-1]['next_prediction'] if baccarat['state_history'] else "N/A"
-    effective_bet = baccarat['bet_amount'] if previous_prediction in ["Player", "Banker"] else 0
+    if len(baccarat['pair_types']) >= 5:
+        recent_pairs = [p for p in baccarat['pair_types'][-10:] if p[0] !='T' and p[1] != 'T']
+        if recent_pairs:
+            odd_count = sum(1 for a, b in recent_pairs if a != b)
+            even_count = sum(1 for a, b in recent_pairs if a == b)
 
-    if effective_bet > 0:
-        if (previous_prediction == "Player" and result == 'P'):
-            baccarat['result_tracker'] += effective_bet
-            baccarat['stats']['wins'] += 1
-            baccarat['consecutive_wins'] += 1
-            baccarat['consecutive_losses'] = 0
+            if baccarat['streak_type']:
+                baccarat['next_prediction'] = "Player" if baccarat['streak_type'] == 'P' else "Banker"
+                baccarat['current_dominance'] = f"Streak ({baccarat['streak_type']})"
+            elif abs(odd_count - even_count) < 2:
+                baccarat['current_dominance'] = "N/A"
+                baccarat['next_prediction'] = "Hold"
+            elif odd_count > even_count:
+                baccarat['current_dominance'] = "Odd"
+                baccarat['next_prediction'] = "Player" if result == 'B' else "Banker"
+            else:
+                baccarat['current_dominance'] = "Even"
+                baccarat['next_prediction'] = "Player" if result == 'P' else "Banker"
+
+            if baccarat['bet_amount'] == 0:
+                baccarat['bet_amount'] = baccarat['base_amount']
+
+            if len(baccarat['pair_types']) >= 6 and baccarat['state_history'][-1]['next_prediction'] != "Hold":
+                previous_prediction = baccarat['state_history'][-1]['next_prediction']
+                effective_bet = min(5 * baccarat['base_amount'], baccarat['bet_amount'])
+                if (previous_prediction == "Player" and result == 'P'):
+                    baccarat['result_tracker'] += effective_bet
+                    baccarat['stats']['wins'] += 1
+                    baccarat['consecutive_wins'] += 1
+                    baccarat['consecutive_losses'] = 0
+                    if baccarat['result_tracker'] > baccarat['profit_lock']:
+                        baccarat['profit_lock'] = baccarat['result_tracker']
+                        baccarat['result_tracker'] = 0.0
+                        baccarat['bet_amount'] = baccarat['base_amount']
+                        st.write(f"New profit lock achieved: ${baccarat['profit_lock']:.2f}! Betting reset.")
+                        reset_betting(baccarat)
+                        return
+                    if baccarat['consecutive_wins'] >= 2:
+                        baccarat['bet_amount'] = max(baccarat['base_amount'], baccarat['bet_amount'] - baccarat['base_amount'])
+                elif (previous_prediction == "Banker" and result == 'B'):
+                    baccarat['result_tracker'] += effective_bet * 0.95
+                    baccarat['stats']['wins'] += 1
+                    baccarat['consecutive_wins'] += 1
+                    baccarat['consecutive_losses'] = 0
+                    if baccarat['result_tracker'] > baccarat['profit_lock']:
+                        baccarat['profit_lock'] = baccarat['result_tracker']
+                        baccarat['result_tracker'] = 0.0
+                        baccarat['bet_amount'] = baccarat['base_amount']
+                        st.write(f"New profit lock achieved: ${baccarat['profit_lock']:.2f}! Betting reset.")
+                        reset_betting(baccarat)
+                        return
+                    if baccarat['consecutive_wins'] >= 2:
+                        baccarat['bet_amount'] = max(baccarat['base_amount'], baccarat['bet_amount'] - baccarat['base_amount'])
+                else:
+                    baccarat['result_tracker'] -= effective_bet
+                    baccarat['stats']['losses'] += 1
+                    baccarat['consecutive_losses'] += 1
+                    baccarat['consecutive_wins'] = 0
+                    if baccarat['consecutive_losses'] >= 3:
+                        baccarat['bet_amount'] = min(5 * baccarat['base_amount'], baccarat['bet_amount'] * 2)
+                    elif baccarat['streak_type']:
+                        baccarat['bet_amount'] = min(5 * baccarat['base_amount'], baccarat['bet_amount'] + baccarat['base_amount'])
+                    else:
+                        baccarat['bet_amount'] = min(5 * baccarat['base_amount'], baccarat['bet_amount'] + baccarat['base_amount'])
+
+        if baccarat['result_tracker'] <= -10 * baccarat['base_amount']:
+            st.write("Loss limit reached. Resetting to resume betting.")
             baccarat['bet_amount'] = baccarat['base_amount']
-        elif (previous_prediction == "Banker" and result == 'B'):
-            baccarat['result_tracker'] += effective_bet * 0.95
-            baccarat['stats']['wins'] += 1
-            baccarat['consecutive_wins'] += 1
-            baccarat['consecutive_losses'] = 0
-            baccarat['bet_amount'] = baccarat['base_amount']
-        elif previous_prediction in ["Player", "Banker"]:
-            baccarat['result_tracker'] -= effective_bet
-            baccarat['stats']['losses'] += 1
-            baccarat['consecutive_losses'] += 1
-            baccarat['consecutive_wins'] = 0
-            baccarat['bet_amount'] = min(3 * baccarat['base_amount'], math.ceil((baccarat['bet_amount'] + 0.5 * baccarat['base_amount']) / baccarat['base_amount']) * baccarat['base_amount'])
-
-    if baccarat['result_tracker'] >= 3 * baccarat['base_amount']:
-        baccarat['profit_lock'] += baccarat['result_tracker']
-        baccarat['result_tracker'] = 0.0
-        baccarat['bet_amount'] = baccarat['base_amount']
-        baccarat['next_prediction'] = random.choice(["Player", "Banker"])
-        st.write(f"Profit of ${baccarat['profit_lock']:.2f} locked! Bankroll reset.")
-        update_display(baccarat)
-        return
-    elif baccarat['result_tracker'] <= -10 * baccarat['base_amount']:
-        st.write("Loss limit reached. Resetting to resume betting.")
-        baccarat['bet_amount'] = baccarat['base_amount']
-        baccarat['next_prediction'] = "Player" if result == 'B' else "Banker" if result == 'P' else random.choice(["Player", "Banker"])
-        update_display(baccarat)
-        return
-
-    if len(baccarat['pair_types']) >= 8:
-        recent_pairs = [p for p in baccarat['pair_types'][-15:] if p[0] != 'T' and p[1] != 'T']
-        dominance, prediction, bet_multiplier = analyze_pair_patterns(recent_pairs, result)
-        if baccarat['streak_type']:
-            baccarat['next_prediction'] = "Player" if baccarat['streak_type'] == 'P' else "Banker"
-            baccarat['current_dominance'] = f"Streak ({baccarat['streak_type']})"
-            streak_length = len([p for p in baccarat['pair_types'][-5:] if p[1] == baccarat['streak_type']])
-            baccarat['bet_amount'] = min(3 * baccarat['base_amount'], math.ceil((1 + 0.5 * (streak_length - 2)) * baccarat['base_amount'] / baccarat['base_amount']) * baccarat['base_amount'])
-        else:
-            baccarat['current_dominance'] = dominance
-            baccarat['next_prediction'] = prediction
-            baccarat['bet_amount'] = min(3 * baccarat['base_amount'], bet_multiplier * baccarat['base_amount'])
-    else:
-        baccarat['current_dominance'] = "N/A"
-        baccarat['next_prediction'] = "Player" if result == 'B' else "Banker" if result == 'P' else random.choice(["Player", "Banker"])
-        baccarat['bet_amount'] = baccarat['base_amount']
+            reset_betting(baccarat)
+            return
 
     baccarat['previous_result'] = result
     update_display(baccarat)
