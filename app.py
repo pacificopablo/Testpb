@@ -9,11 +9,11 @@ class BaccaratMoneyManager:
         self.profit_lock = 0.0  # Secured profit
         self.previous_result = None  # Last game result
         self.state_history = deque(maxlen=100)  # Store states for undo
-        self.stats = {'wins': 0, 'losses': 0, 'ties': 0, 'bet_history': []}  # Track outcomes
+        self.stats = {'wins': 0, 'losses': 0, 'bet_history': []}  # Track outcomes
         self.consecutive_wins = 0  # Track win streak
         self.consecutive_losses = 0  # Track loss streak
         self.is_streak = False  # Placeholder for streak detection
-        self.next_prediction = "N/A"  # Next bet (Player, Banker, Hold)
+        self.next_prediction = "N/A"  # Next bet (Player, Banker)
         print("Baccarat Money Manager initialized. Base amount: $10.00")
 
     def set_base_amount(self, amount):
@@ -53,7 +53,7 @@ class BaccaratMoneyManager:
         self.profit_lock = 0.0
         self.previous_result = None
         self.state_history.clear()
-        self.stats = {'wins': 0, 'losses': 0, 'ties': 0, 'bet_history': []}
+        self.stats = {'wins': 0, 'losses': 0, 'bet_history': []}
         self.consecutive_wins = 0
         self.consecutive_losses = 0
         self.is_streak = False
@@ -78,16 +78,6 @@ class BaccaratMoneyManager:
         }
         self.state_history.append(state)
 
-        # Handle Tie
-        if result == 'T':
-            self.stats['ties'] += 1
-            self.previous_result = result
-            self.next_prediction = "N/A"
-            self.bet_amount = self.base_amount
-            self.update_display()
-            print("Tie recorded.")
-            return
-
         # Handle first result
         if self.previous_result is None:
             self.previous_result = result
@@ -98,19 +88,17 @@ class BaccaratMoneyManager:
             return
 
         # Placeholder pattern logic: Simulate streak detection and prediction
-        # In original, this is based on pair_types and streak detection
-        if self.previous_result == result and self.previous_result != 'T':
+        if self.previous_result == result:
             self.is_streak = True
             self.next_prediction = "Player" if result == 'P' else "Banker"
             self.bet_amount = 2 * self.base_amount  # Double bet during streak
         else:
             self.is_streak = False
-            # Simulate Odd/Even-like prediction
             self.next_prediction = "Player" if result == 'B' else "Banker"
             self.bet_amount = self.base_amount
 
-        # Evaluate bet outcome (require at least 5 results for betting, as in original)
-        if len(self.stats['bet_history']) >= 5 and self.next_prediction != "Hold":
+        # Evaluate bet outcome (require at least 5 results for betting)
+        if len(self.stats['bet_history']) >= 5 and self.next_prediction != "N/A":
             effective_bet = min(5 * self.base_amount, self.bet_amount)
             outcome = ""
             if self.next_prediction == "Player" and result == 'P':
@@ -170,7 +158,7 @@ class BaccaratMoneyManager:
         if self.result_tracker <= -10 * self.base_amount:
             print("Loss limit reached. Resetting to resume betting.")
             self.bet_amount = self.base_amount
-            self.next_prediction = "Player" if result == 'B' else "Banker" if result == 'P' else random.choice(["Player", "Banker"])
+            self.next_prediction = "Player" if result == 'B' else "Banker"
             self.update_display()
             return
 
@@ -205,7 +193,7 @@ class BaccaratMoneyManager:
         print(f"Bankroll: ${self.result_tracker:.2f}")
         print(f"Profit Lock: ${self.profit_lock:.2f}")
         print(f"Next Bet: {self.next_prediction}")
-        print(f"Stats: Wins: {self.stats['wins']}, Losses: {self.stats['losses']}, Ties: {self.stats['ties']}, Win Rate: {win_rate:.1f}%")
+        print(f"Stats: Wins: {self.stats['wins']}, Losses: {self.stats['losses']}, Win Rate: {win_rate:.1f}%")
         if self.stats['bet_history']:
             print("Recent Bets:")
             for bet in self.stats['bet_history'][-3:]:
@@ -214,8 +202,8 @@ class BaccaratMoneyManager:
 
     def simulate_games(self, num_games=100):
         """Simulate games to test money management."""
-        outcomes = ['P', 'B', 'T']
-        weights = [0.446, 0.458, 0.096]
+        outcomes = ['P', 'B']
+        weights = [0.493, 0.507]  # Normalized: 0.446/(0.446+0.458), 0.458/(0.446+0.458)
         for _ in range(num_games):
             result = random.choices(outcomes, weights)[0]
             self.record_result(result)
@@ -225,7 +213,7 @@ def main():
     manager = BaccaratMoneyManager()
     while True:
         print("\nOptions:")
-        print("1. Record Result (P/B/T)")
+        print("1. Record Result (P/B)")
         print("2. Set Base Amount")
         print("3. Reset Betting")
         print("4. Reset Session")
@@ -235,11 +223,11 @@ def main():
         choice = input("Enter choice (1-7): ").strip()
 
         if choice == '1':
-            result = input("Enter result (P/B/T): ").strip().upper()
-            if result in ['P', 'B', 'T']:
+            result = input("Enter result (P/B): ").strip().upper()
+            if result in ['P', 'B']:
                 manager.record_result(result)
             else:
-                print("Invalid result. Use P, B, or T.")
+                print("Invalid result. Use P or B.")
         elif choice == '2':
             amount = input("Enter base amount ($1-$100): ").strip()
             manager.set_base_amount(amount)
