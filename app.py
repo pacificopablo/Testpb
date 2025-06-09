@@ -19,17 +19,18 @@ def initialize_session_state():
         st.session_state.streak_type = None
         st.session_state.consecutive_wins = 0
         st.session_state.consecutive_losses = 0
-        st.session_state.initial_bankroll = 1000.0  # New: Initial bankroll
-        st.session_state.current_bankroll = 1000.0  # New: Current bankroll
-        st.session_state.session_start_time = datetime.now()  # New: Session start time
-        st.session_state.max_session_time = 0  # New: Max session time in minutes (0 = unlimited)
-        st.session_state.profit_limit = 500.0  # New: Session profit limit
-        st.session_state.loss_limit = 500.0   # New: Session loss limit
+        st.session_state.initial_bankroll = 1000.0
+        st.session_state.current_bankroll = 1000.0
+        st.session_state.session_start_time = datetime.now()
+        st.session_state.max_session_time = 0
+        st.session_state.profit_limit = 500.0
+        st.session_state.loss_limit = 500.0
         st.session_state.stats = {
             'wins': 0,
             'losses': 0,
             'ties': 0,
             'streaks': [],
+            'choppy_count': 0,  # New: Count of choppy patterns
             'odd_pairs': 0,
             'even_pairs': 0,
             'bet_history': []
@@ -39,7 +40,7 @@ def set_base_amount():
     """Set the base amount from user input."""
     try:
         amount = float(st.session_state.base_amount_input)
-        if 1 <= amount <= 100 and amount <= st.session_state.current_bankroll * 0.05:  # Modified: Limit to 5% of bankroll
+        if 1 <= amount <= 100 and amount <= st.session_state.current_bankroll * 0.05:
             st.session_state.base_amount = amount
             st.session_state.bet_amount = st.session_state.base_amount
             st.session_state.alert = {"type": "success", "message": "Base amount updated successfully.", "id": str(uuid.uuid4())}
@@ -117,6 +118,40 @@ def check_session_limits():
             
     return False
 
+def detect_pattern():
+    """Detect choppy or streak patterns and set prediction."""
+    recent_results = [pair[1] for pair in st.session_state.pair_types[-4:]] + ([st.session_state.previous_result] if st.session_state.previous_result else [])
+    if len(recent_results) < 4:
+        return "N/A", "Hold", st.session_state.base_amount, None
+
+    # Choppy detection: Check for alternating P-B or B-P
+    is_choppy = True
+    for i in range(len(recent_results) - 1):
+        if recent_results[i] == recent_results[i + 1] or recent_results[i] == 'T' or recent_results[i + 1] == 'T':
+            is_choppy = False
+            break
+    if is_choppy:
+        next_result = 'P' if recent_results[-1] == 'B' else 'B'
+        return "Choppy", next_result, min(1.5 * st.session_state.base_amount, st.session_state.current_bankroll), None
+
+    # Streak detection: Check for 3+ identical non-Tie results
+    last_three = recent_results[-3:]
+    if len(last_three) >= 3 and all(r == last_three[0] for r in last_three) and last_three[0] in ['P', 'B']:
+        return f"Streak ({last_three[0]})", last_three[0], min(2 * st.session_state.base_amount, st.session_state.current_bankroll), last_three[0]
+
+    # Fall back to Odd/Even pair dominance
+    recent_pairs = st.session_state.pair_types[-10:]
+    odd_count = sum(1 for a, b in recent_pairs if a != b)
+    even_count = sum(1 for a, b in recent_pairs if a == b)
+    if abs(odd_count - even_count) < 2:
+        return "N/A", "Hold", 0, None
+    elif odd_count > even_count:
+        next_result = "Player" if st.session_state.previous_result == 'B' else "Banker"
+        return "Odd", next_result, min(st.session_state.base_amount, st.session_state.current_bankroll), None
+    else:
+        next_result = "Player" if st.session_state.previous_result == 'P' else "Banker"
+        return "Even", next_result, min(st.session_state.base_amount, st.session_state.current_bankroll), None
+
 def reset_betting():
     """Reset betting parameters."""
     if st.session_state.result_tracker <= -10 * st.session_state.base_amount:
@@ -129,28 +164,7 @@ def reset_betting():
     st.session_state.streak_type = None
 
     if len(st.session_state.pair_types) >= 5:
-        recent_pairs = st.session_state.pair_types[-10:]
-        odd_count = sum(1 for a, b in recent_pairs if a != b)
-        even_count = sum(1 for a, b in recent_pairs if a == b)
-        result = st.session_state.previous_result
-        if abs(odd_count - even_count) < 2:
-            st.session_state.current_dominance = "N/A"
-            st.session_state.next_prediction = "Hold"
-            st.session_state.bet_amount = 0
-        elif odd_count > even_count:
-            st.session_state.current_dominance = "Odd"
-            st.session_state.next_prediction = "Player" if result == 'B' else "Banker"
-            st.session_state.bet_amount = st.session_state.base_amount
-        else:
-            st.session_state.current_dominance = "Even"
-            st.session_state.next_prediction = "Player" if result == 'P' else "Banker"
-            st.session_state.bet_amount = st.session_state.base_amount
-        last_three = [st.session_state.pair_types[-i][1] for i in range(1, min(4, len(st.session_state.pair_types)))]
-        if len(last_three) >= 3 and all(r == last_three[0] for r in last_three):
-            st.session_state.streak_type = last_three[0]
-            st.session_state.next_prediction = "Player" if st.session_state.streak_type == 'P' else "Banker"
-            st.session_state.current_dominance = f"Streak ({st.session_state.streak_type})"
-            st.session_state.bet_amount = 2 * st.session_state.base_amount
+        st.session_state.current_dominance, st.session_state.next_prediction, st.session_state.bet_amount, st.session_state.streak_type = detect_pattern()
     else:
         st.session_state.next_prediction = "N/A"
         st.session_state.current_dominance = "N/A"
@@ -174,13 +188,14 @@ def reset_all():
     st.session_state.consecutive_wins = 0
     st.session_state.consecutive_losses = 0
     st.session_state.streak_type = None
-    st.session_state.current_bankroll = st.session_state.initial_bankroll  # New: Reset bankroll
-    st.session_state.session_start_time = datetime.now()  # New: Reset session start time
+    st.session_state.current_bankroll = st.session_state.initial_bankroll
+    st.session_state.session_start_time = datetime.now()
     st.session_state.stats = {
         'wins': 0,
         'losses': 0,
         'ties': 0,
         'streaks': [],
+        'choppy_count': 0,
         'odd_pairs': 0,
         'even_pairs': 0,
         'bet_history': []
@@ -193,15 +208,12 @@ def record_result(result):
     if check_session_limits():
         return
 
-    # Store the current prediction as the one to evaluate
     current_prediction = st.session_state.next_prediction
 
-    # Handle Tie
     if result == 'T':
         st.session_state.stats['ties'] += 1
         st.session_state.previous_result = result
         st.session_state.alert = {"type": "info", "message": "Tie recorded. No bet placed.", "id": str(uuid.uuid4())}
-        # Save state
         state = {
             'pair_types': st.session_state.pair_types.copy(),
             'previous_result': st.session_state.previous_result,
@@ -221,13 +233,11 @@ def record_result(result):
         st.rerun()
         return
 
-    # Handle first result
     if st.session_state.previous_result is None:
         st.session_state.previous_result = result
         st.session_state.next_prediction = "N/A"
         st.session_state.bet_amount = st.session_state.base_amount
         st.session_state.alert = {"type": "info", "message": "Waiting for more results to start betting.", "id": str(uuid.uuid4())}
-        # Save state
         state = {
             'pair_types': st.session_state.pair_types.copy(),
             'previous_result': st.session_state.previous_result,
@@ -247,22 +257,19 @@ def record_result(result):
         st.rerun()
         return
 
-    # Record pair
     if st.session_state.previous_result != 'T':
         pair = (st.session_state.previous_result, result)
         st.session_state.pair_types.append(pair)
         pair_type = "Even" if pair[0] == pair[1] else "Odd"
         st.session_state.stats['odd_pairs' if pair_type == "Odd" else 'even_pairs'] += 1
 
-    # Evaluate bet outcome (after 6 pairs)
     if len(st.session_state.pair_types) >= 6 and current_prediction != "Hold":
         effective_bet = min(5 * st.session_state.base_amount, st.session_state.bet_amount)
-        effective_bet = min(effective_bet, st.session_state.current_bankroll)  # New: Ensure bet doesn't exceed bankroll
-        print(f"Bet: {current_prediction}, Amount: {effective_bet}, Result: {result}, Tracker Before: {st.session_state.result_tracker}")  # Debug
+        effective_bet = min(effective_bet, st.session_state.current_bankroll)
         outcome = ""
         if current_prediction == "Player" and result == 'P':
             st.session_state.result_tracker += effective_bet
-            st.session_state.current_bankroll += effective_bet  # New: Update bankroll
+            st.session_state.current_bankroll += effective_bet
             st.session_state.stats['wins'] += 1
             st.session_state.consecutive_wins += 1
             st.session_state.consecutive_losses = 0
@@ -278,7 +285,7 @@ def record_result(result):
         elif current_prediction == "Banker" and result == 'B':
             win_amount = effective_bet * 0.95
             st.session_state.result_tracker += win_amount
-            st.session_state.current_bankroll += win_amount  # New: Update bankroll
+            st.session_state.current_bankroll += win_amount
             st.session_state.stats['wins'] += 1
             st.session_state.consecutive_wins += 1
             st.session_state.consecutive_losses = 0
@@ -293,7 +300,7 @@ def record_result(result):
                 st.session_state.bet_amount = max(st.session_state.base_amount, st.session_state.bet_amount - st.session_state.base_amount)
         else:
             st.session_state.result_tracker -= effective_bet
-            st.session_state.current_bankroll -= effective_bet  # New: Update bankroll
+            st.session_state.current_bankroll -= effective_bet
             st.session_state.stats['losses'] += 1
             st.session_state.consecutive_losses += 1
             st.session_state.consecutive_wins = 0
@@ -301,20 +308,18 @@ def record_result(result):
             st.session_state.alert = {"type": "error", "message": f"Bet lost! -${effective_bet:.2f}", "id": str(uuid.uuid4())}
             if st.session_state.consecutive_losses >= 3:
                 st.session_state.bet_amount = min(5 * st.session_state.base_amount, st.session_state.bet_amount * 2)
-            elif st.session_state.streak_type:
+            elif st.session_state.streak_type or st.session_state.current_dominance == "Choppy":
                 st.session_state.bet_amount = min(5 * st.session_state.base_amount, st.session_state.bet_amount + st.session_state.base_amount)
             else:
                 st.session_state.bet_amount = min(5 * st.session_state.base_amount, st.session_state.bet_amount + st.session_state.base_amount)
-        # Record bet outcome
         st.session_state.stats['bet_history'].append({
             'prediction': current_prediction,
             'result': result,
             'bet_amount': effective_bet,
-            'outcome': outcome
+            'outcome': outcome,
+            'pattern': st.session_state.current_dominance
         })
-        print(f"Tracker After: {st.session_state.result_tracker}, Bankroll: {st.session_state.current_bankroll}")  # Debug
 
-    # Check bankroll and session limits
     if st.session_state.current_bankroll < st.session_state.base_amount:
         st.session_state.alert = {"type": "error", "message": "Bankroll too low to continue betting. Please reset session or increase bankroll.", "id": str(uuid.uuid4())}
         st.session_state.next_prediction = "Hold"
@@ -325,12 +330,10 @@ def record_result(result):
     if check_session_limits():
         return
 
-    # Check stop-loss
     if st.session_state.result_tracker <= -10 * st.session_state.base_amount:
         st.session_state.alert = {"type": "warning", "message": "Loss limit reached. Resetting to resume betting.", "id": str(uuid.uuid4())}
         st.session_state.bet_amount = st.session_state.base_amount
-        st.session_state.next_prediction = "Player" if result == 'B' else "Banker" if result == 'P' else random.choice(["Player", "Banker"])
-        # Save state
+        st.session_state.next_prediction = "Player" if st.session_state.previous_result == 'B' else "Banker" if st.session_state.previous_result == 'P' else random.choice(["Player", "Banker"])
         state = {
             'pair_types': st.session_state.pair_types.copy(),
             'previous_result': st.session_state.previous_result,
@@ -350,39 +353,17 @@ def record_result(result):
         st.rerun()
         return
 
-    # Update prediction and bet amount for next round
     if len(st.session_state.pair_types) >= 5:
-        recent_pairs = st.session_state.pair_types[-10:]
-        odd_count = sum(1 for a, b in recent_pairs if a != b)
-        even_count = sum(1 for a, b in recent_pairs if a == b)
-        last_three = [st.session_state.pair_types[-i][1] for i in range(1, min(4, len(st.session_state.pair_types)))]
-        if len(last_three) >= 3 and all(r == last_three[0] for r in last_three):
-            st.session_state.streak_type = last_three[0]
-            st.session_state.next_prediction = "Player" if st.session_state.streak_type == 'P' else "Banker"
-            st.session_state.current_dominance = f"Streak ({st.session_state.streak_type})"
-            st.session_state.bet_amount = min(2 * st.session_state.base_amount, st.session_state.current_bankroll)
-            st.session_state.stats['streaks'].append(len(last_three))
-        elif abs(odd_count - even_count) < 2:
-            st.session_state.current_dominance = "N/A"
-            st.session_state.next_prediction = "Hold"
-            st.session_state.bet_amount = 0
-            st.session_state.streak_type = None
-        elif odd_count > even_count:
-            st.session_state.current_dominance = "Odd"
-            st.session_state.next_prediction = "Player" if st.session_state.previous_result == 'B' else "Banker"
-            st.session_state.bet_amount = min(st.session_state.base_amount, st.session_state.current_bankroll)
-            st.session_state.streak_type = None
-        else:
-            st.session_state.current_dominance = "Even"
-            st.session_state.next_prediction = "Player" if st.session_state.previous_result == 'P' else "Banker"
-            st.session_state.bet_amount = min(st.session_state.base_amount, st.session_state.current_bankroll)
-            st.session_state.streak_type = None
+        st.session_state.current_dominance, st.session_state.next_prediction, st.session_state.bet_amount, st.session_state.streak_type = detect_pattern()
+        if st.session_state.current_dominance == "Choppy":
+            st.session_state.stats['choppy_count'] += 1
+        elif st.session_state.streak_type:
+            st.session_state.stats['streaks'].append(len([r for r in recent_results if r == st.session_state.streak_type]))
 
     st.session_state.previous_result = result
     if len(st.session_state.pair_types) < 5:
         st.session_state.alert = {"type": "info", "message": f"Result recorded. Need {5 - len(st.session_state.pair_types)} more results to start betting.", "id": str(uuid.uuid4())}
 
-    # Save state
     state = {
         'pair_types': st.session_state.pair_types.copy(),
         'previous_result': st.session_state.previous_result,
@@ -409,7 +390,6 @@ def undo():
         return
 
     last_state = st.session_state.state_history.pop()
-    print(f"Restoring state: {last_state}")  # Debug
     st.session_state.pair_types = last_state['pair_types']
     st.session_state.previous_result = last_state['previous_result']
     st.session_state.result_tracker = last_state['result_tracker']
@@ -421,8 +401,8 @@ def undo():
     st.session_state.consecutive_losses = last_state['consecutive_losses']
     st.session_state.streak_type = last_state['streak_type']
     st.session_state.stats = last_state['stats']
-    st.session_state.current_bankroll = last_state['current_bankroll']  # New: Restore bankroll
-    st.session_state.session_start_time = last_state['session_start_time']  # New: Restore session time
+    st.session_state.current_bankroll = last_state['current_bankroll']
+    st.session_state.session_start_time = last_state['session_start_time']
     st.session_state.alert = {"type": "success", "message": "Last action undone.", "id": str(uuid.uuid4())}
     st.rerun()
 
@@ -440,10 +420,8 @@ def simulate_games(num_games=100):
 
 def main():
     """Main Streamlit application."""
-    # Initialize session state
     initialize_session_state()
 
-    # Custom CSS with Tailwind CDN
     st.markdown("""
         <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
         <style>
@@ -535,15 +513,12 @@ def main():
         </style>
     """, unsafe_allow_html=True)
 
-    # Display alert if present
     if 'alert' in st.session_state:
         alert_class = f"alert alert-{st.session_state.alert['type']}"
         st.markdown(f'<div class="{alert_class}">{st.session_state.alert["message"]}</div>', unsafe_allow_html=True)
 
-    # Title
     st.markdown('<h1>Baccarat Predictor with Money Management</h1>', unsafe_allow_html=True)
 
-    # Sidebar for controls
     with st.sidebar:
         st.markdown('<h2>Controls</h2>', unsafe_allow_html=True)
         with st.expander("Bet Settings", expanded=True):
@@ -571,7 +546,6 @@ def main():
             if st.button("Simulate 100 Games"):
                 simulate_games(100)
 
-    # Main content with card layout
     with st.container():
         st.markdown('<h2>Betting Overview</h2>', unsafe_allow_html=True)
         col1, col2 = st.columns(2)
@@ -598,7 +572,6 @@ def main():
                 </div>
             """, unsafe_allow_html=True)
 
-        # Statistics
         total_games = st.session_state.stats['wins'] + st.session_state.stats['losses']
         win_rate = (st.session_state.stats['wins'] / total_games * 100) if total_games > 0 else 0
         avg_streak = sum(st.session_state.stats['streaks']) / len(st.session_state.stats['streaks']) if st.session_state.stats['streaks'] else 0
@@ -608,15 +581,15 @@ def main():
             <div class="card">
                 <p class="text-sm font-semibold text-gray-400">Statistics</p>
                 <p class="text-base text-white">Win Rate: {win_rate:.1f}%</p>
-                <p class="text-base text-white">Avg Streak: {avg_streak:.1f}</p>
+                <p class="text-base text-white">Avg Streak Length: {avg_streak:.1f}</p>
+                <p class="text-base text-white">Choppy Patterns: {st.session_state.stats['choppy_count']}</p>
                 <p class="text-base text-white">Patterns: Odd: {st.session_state.stats['odd_pairs']}, Even: {st.session_state.stats['even_pairs']}</p>
-                <p class="text-base text-white">Streak: {st.session_state.streak_type if st.session_state.streak_type else 'None'}</p>
+                <p class="text-base text-white">Current Pattern: {st.session_state.current_dominance}</p>
                 <p class="text-base text-white">Session Profit/Loss: ${session_profit:.2f}</p>
                 <p class="text-base text-white">Session Time: {elapsed_time:.1f} minutes</p>
             </div>
         """, unsafe_allow_html=True)
 
-        # Result input buttons
         st.markdown('<h2>Record Result</h2>', unsafe_allow_html=True)
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -632,7 +605,6 @@ def main():
             if st.button("Undo"):
                 undo()
 
-        # Deal History
         st.markdown('<h2>Deal History</h2>', unsafe_allow_html=True)
         if st.session_state.pair_types:
             history_data = [
@@ -643,7 +615,6 @@ def main():
         else:
             st.markdown('<p class="text-gray-400">No history yet.</p>', unsafe_allow_html=True)
 
-        # Bet History
         st.markdown('<h2>Bet History</h2>', unsafe_allow_html=True)
         if st.session_state.stats.get('bet_history'):
             bet_history = pd.DataFrame(st.session_state.stats['bet_history'])
