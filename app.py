@@ -1,5 +1,6 @@
 import random
 from collections import deque
+from copy import deepcopy
 
 class BaccaratMoneyManager:
     def __init__(self):
@@ -12,9 +13,9 @@ class BaccaratMoneyManager:
         self.stats = {'wins': 0, 'losses': 0, 'bet_history': []}  # Track outcomes
         self.consecutive_wins = 0  # Track win streak
         self.consecutive_losses = 0  # Track loss streak
-        self.is_streak = False  # Placeholder for streak detection
+        self.is_streak = False  # Streak detection flag
         self.next_prediction = "N/A"  # Next bet (Player, Banker)
-        print("Baccarat Money Manager initialized. Base amount: $10.00")
+        print("Baccarat Money Manager initialized. Base amount: ${:.2f}".format(self.base_amount))
 
     def set_base_amount(self, amount):
         """Set the base betting amount ($1-$100)."""
@@ -27,11 +28,11 @@ class BaccaratMoneyManager:
                 print(f"Base amount set to ${self.base_amount:.2f}")
             else:
                 print("Base amount must be between $1 and $100.")
-        except ValueError:
+        except (ValueError, TypeError):
             print("Please enter a valid number.")
 
     def reset_betting(self):
-        """Reset betting progression."""
+        """Reset betting progression to initial state."""
         if self.result_tracker <= -10 * self.base_amount:
             print("Stop-loss reached. Resetting to resume betting.")
         if self.result_tracker >= 0:
@@ -40,13 +41,13 @@ class BaccaratMoneyManager:
         self.consecutive_wins = 0
         self.consecutive_losses = 0
         self.is_streak = False
-        # Placeholder: Assume a new prediction after reset
+        # Set next prediction based on previous result
         self.next_prediction = "Player" if self.previous_result == 'B' else "Banker" if self.previous_result == 'P' else "N/A"
         self.update_display()
         print("Betting reset.")
 
     def reset_all(self):
-        """Reset all session data."""
+        """Reset all session data to initial values."""
         self.base_amount = 10.0
         self.bet_amount = self.base_amount
         self.result_tracker = 0.0
@@ -74,7 +75,7 @@ class BaccaratMoneyManager:
             'consecutive_losses': self.consecutive_losses,
             'is_streak': self.is_streak,
             'next_prediction': self.next_prediction,
-            'stats': self.stats.copy()
+            'stats': deepcopy(self.stats)  # Deep copy to avoid reference issues
         }
         self.state_history.append(state)
 
@@ -87,7 +88,7 @@ class BaccaratMoneyManager:
             print("First result recorded. Waiting for more results.")
             return
 
-        # Placeholder pattern logic: Simulate streak detection and prediction
+        # Streak detection and betting strategy
         if self.previous_result == result:
             self.is_streak = True
             self.next_prediction = "Player" if result == 'P' else "Banker"
@@ -116,7 +117,7 @@ class BaccaratMoneyManager:
                     self.update_display()
                     return
                 if self.consecutive_wins >= 2:
-                    self.bet_amount = max(self.base_amount, self.bet_amount - self.base_amount)
+                    self.bet_amount = self.base_amount  # Reset to base after two wins
             elif self.next_prediction == "Banker" and result == 'B':
                 self.result_tracker += effective_bet * 0.95  # 5% commission
                 self.stats['wins'] += 1
@@ -132,7 +133,7 @@ class BaccaratMoneyManager:
                     self.update_display()
                     return
                 if self.consecutive_wins >= 2:
-                    self.bet_amount = max(self.base_amount, self.bet_amount - self.base_amount)
+                    self.bet_amount = self.base_amount  # Reset to base after two wins
             else:
                 self.result_tracker -= effective_bet
                 self.stats['losses'] += 1
@@ -166,28 +167,31 @@ class BaccaratMoneyManager:
         self.update_display()
 
     def undo(self):
-        """Undo the last action."""
-        if not self.state_history:
-            print("No actions to undo.")
-            return
-        last_state = self.state_history.pop()
-        self.base_amount = last_state['base_amount']
-        self.bet_amount = last_state['bet_amount']
-        self.result_tracker = last_state['result_tracker']
-        self.profit_lock = last_state['profit_lock']
-        self.previous_result = last_state['previous_result']
-        self.consecutive_wins = last_state['consecutive_wins']
-        self.consecutive_losses = last_state['consecutive_losses']
-        self.is_streak = last_state['is_streak']
-        self.next_prediction = last_state['next_prediction']
-        self.stats = last_state['stats']
-        self.update_display()
-        print("Last action undone.")
+        """Undo the last action by restoring the previous state."""
+        try:
+            if not self.state_history:
+                print("No actions to undo.")
+                return
+            last_state = self.state_history.pop()
+            self.base_amount = last_state['base_amount']
+            self.bet_amount = last_state['bet_amount']
+            self.result_tracker = last_state['result_tracker']
+            self.profit_lock = last_state['profit_lock']
+            self.previous_result = last_state['previous_result']
+            self.consecutive_wins = last_state['consecutive_wins']
+            self.consecutive_losses = last_state['consecutive_losses']
+            self.is_streak = last_state['is_streak']
+            self.next_prediction = last_state['next_prediction']
+            self.stats = last_state['stats']
+            self.update_display()
+            print("Last action undone.")
+        except Exception as e:
+            print(f"Error during undo: {e}")
 
     def update_display(self):
-        """Display current state."""
+        """Display current state of the game."""
         total_games = self.stats['wins'] + self.stats['losses']
-        win_rate = (self.stats['wins'] / total_games * 100) if total_games > 0 else 0
+        win_rate = self.stats['wins'] / total_games * 100 if total_games > 0 else 0.0
         print("\n=== Current State ===")
         print(f"Bet Amount: {'No Bet' if self.bet_amount == 0 else f'${self.bet_amount:.2f}'}")
         print(f"Bankroll: ${self.result_tracker:.2f}")
@@ -202,8 +206,11 @@ class BaccaratMoneyManager:
 
     def simulate_games(self, num_games=100):
         """Simulate games to test money management."""
+        if not isinstance(num_games, int) or num_games <= 0:
+            print("Number of games must be a positive integer.")
+            return
         outcomes = ['P', 'B']
-        weights = [0.493, 0.507]  # Normalized: 0.446/(0.446+0.458), 0.458/(0.446+0.458)
+        weights = [0.493362, 0.506638]  # Normalized probabilities
         for _ in range(num_games):
             result = random.choices(outcomes, weights)[0]
             self.record_result(result)
@@ -224,7 +231,9 @@ def main():
 
         if choice == '1':
             result = input("Enter result (P/B): ").strip().upper()
-            if result in ['P', 'B']:
+            if not result:
+                print("Input cannot be empty. Use P or B.")
+            elif result in ['P', 'B']:
                 manager.record_result(result)
             else:
                 print("Invalid result. Use P or B.")
