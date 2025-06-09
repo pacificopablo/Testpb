@@ -29,13 +29,15 @@ def initialize_session_state():
             'bet_history': []
         }
         st.session_state.alerts = []  # List to store active alerts
+        st.session_state.profit_lock_threshold = 2 * st.session_state.base_amount  # Initialize profit lock threshold
 
 def set_base_amount():
-    """Set the base amount from user input."""
+    """Set the base amount from user input and update profit lock threshold."""
     try:
         amount = float(st.session_state.base_amount_input)
         if 1 <= amount <= 100:
             st.session_state.base_amount = amount
+            st.session_state.profit_lock_threshold = 2 * amount  # Update threshold
             st.session_state.alerts.append({"type": "success", "message": "Base amount updated successfully.", "id": str(uuid.uuid4())})
         else:
             st.session_state.alerts.append({"type": "error", "message": "Invalid base amount. Must be between $1 and $100.", "id": str(uuid.uuid4())})
@@ -45,6 +47,9 @@ def set_base_amount():
 def reset_betting():
     """Reset betting parameters."""
     if st.session_state.result_tracker <= -10 * st.session_state.base_amount:
+        if st.session_state.result_tracker > 0:
+            st.session_state.profit_lock += st.session_state.result_tracker
+            st.session_state.alerts.append({"type": "success", "message": f"Stop-loss reached. Locked remaining profit: ${st.session_state.result_tracker:.2f}", "id": str(uuid.uuid4())})
         st.session_state.alerts.append({"type": "warning", "message": "Stop-loss reached. Resetting to resume tracking.", "id": str(uuid.uuid4())})
     if st.session_state.result_tracker >= 0:
         st.session_state.result_tracker = 0.0
@@ -77,6 +82,7 @@ def reset_all():
         'alternating_pairs': 0,
         'bet_history': []
     }
+    st.session_state.profit_lock_threshold = 2 * st.session_state.base_amount
     st.session_state.alerts.append({"type": "success", "message": "All session data reset, profit lock reset.", "id": str(uuid.uuid4())})
 
 def record_result(result):
@@ -149,10 +155,16 @@ def record_result(result):
                     # Win: Bet on predicted side was correct
                     st.session_state.result_tracker += st.session_state.bet_amount
                     st.session_state.stats['wins'] += 1
-                    if st.session_state.result_tracker > st.session_state.max_profit:
+                    if st.session_state.result_tracker >= st.session_state.profit_lock_threshold:
+                        lock_amount = st.session_state.result_tracker
+                        st.session_state.profit_lock += lock_amount
+                        st.session_state.result_tracker = 0.0  # Reset bankroll
+                        st.session_state.bet_amount = st.session_state.base_amount  # Continue betting with base amount
+                        st.session_state.alerts.append({"type": "success", "message": f"Profit locked at ${lock_amount:.2f}. Total locked: ${st.session_state.profit_lock:.2f}. Continuing with ${st.session_state.bet_amount:.2f} bet.", "id": str(uuid.uuid4())})
+                    elif st.session_state.result_tracker > st.session_state.max_profit:
                         st.session_state.max_profit = st.session_state.result_tracker
                         st.session_state.bet_amount = st.session_state.base_amount  # Reset to base
-                    st.session_state.alerts.append({"type": "success", "message": f"Win! +${st.session_state.bet_amount:.2f}", "id": str(uuid.uuid4())})
+                        st.session_state.alerts.append({"type": "success", "message": f"New max profit: ${st.session_state.max_profit:.2f}", "id": str(uuid.uuid4())})
                 else:
                     # Loss: Bet on predicted side was incorrect
                     st.session_state.result_tracker -= st.session_state.bet_amount
@@ -348,6 +360,7 @@ def main():
         st.markdown('<h2>Controls</h2>', unsafe_allow_html=True)
         with st.expander("Settings", expanded=True):
             st.number_input("Base Amount ($1-$100)", min_value=1.0, max_value=100.0, value=st.session_state.base_amount, step=1.0, key="base_amount_input")
+            st.markdown(f'<p class="text-sm text-gray-400">Profit Lock Threshold: ${st.session_state.profit_lock_threshold:.2f} (2x Base)</p>', unsafe_allow_html=True)
             st.button("Set Amount", on_click=set_base_amount)
 
         with st.expander("Session Actions"):
@@ -367,7 +380,7 @@ def main():
                 </div>
                 <div class="card">
                     <p class="text-sm font-semibold text-gray-400">Profit Lock</p>
-                    <p class="text-xl font-bold text-white">${st.session_state.profit_lock:.2f}</p>
+                    <p class="text-xl font-bold text-green-400">${st.session_state.profit_lock:.2f}</p>
                 </div>
                 <div class="card">
                     <p class="text-sm font-semibold text-gray-400">Next Bet</p>
